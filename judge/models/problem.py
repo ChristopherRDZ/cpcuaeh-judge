@@ -395,6 +395,13 @@ class Problem(models.Model):
 
     def update_stats(self):
         all_queryset = self.submission_set.filter(user__is_unlisted=False)
+        # «AC rate» and «Users» are public, also on /problems/: nothing a frozen scoreboard still hides counts, or a
+        # problem of the contest that is public would tell how many solved it during the freeze. Revealing it counts it
+        # again (Contest.refresh_after_freeze_change; congelacion-revelador-3, 2026-10-29).
+        from judge.models import Contest
+        hidden = Contest.public_freeze_filter()
+        if hidden is not None:
+            all_queryset = all_queryset.exclude(hidden)
         ac_queryset = all_queryset.filter(points__gte=self.points, result='AC')
         self.user_count = ac_queryset.filter(contest__participation__team__isnull=True).values('user').distinct().count()
         submissions = all_queryset.count()

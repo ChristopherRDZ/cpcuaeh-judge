@@ -270,6 +270,8 @@ class APIContestDetail(APIDetailView):
         participations = (
             contest.users
             .filter(virtual=ContestParticipation.LIVE)
+            # Whoever organizes or tests the contest today is not on its scoreboard (without_contest_staff, 2026-10-29).
+            .without_contest_staff()
             .annotate(
                 username=F('user__user__username'),
                 old_rating=Subquery(old_ratings_subquery.values('rating')[:1]),
@@ -401,6 +403,8 @@ class APIContestParticipationList(APIListView):
         return (
             ContestParticipation.objects
             .filter(virtual__gte=0, contest__in=visible_contests)
+            # Nor here, as on the scoreboard (without_contest_staff, 2026-10-29).
+            .without_contest_staff()
             .select_related('user__user', 'contest')
             .order_by('id')
             .only(
@@ -566,17 +570,18 @@ class APIUserDetail(APIDetailView):
     slug_url_kwarg = 'user'
 
     def get_object_data(self, profile):
-        solved_problems = list(
-            Submission.objects
-            .filter(
-                result='AC',
-                user=profile, contest__participation__team__isnull=True,
-                problem__is_public=True,
-                problem__is_organization_private=False,
-            )
-            .values('problem').distinct()
-            .values_list('problem__code', flat=True),
+        solved = Submission.objects.filter(
+            result='AC',
+            user=profile, contest__participation__team__isnull=True,
+            problem__is_public=True,
+            problem__is_organization_private=False,
         )
+        # Not what a frozen scoreboard still hides from this reader, except to the user themselves: the AC of the
+        # last hour showed up here one problem at a time (congelacion-costuras-v1, 2026-10-29).
+        frozen = Contest.frozen_submission_filter(self.request.user)
+        if frozen is not None and not (self.request.user.is_authenticated and self.request.profile.id == profile.id):
+            solved = solved.exclude(frozen)
+        solved_problems = list(solved.values('problem').distinct().values_list('problem__code', flat=True))
 
         contest_history = []
         participations = (

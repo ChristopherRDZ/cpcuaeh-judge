@@ -37,7 +37,7 @@ from reversion import revisions
 
 from judge.forms import CustomAuthenticationForm, DownloadDataForm, EmailChangeForm, ProfileForm, newsletter_id
 from judge.jinja2.gravatar import AVATAR_SIZES, gravatar_picture
-from judge.models import Profile, Submission
+from judge.models import Contest, Profile, Submission
 from judge.performance_points import get_pp_breakdown
 from judge.ratings import rating_class, rating_progress
 from judge.tasks import move_resend_contact, prepare_user_data
@@ -112,6 +112,20 @@ class UserPage(TitleMixin, UserMixin, DetailView):
             return contest_completed_ids(self.profile.current_contest)
         else:
             return user_completed_ids(self.profile) if self.profile is not None else ()
+
+    @cached_property
+    def hidden_windows(self):
+        """(contest id, cutoff) of the frozen scoreboards whose submissions this reader may not see here. None on
+        their own page: a freeze never hides your own submissions (congelacion-revelador-3 and costuras-3,
+        2026-10-29)."""
+        if self.profile is not None and self.profile.id == self.object.id:
+            return []
+        return Contest.frozen_windows_for(self.request.user)
+
+    def without_hidden(self, submissions):
+        for contest_id, cutoff in self.hidden_windows:
+            submissions = submissions.exclude(contest_object_id=contest_id, date__gte=cutoff)
+        return submissions
 
     def get_context_data(self, **kwargs):
         context = super(UserPage, self).get_context_data(**kwargs)
@@ -188,9 +202,10 @@ class UserAboutPage(UserPage):
             'height': '%.3fem' % rating_progress(rating.rating),
         } for rating in ratings])
 
+        # Nor how many were sent behind a frozen scoreboard (congelacion-costuras-3, 2026-10-29).
+        sent = self.without_hidden(self.object.submission_set.filter(contest__participation__team__isnull=True))
         submissions = (
-            self.object.submission_set.filter(contest__participation__team__isnull=True)
-            .annotate(date_only=TruncDate('date'))
+            sent.annotate(date_only=TruncDate('date'))
             .values('date_only').annotate(cnt=Count('id'))
         )
 
@@ -199,8 +214,7 @@ class UserAboutPage(UserPage):
         }))
         context['submission_metadata'] = mark_safe(json.dumps({
             'min_year': (
-                self.object.submission_set.filter(contest__participation__team__isnull=True)
-                .annotate(year_only=ExtractYear('date'))
+                sent.annotate(year_only=ExtractYear('date'))
                 .aggregate(min_year=Min('year_only'))['min_year']
             ),
         }))
@@ -213,8 +227,9 @@ class UserProblemsPage(UserPage):
     def get_context_data(self, **kwargs):
         context = super(UserProblemsPage, self).get_context_data(**kwargs)
 
-        result = Submission.objects.filter(user=self.object, points__gt=0, problem__is_public=True, contest__participation__team__isnull=True,
-                                           problem__is_organization_private=False) \
+        result = self.without_hidden(Submission.objects.filter(
+            user=self.object, points__gt=0, problem__is_public=True, contest__participation__team__isnull=True,
+            problem__is_organization_private=False)) \
             .exclude(problem__in=self.get_completed_problems() if self.hide_solved else []) \
             .values('problem__id', 'problem__code', 'problem__name', 'problem__points', 'problem__group__full_name') \
             .distinct().annotate(points=Max('points')).order_by('problem__group__full_name', 'problem__code')
@@ -231,7 +246,7 @@ class UserProblemsPage(UserPage):
                     'problem__group__full_name': 'group',
                 }), itemgetter('group'))
         ]
-        breakdown, has_more = get_pp_breakdown(self.object, start=0, end=10)
+        breakdown, has_more = get_pp_breakdown(self.object, start=0, end=10, hidden=self.hidden_windows)
         context['pp_breakdown'] = breakdown
         context['pp_has_more'] = has_more
 
@@ -250,7 +265,7 @@ class UserPerformancePointsAjax(UserProblemsPage):
                 raise ValueError
         except ValueError:
             start, end = 0, 100
-        breakdown, self.has_more = get_pp_breakdown(self.object, start=start, end=end)
+        breakdown, self.has_more = get_pp_breakdown(self.object, start=start, end=end, hidden=self.hidden_windows)
         context['pp_breakdown'] = breakdown
         return context
 

@@ -141,11 +141,22 @@ def recalculate_ratings(ranking, old_mean, times_ranked, historical_p):
 
 
 def rate_contest(contest):
+    """Store the ratings of this contest. Returns False, storing nothing, while its scoreboard is frozen: the ratings
+    would give away the real standings before the reveal (congelacion-revelador-1, 2026-10-29). Whoever organizes or
+    tests it today does not count (without_contest_staff)."""
     from judge.models import Rating, Profile
 
+    if contest.freeze_active:
+        # Its ratings are gone (rate and rate_all delete them before rating again): the rating of each participant goes
+        # back to the last one that remains, or the profile would still show the one from this contest.
+        Profile.objects.filter(contest_history__contest=contest, contest_history__virtual=0,
+                               contest_history__team__isnull=True).update(
+            rating=Subquery(Rating.objects.filter(user=OuterRef('id'))
+                            .order_by('-contest__end_time').values('rating')[:1]))
+        return False
     rating_subquery = Rating.objects.filter(user=OuterRef('user'))
     rating_sorted = rating_subquery.order_by('-contest__end_time')
-    users = contest.users.order_by('is_disqualified', '-score', 'cumtime', 'tiebreaker') \
+    users = contest.users.without_contest_staff().order_by('is_disqualified', '-score', 'cumtime', 'tiebreaker') \
         .annotate(submissions=Count('submission'),
                   last_rating=Coalesce(Subquery(rating_sorted.values('rating')[:1]), RATING_INIT),
                   last_mean=Coalesce(Subquery(rating_sorted.values('mean')[:1]), MEAN_INIT),
@@ -189,6 +200,7 @@ def rate_contest(contest):
                                contest_history__team__isnull=True).update(
             rating=Subquery(Rating.objects.filter(user=OuterRef('id'))
                             .order_by('-contest__end_time').values('rating')[:1]))
+    return True
 
 
 RATING_LEVELS = [

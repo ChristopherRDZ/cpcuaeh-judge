@@ -1,14 +1,15 @@
-from datetime import timedelta
+import math
+from datetime import datetime, timedelta
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models, transaction
-from django.db.models import CASCADE, Q
+from django.db.models import CASCADE, Exists, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _
 from jsonfield import JSONField
 from lupa import LuaRuntime
 from moss import MOSS_LANG_C, MOSS_LANG_CC, MOSS_LANG_JAVA, MOSS_LANG_PYTHON
@@ -25,6 +26,79 @@ __all__ = ['Contest', 'ContestTag', 'ContestParticipation', 'ContestProblem', 'C
 class MinValueOrNoneValidator(MinValueValidator):
     def compare(self, a, b):
         return a is not None and b is not None and super().compare(a, b)
+
+
+# What decides when a freeze begins, and whether it still hides anything.
+FREEZE_SCHEDULE = ('start_time', 'end_time', 'time_limit', 'freeze_minutes', 'scoreboard_revealed')
+# The score of a disqualified participation (recompute_results).
+DISQUALIFIED_SCORE = -9999
+
+
+def freeze_cutoff(start_time, end_time, time_limit, freeze_minutes):
+    """When the freeze of a contest with this schedule begins, or None without a freeze: the same rule as
+    `Contest.submission_freeze_cutoff`, for values that may not be saved yet."""
+    if not freeze_minutes or start_time is None or end_time is None:
+        return None
+    end = min(start_time + time_limit, end_time) if time_limit else end_time
+    return end - timedelta(minutes=freeze_minutes)
+
+
+def _to_the_second(schedule):
+    return {field: value.replace(microsecond=0) if isinstance(value, datetime) else value
+            for field, value in schedule.items()}
+
+
+def kept_freeze_minutes(stored, new, now=None, live=None):
+    """The freeze minutes for the schedule `new` (a dict of FREEZE_SCHEDULE) that keep the cutoff of `stored`.
+
+    Once a freeze has started, and until the scoreboard is revealed, its cutoff stays where it was
+    (congelacion-revelador-2, 2026-10-29). Moving it later lifted the freeze for everybody, sent out the balloons it
+    held back, and then mixed two cutoffs on one scoreboard; moving it earlier hid what everybody had already seen.
+    Without a time limit per participation, a new end keeps the cutoff with as many more (or fewer) minutes of freeze,
+    rounded so that the cutoff never moves later; every other change that moves it is refused until the scoreboard is
+    revealed. Returns new['freeze_minutes'] when nothing has to change, and raises ValidationError otherwise.
+
+    `live`, if given, says whether anybody takes part live. Without anybody the freeze hides nothing yet, so the
+    schedule changes freely: a contest cloned from a past one, created with past dates by mistake, or postponed before
+    anybody joined (round 1 of the review, 2026-10-29). It is only asked when the answer matters.
+    """
+    now = now or timezone.now()
+    old_cutoff = freeze_cutoff(stored['start_time'], stored['end_time'], stored['time_limit'],
+                               stored['freeze_minutes'])
+    if stored['scoreboard_revealed'] or new['scoreboard_revealed'] or old_cutoff is None or now < old_cutoff:
+        return new['freeze_minutes']
+    # To the second: the administration shows and sends times without microseconds, so a contest created with them
+    # (from code) would otherwise look changed every time its form is saved, and be refused.
+    stored, new, old_cutoff = _to_the_second(stored), _to_the_second(new), old_cutoff.replace(microsecond=0)
+    if all(new[field] == stored[field] for field in FREEZE_SCHEDULE):
+        return new['freeze_minutes']
+    if live is not None and not live():
+        return new['freeze_minutes']
+    started = gettext('The freeze started at %(cutoff)s and the scoreboard has not been revealed.') % {
+        'cutoff': timezone.localtime(old_cutoff).strftime('%Y-%m-%d %H:%M:%S')}
+    if not new['freeze_minutes']:
+        raise ValidationError({'freeze_minutes': '%s %s' % (started, gettext(
+            'To lift the freeze, reveal the scoreboard.'))})
+    if new['time_limit'] or stored['time_limit'] or new['start_time'] != stored['start_time']:
+        raise ValidationError('%s %s' % (started, gettext(
+            'Until it is revealed, the start, the end, the time limit and the freeze cannot change: each '
+            'participation would leave or enter its freeze at another moment.')))
+    if new['end_time'] - timedelta(minutes=new['freeze_minutes']) == old_cutoff:
+        return new['freeze_minutes']
+    minutes = math.ceil((new['end_time'] - old_cutoff).total_seconds() / 60)
+    # The minutes this same rule gives for that end: the form adjusts them, and Contest.save checks again. With an end
+    # that is not a whole number of minutes from the cutoff, the cutoff moves up to 59 seconds earlier, never later
+    # (before round 1 of the review the second check refused it, and the administration answered 500).
+    if minutes >= 1 and new['freeze_minutes'] == minutes:
+        return minutes
+    if new['freeze_minutes'] != stored['freeze_minutes']:
+        raise ValidationError({'freeze_minutes': '%s %s' % (started, gettext(
+            'Until it is revealed, the freeze cannot start at another moment. To change the end of the '
+            'contest, change only the end: the freeze minutes follow by themselves.'))})
+    if minutes < 1:
+        raise ValidationError({'end_time': '%s %s' % (started, gettext(
+            'The contest cannot end before the freeze began.'))})
+    return minutes
 
 
 class ContestTag(models.Model):
@@ -65,7 +139,9 @@ class Contest(models.Model):
                                                      validators=[MinValueValidator(1), MaxValueValidator(100)])
     team_max_size = models.PositiveSmallIntegerField(_('Máximo de integrantes'), default=3,
                                                      validators=[MinValueValidator(1), MaxValueValidator(100)])
-    FROZEN_WINDOWS_CACHE_KEY = 'frozen_contest_windows'
+    # Since 2026-10-29 it keeps every freeze that is not revealed, started or not (frozen_windows_for); the name
+    # changed with that, so that code from before never reads the new list with the old meaning.
+    FROZEN_WINDOWS_CACHE_KEY = 'frozen_contest_windows_v2'
     SCOREBOARD_VISIBLE = 'V'
     SCOREBOARD_AFTER_CONTEST = 'C'
     SCOREBOARD_AFTER_PARTICIPATION = 'P'
@@ -355,17 +431,42 @@ class Contest(models.Model):
         return query if hides_something else None
 
     @classmethod
+    def unrevealed_freezes(cls):
+        """(contest id, cutoff) of every contest with a freeze that is not revealed, whether it started or not. Not
+        cached: what is stored from the submissions (the AC rate of a problem, the points of a profile) is worked out
+        from this, and a stale list would store what a reveal has just made public as still hidden, or the other way
+        round. One small query; normally it finds nothing."""
+        contests = cls.objects.filter(freeze_minutes__isnull=False, scoreboard_revealed=False)
+        windows = [(contest.id, contest.submission_freeze_cutoff)
+                   for contest in contests.only('id', 'start_time', 'end_time', 'time_limit', 'freeze_minutes')]
+        return [(contest_id, cutoff) for contest_id, cutoff in windows if cutoff is not None]
+
+    @classmethod
+    def public_freeze_filter(cls):
+        """Q matching the submissions that some freeze hides from the public right now, or None. For what is stored
+        and read by everybody: the AC rate and users of a problem, and the points and solved problems of a profile
+        (congelacion-revelador-3, 2026-10-29). A cutoff still in the future matches nothing yet."""
+        query, found = Q(), False
+        for contest_id, cutoff in cls.unrevealed_freezes():
+            query |= Q(contest_object_id=contest_id, date__gte=cutoff)
+            found = True
+        return query if found else None
+
+    @classmethod
     def frozen_windows_for(cls, user):
-        """(contest id, cutoff) of every frozen contest whose freeze this user does not see through."""
+        """(contest id, cutoff) of every frozen contest whose freeze this user does not see through.
+
+        The list of freezes is cached for half a minute, and since 2026-10-29 (congelacion-revelador-4) it holds every
+        freeze that is not revealed, started or not: whether one has started is decided now, on every read. Before,
+        a list taken seconds before a cutoff kept that contest out of it for up to half a minute after the cutoff,
+        and the submission lists showed the first seconds of the freeze with their verdicts.
+        """
         windows = cache.get(cls.FROZEN_WINDOWS_CACHE_KEY)
         if windows is None:
-            windows = []
-            configurados = cls.objects.filter(freeze_minutes__isnull=False, scoreboard_revealed=False)
-            for contest in configurados.only('id', 'start_time', 'end_time', 'time_limit',
-                                             'freeze_minutes'):
-                if contest.freeze_started:
-                    windows.append((contest.id, contest.submission_freeze_cutoff))
+            windows = cls.unrevealed_freezes()
             cache.set(cls.FROZEN_WINDOWS_CACHE_KEY, windows, 30)
+        now = timezone.now()
+        windows = [(contest_id, cutoff) for contest_id, cutoff in windows if cutoff <= now]
         if not windows:
             return []
 
@@ -489,12 +590,16 @@ class Contest(models.Model):
 
         in_org = (self.organizations.filter(id__in=user.profile.organizations.all()).exists() or
                   self.classes.filter(id__in=user.profile.classes.all()).exists())
+        # Whoever registers a team answers for the whole roster: the code, the privacy, and the organisation limit
+        # too (teams.md, 2026-09-19). Until 2026-10-29 (equipos-globos-1) the organisation was asked again of every
+        # member, so a teammate from outside it stayed on the roster without being able to open the contest.
+        in_roster = self.users.filter(team__isnull=False, team_roster__profile=user.profile).exists()
         in_users = (self.private_contestants.filter(id=user.profile.id).exists() or
                     self.private_teams.filter(is_active=True, members=user.profile).exists() or
-                    self.users.filter(team__isnull=False, team_roster__profile=user.profile).exists())
+                    in_roster)
 
         if not self.is_private and self.is_organization_private:
-            if in_org:
+            if in_org or in_roster:
                 return
             raise self.PrivateContest()
 
@@ -504,7 +609,7 @@ class Contest(models.Model):
             raise self.PrivateContest()
 
         if self.is_private and self.is_organization_private:
-            if in_org and in_users:
+            if (in_org and in_users) or in_roster:
                 return
             raise self.PrivateContest()
 
@@ -609,20 +714,89 @@ class Contest(models.Model):
             q |= Q(curators=user.profile)
             q |= Q(testers=user.profile)
             q |= Q(spectators=user.profile)
-            q |= (Q(is_visible=True, is_private=True, private_teams__is_active=True,
-                    private_teams__members=user.profile) & (Q(is_organization_private=False) | org_check))
-            q |= (Q(is_visible=True, is_private=True, users__team_roster__profile=user.profile) &
+            # The two team branches as subqueries (equipos-globos-7, 2026-10-29): as joins inside the OR they
+            # multiplied the rows of every contest by its participations and team members before the DISTINCT. And
+            # the registered roster opens the contest also when it is private to organisations, as access_check
+            # does (equipos-globos-1).
+            from judge.models.team import ContestTeamMember
+            authorized_team = Contest.private_teams.through.objects.filter(
+                contest_id=OuterRef('pk'), team__is_active=True, team__members=user.profile)
+            on_roster = ContestTeamMember.objects.filter(participation__contest_id=OuterRef('pk'), profile=user.profile)
+            q |= (Q(is_visible=True, is_private=True) & Q(Exists(authorized_team)) &
                   (Q(is_organization_private=False) | org_check))
+            q |= Q(is_visible=True) & Q(Exists(on_roster))
             queryset = queryset.filter(q)
         return queryset.distinct()
 
     def rate(self):
+        """Rate this contest and redo every rated contest that ended after it. A contest whose scoreboard is still
+        frozen is passed over by rate_contest and keeps no ratings until it is revealed and rated
+        (congelacion-revelador-1)."""
         with transaction.atomic():
             Rating.objects.filter(contest__end_time__range=(self.end_time, self._now)).delete()
             for contest in Contest.objects.filter(
                 is_rated=True, end_time__range=(self.end_time, self._now),
             ).order_by('end_time'):
                 rate_contest(contest)
+
+    def save(self, *args, **kwargs):
+        """Keeps the cutoff of a freeze that already started (kept_freeze_minutes), whatever saves the contest: the
+        form of the administration already shows why a change is refused, and adjusts the minutes itself."""
+        fields = kwargs.get('update_fields')
+        if self.pk and (fields is None or set(fields) & set(FREEZE_SCHEDULE)):
+            stored = type(self).objects.filter(pk=self.pk).values(*FREEZE_SCHEDULE).first()
+            if stored is not None:
+                minutes = kept_freeze_minutes(stored, {field: getattr(self, field) for field in FREEZE_SCHEDULE},
+                                              getattr(self, '_freeze_checked_at', None), live=self.takes_part_live)
+                if minutes != self.freeze_minutes:
+                    self.freeze_minutes = minutes
+                    if fields is not None and 'freeze_minutes' not in fields:
+                        kwargs['update_fields'] = list(fields) + ['freeze_minutes']
+                for name in ('freeze_delta', 'freeze_active', 'submission_freeze_cutoff', 'freeze_started'):
+                    self.__dict__.pop(name, None)
+        super().save(*args, **kwargs)
+        # What the form saw holds for this save only: a later save of the same instance looks again.
+        for name in ('_freeze_checked_at', '_freeze_live'):
+            self.__dict__.pop(name, None)
+
+    def takes_part_live(self):
+        """Whether anybody takes part live in this contest (kept_freeze_minutes). The form asks first, and the save
+        keeps its answer, as it keeps its moment: somebody who joins in between cannot make the save refuse what the
+        form accepted."""
+        if getattr(self, '_freeze_live', None) is None:
+            self._freeze_live = ContestParticipation.objects.filter(
+                contest_id=self.pk, virtual=ContestParticipation.LIVE).exists()
+        return self._freeze_live
+
+    @property
+    def hides_now(self):
+        """Whether a freeze of this contest hides anything right now: configured, started and not revealed."""
+        return self.freeze_active and self.freeze_started
+
+    def refresh_after_freeze_change(self):
+        """Recompute what is stored from submissions and depends on this freeze: the AC rate and users of the problems
+        sent to in this contest, the points and solved problems of whoever sent something to it, and its ratings.
+
+        While a freeze hides something, those stored values leave out what it hides (public_freeze_filter), so they
+        have to be recomputed when it starts or stops hiding on purpose: revealing, freezing again, configuring a
+        freeze once it is due or removing it. A freeze that begins on its own, at the cutoff, needs nothing: each
+        submission judged from then on is left out as it is judged. A rated contest that hides something again
+        loses its ratings (rate passes it over) until it is revealed and rated (congelacion-revelador-1).
+        """
+        contest = type(self).objects.get(pk=self.pk)
+        sent = Submission.objects.filter(contest_object=contest)
+        problem_ids = set(contest.contest_problems.values_list('problem_id', flat=True))
+        problem_ids.update(sent.values_list('problem_id', flat=True).distinct())
+        for problem in Problem.objects.filter(id__in=problem_ids):
+            problem._updating_stats_only = True
+            problem.update_stats()
+        for profile in Profile.objects.filter(id__in=sent.values('user_id')):
+            profile._updating_stats_only = True
+            profile.calculate_points()
+        if contest.is_rated and contest.hides_now and contest.ratings.exists():
+            contest.rate()
+
+    refresh_after_freeze_change.alters_data = True
 
     class Meta:
         permissions = (
@@ -648,6 +822,30 @@ class ContestParticipationQuerySet(models.QuerySet):
             return self.none()
         return self.filter(Q(team__isnull=True, user=profile) |
                            Q(pk__in=profile.team_contest_entries.values('participation_id')))
+
+    def without_contest_staff(self):
+        """Without the official participations of whoever organizes (author or curator) or tests their contest today,
+        alone or on the roster of a team (decision of the owner, 2026-10-29).
+
+        Joining makes an organizer or a tester a spectator, but a participation from before they got the role stays:
+        the balloon sheet, the reveal and its awards, the scoreboard, the API and the rating counted it as one more
+        contestant. They no longer do, and it counts again by itself if they lose the role. Virtual participations
+        are not touched. One subquery per role, so it works on participations of several contests too.
+        """
+        from judge.models.team import ContestTeamMember
+        throughs = (Contest.authors.through, Contest.curators.through, Contest.testers.through)
+        # The participant: the person of an individual participation, or whoever registered a team.
+        alone = Q()
+        for through in throughs:
+            alone |= Q(Exists(through.objects.filter(contest_id=OuterRef('contest_id'),
+                                                     profile_id=OuterRef('user_id'))))
+        # Anybody on the roster of a team, against the roles in the contest of that participation.
+        member = Q()
+        for through in throughs:
+            member |= Q(Exists(through.objects.filter(contest_id=OuterRef(OuterRef('contest_id')),
+                                                      profile_id=OuterRef('profile_id'))))
+        staff_member = ContestTeamMember.objects.filter(participation_id=OuterRef('pk')).filter(member)
+        return self.exclude(Q(virtual=ContestParticipation.LIVE) & (alone | Q(Exists(staff_member))))
 
 
 class ContestParticipation(models.Model):
@@ -722,11 +920,31 @@ class ContestParticipation(models.Model):
             self.freeze_scoreboard()
             self.contest.format.update_participation(self)
             if self.is_disqualified:
-                self.score = -9999
+                self.score = DISQUALIFIED_SCORE
                 self.cumtime = 0
                 self.tiebreaker = 0
                 self.save(update_fields=['score', 'cumtime', 'tiebreaker'])
+            elif self.frozen_at is not None and self.frozen_score == DISQUALIFIED_SCORE:
+                self.repair_frozen_totals()
     recompute_results.alters_data = True
+
+    def repair_frozen_totals(self):
+        """The frozen totals of a participation that was disqualified when its copy was taken and is not anymore
+        (congelacion-costuras-2, 2026-10-29).
+
+        A disqualification leaves the live totals at DISQUALIFIED_SCORE and keeps the real cells in `format_data`, and
+        the copy took both as they were: the frozen scoreboard showed the rehabilitated row last, with -9999 points and
+        its solved problems. The totals are added up again from the frozen cells, the way the contest format adds them
+        up (the reveal does the same); for a format it does not know, the copy stays as it was.
+        """
+        from judge.views.contest_reveal import format_totals
+        config = getattr(self.contest.format, 'config', None) or {}
+        totals = format_totals(self.contest.format_name, config, self.frozen_format_data or {})
+        if totals is None:
+            return
+        self.frozen_score, self.frozen_cumtime, self.frozen_tiebreaker = totals[0], int(totals[1]), totals[2]
+        self.save(update_fields=['frozen_score', 'frozen_cumtime', 'frozen_tiebreaker'])
+    repair_frozen_totals.alters_data = True
 
     @transaction.atomic
     def set_disqualified(self, disqualified):

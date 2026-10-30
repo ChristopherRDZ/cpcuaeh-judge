@@ -18,12 +18,17 @@ class TeamForm(forms.Form):
 
 
 def _context(request, form=None, error=None):
+    invitations = list(TeamInvitation.objects.filter(recipient=request.profile, status=TeamInvitation.PENDING,
+                                                     team__is_active=True).select_related('team', 'sender__user'))
+    cutoff = team_services.invitation_cutoff()
+    for invitation in invitations:
+        # Shown, but not to be accepted (equipos-globos-8).
+        invitation.expired = team_services.is_expired(invitation, cutoff)
     return {
         'title': _('Mis equipos'), 'form': form or TeamForm(), 'error': error,
         'teams': Team.objects.filter(members=request.profile, is_active=True).select_related('owner__user')
                      .prefetch_related('members__user'),
-        'invitations': TeamInvitation.objects.filter(recipient=request.profile, status=TeamInvitation.PENDING,
-                                                     team__is_active=True).select_related('team', 'sender__user'),
+        'invitations': invitations,
     }
 
 
@@ -51,7 +56,7 @@ def my_teams(request):
 @never_cache
 def invitation_count(request):
     count = TeamInvitation.objects.filter(recipient=request.profile, status=TeamInvitation.PENDING,
-                                           team__is_active=True).count()
+                                           team__is_active=True, created__gte=team_services.invitation_cutoff()).count()
     return JsonResponse({'count': count})
 
 
@@ -95,6 +100,8 @@ def team_detail(request, pk):
                     raise ValidationError(_('Escribe el nombre exacto del equipo para confirmar su eliminación.'))
                 team_services.delete_team(request.profile, pk)
                 return HttpResponseRedirect(reverse('my_teams'))
+            elif action == 'take':
+                team_services.take_ownership(request.profile, pk)
             else:
                 raise ValidationError(_('Acción no válida.'))
         except Team.DoesNotExist:
@@ -106,10 +113,18 @@ def team_detail(request, pk):
     elif request.method != 'GET':
         from django.http import HttpResponseNotAllowed
         return HttpResponseNotAllowed(['GET', 'POST'])
+    heir = team_services.ownership_heir(team)
+    pending = list(team.invitations.filter(status=TeamInvitation.PENDING).select_related('recipient__user'))
+    cutoff = team_services.invitation_cutoff()
+    for invitation in pending:
+        invitation.expired = team_services.is_expired(invitation, cutoff)
     return render(request, 'team/detail.html', {
         'title': team.name, 'team': team, 'error': error, 'is_owner': team.owner_id == request.profile.pk,
+        # A team whose owner's account is not active anymore can be taken over by its oldest active member
+        # (equipos-globos-5).
+        'can_take': heir is not None and heir.pk == request.profile.pk,
         'members': team.memberships.select_related('profile__user').order_by('joined', 'id'),
-        'pending': team.invitations.filter(status=TeamInvitation.PENDING).select_related('recipient__user'),
+        'pending': pending,
         'history': team.participations.filter(contest__in=Contest.get_visible_contests(request.user))
                     .select_related('contest').order_by('-real_start')[:50],
     }, status=400 if error else 200)

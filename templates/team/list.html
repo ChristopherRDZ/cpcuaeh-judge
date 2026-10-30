@@ -17,12 +17,20 @@
                         <div class="team-invite-text">
                             <div class="team-invite-team">{{ invitation.team.name }}</div>
                             <span class="team-note">{{ _('%(username)s te invitó a formar parte de este equipo.', username=invitation.sender.username) }}</span>
+                            {% if invitation.expired %}
+                                {# Vencen a los 30 días (equipos-globos-8). #}
+                                <span class="team-note">{{ _('Esta invitación venció: pide a quien es propietario del equipo que te invite de nuevo.') }}</span>
+                            {% endif %}
                         </div>
                         <div class="team-actions">
                             <form action="{{ url('team_invitation_action', invitation.pk) }}" method="post">
                                 {% csrf_token %}
-                                <button name="action" value="accept">{{ _('Aceptar') }}</button>
-                                <button name="action" value="decline" class="team-btn-secondary">{{ _('Rechazar') }}</button>
+                                {% if invitation.expired %}
+                                    <button name="action" value="decline" class="team-btn-secondary">{{ _('Quitar') }}</button>
+                                {% else %}
+                                    <button name="action" value="accept">{{ _('Aceptar') }}</button>
+                                    <button name="action" value="decline" class="team-btn-secondary">{{ _('Rechazar') }}</button>
+                                {% endif %}
                             </form>
                         </div>
                     </div>

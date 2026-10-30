@@ -1,9 +1,9 @@
 from datetime import timedelta
 
 from adminsortable2.admin import SortableAdminBase, SortableInlineAdminMixin
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.cache import cache
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q, TextField
 from django.forms import ModelForm, ModelMultipleChoiceField, TextInput
@@ -20,6 +20,7 @@ from reversion.admin import VersionAdmin
 from judge.admin.purge import PurgeMixin, contest_plan, purge_contest
 from judge.admin_owner import is_server_owner
 from judge.models import Class, Contest, ContestProblem, ContestSubmission, Profile, Rating, Submission
+from judge.models.contest import FREEZE_SCHEDULE, kept_freeze_minutes
 from judge.ratings import rate_contest
 from judge.utils.views import NoBatchDeleteMixin
 from judge.widgets import AdminAceWidget, AdminHeavySelect2MultipleWidget, AdminHeavySelect2Widget, \
@@ -127,6 +128,10 @@ class ContestProblemInline(SortableInlineAdminMixin, admin.TabularInline):
 class ContestForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super(ContestForm, self).__init__(*args, **kwargs)
+        if 'scoreboard_revealed' in self.fields:
+            # The form carries what the box said when it was opened (round 3 of the review): one opened while the
+            # scoreboard was revealed, and saved after it was frozen again, revealed it again.
+            self.fields['scoreboard_revealed'].show_hidden_initial = True
         if 'private_teams' in self.fields:
             field = self.fields['private_teams']
             visible = Q(is_active=True)
@@ -151,13 +156,65 @@ class ContestForm(ModelForm):
         self.fields['view_contest_scoreboard'].widget.can_add_related = False
         self.fields['balloon_staff'].widget.can_add_related = False
 
+    def revealed_when_opened(self):
+        """What the box of the revealed scoreboard said when this form was opened (its hidden initial value), or None
+        if the form did not send it."""
+        return {'True': True, 'False': False}.get(self.data.get(self['scoreboard_revealed'].html_initial_name))
+
     def clean(self):
         cleaned_data = super().clean()
+        self.freeze_adjusted = None
+        freeze = cleaned_data.get('freeze_minutes') if 'freeze_minutes' in self.fields else self.instance.freeze_minutes
+        # A form opened before the reveal (or before the ceremony published the scoreboard) and saved afterwards for
+        # any other change sends the scoreboard as not revealed: it froze the contest again without a word, and took
+        # the ratings of a rated one away (rounds 1 and 2 of the review, 2026-10-29; a contest of teams is never
+        # rated). A revealed contest is only frozen again with the action of the list, on purpose.
+        if self.instance.pk and 'scoreboard_revealed' in self.fields and self.instance.scoreboard_revealed and \
+                not cleaned_data.get('scoreboard_revealed') and freeze:
+            self.add_error('scoreboard_revealed',
+                           _('The scoreboard of this contest is already revealed: to freeze it again, use '
+                             '«%(action)s» in the list of contests (a rated contest also loses its ratings until it '
+                             'is revealed and rated again). If you did not mean to freeze it, open this page again: '
+                             'the scoreboard was revealed after this form was opened.')
+                           % {'action': _('Freeze scoreboards again')})
+        # And the other way round (round 3 of the review): revealed by mistake during the contest and frozen again with
+        # the action, a form opened in between still had the box ticked; saved for another change, it revealed what
+        # was sent since and lifted the freeze for the rest of the contest. Only when the box is as it was when the
+        # form was opened: ticking it on purpose still reveals the scoreboard. The saved freeze counts too (round 4):
+        # with the minutes emptied, or a form opened before the contest had a freeze, the stale box still revealed it.
+        elif self.instance.pk and 'scoreboard_revealed' in self.fields and not self.instance.scoreboard_revealed and \
+                cleaned_data.get('scoreboard_revealed') and (freeze or self.instance.freeze_minutes) and \
+                self.revealed_when_opened() is True:
+            self.add_error('scoreboard_revealed',
+                           _('The scoreboard of this contest was frozen again after this form was opened: open this '
+                             'page again to save it without revealing the scoreboard, or reveal it with «%(action)s» '
+                             'in the list of contests.') % {'action': _('Reveal frozen scoreboards')})
+        if self.instance.pk and not self.errors:
+            # A freeze that already started keeps its cutoff until it is revealed (congelacion-revelador-2). Here the
+            # instance still holds what is saved; a field the user cannot change keeps that value.
+            stored = {field: getattr(self.instance, field) for field in FREEZE_SCHEDULE}
+            new = {field: cleaned_data.get(field) if field in self.fields else stored[field]
+                   for field in FREEZE_SCHEDULE}
+            now = timezone.now()
+            try:
+                minutes = kept_freeze_minutes(stored, new, now, live=self.instance.takes_part_live)
+            except ValidationError as error:
+                self.add_error(None, error)
+                return cleaned_data
+            # Contest.save checks again with this same moment, so a cutoff reached in between cannot refuse it.
+            self.instance._freeze_checked_at = now
+            if minutes != new['freeze_minutes']:
+                self.freeze_adjusted = (new['freeze_minutes'], minutes)
+                cleaned_data['freeze_minutes'] = minutes
         freeze = cleaned_data.get('freeze_minutes')
         if freeze:
             time_limit = cleaned_data.get('time_limit')
             start_time, end_time = cleaned_data.get('start_time'), cleaned_data.get('end_time')
-            window = time_limit or (end_time - start_time if start_time and end_time else None)
+            window = end_time - start_time if start_time and end_time else None
+            # The cutoff comes from the shorter of the two (Contest.submission_freeze_cutoff): a time limit longer
+            # than the window let a freeze through that began before the contest did (congelacion-revelador-v1).
+            if time_limit and (window is None or time_limit < window):
+                window = time_limit
             if window is not None and timedelta(minutes=freeze) >= window:
                 self.add_error('freeze_minutes',
                                _('The freeze has to be shorter than the contest, or the scoreboard would be '
@@ -253,21 +310,31 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
     def purge_contests(self, request, queryset):
         return self.run_purge(request, queryset)
 
+    def _set_revealed(self, queryset, revealed):
+        """Reveal or freeze again, and recompute in the same transaction what is stored and depends on it: the AC
+        rate of the problems and the points of whoever took part, and the ratings of a contest frozen again
+        (Contest.refresh_after_freeze_change). If that fails, nothing changes."""
+        with transaction.atomic():
+            # Materialised: the changelist queryset can be distinct.
+            ids = list(queryset.filter(freeze_minutes__isnull=False, scoreboard_revealed=not revealed)
+                       .values_list('id', flat=True))
+            count = Contest.objects.filter(id__in=ids, scoreboard_revealed=not revealed) \
+                .update(scoreboard_revealed=revealed)
+            for contest in Contest.objects.filter(id__in=ids):
+                contest.refresh_after_freeze_change()
+            transaction.on_commit(lambda: cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY))
+        cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY)
+        return count
+
     @admin.display(description=_('Reveal frozen scoreboards'))
     def reveal_scoreboard(self, request, queryset):
-        count = queryset.filter(
-            freeze_minutes__isnull=False, scoreboard_revealed=False,
-        ).update(scoreboard_revealed=True)
-        cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY)
+        count = self._set_revealed(queryset, True)
         self.message_user(request, ngettext('%d scoreboard revealed.',
                                             '%d scoreboards revealed.', count) % count)
 
     @admin.display(description=_('Freeze scoreboards again'))
     def hide_scoreboard(self, request, queryset):
-        count = queryset.filter(
-            freeze_minutes__isnull=False, scoreboard_revealed=True,
-        ).update(scoreboard_revealed=False)
-        cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY)
+        count = self._set_revealed(queryset, False)
         self.message_user(request, ngettext('%d scoreboard frozen again.',
                                             '%d scoreboards frozen again.', count) % count)
 
@@ -320,7 +387,22 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
             if not request.user.has_perm('judge.create_private_contest'):
                 raise PermissionDenied
 
+        stored = Contest.objects.filter(pk=obj.pk).first() if obj.pk else None
+        hid = stored is not None and stored.hides_now
+        # Who organizes or tests it, before the form saves its lists (save_related): changing them after the ratings
+        # leaves the ratings with another field of contestants. On the form, which is of this request only.
+        form.staff_before = self._staff(stored) if stored is not None else None
         super().save_model(request, obj, form, change)
+        adjusted = getattr(form, 'freeze_adjusted', None)
+        if adjusted:
+            self.message_user(request, _('The freeze had already started, so it now lasts %(new)d minutes instead '
+                                         'of %(old)d: the scoreboard stays frozen from the same moment.')
+                              % {'new': adjusted[1], 'old': adjusted[0]}, messages.WARNING)
+        # Revealing, freezing again, or a freeze configured or removed when it is already due: what is stored from
+        # the submissions and depends on the freeze is recomputed (Contest.refresh_after_freeze_change). Inside the
+        # transaction of the form, like the save itself.
+        if stored is not None and Contest.objects.get(pk=obj.pk).hides_now != hid:
+            obj.refresh_after_freeze_change()
         # We need this flag because `save_related` deals with the inlines, but does not know if we have already rescored
         self._rescored = False
         if form.changed_data and any(f in form.changed_data for f in ('format_config', 'format_name')):
@@ -330,11 +412,18 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
         if form.changed_data and 'locked_after' in form.changed_data:
             self.set_locked_after(obj, form.cleaned_data['locked_after'])
 
-        # The list of frozen contests is cached for half a minute; dropping it here makes a reveal immediate.
+        # The list of frozen contests is cached for half a minute; dropping it here makes a reveal immediate. Again
+        # once the transaction commits: a page read in between would cache the list from before.
         if form.changed_data and any(f in form.changed_data
                                      for f in ('freeze_minutes', 'scoreboard_revealed', 'start_time', 'end_time',
                                                'time_limit')):
             cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY)
+            transaction.on_commit(lambda: cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY))
+
+    @staticmethod
+    def _staff(contest):
+        return {role: set(getattr(contest, role).values_list('id', flat=True))
+                for role in ('authors', 'curators', 'testers')}
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
@@ -345,6 +434,14 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
         # Only rescored if we did not already do so in `save_model`
         if not self._rescored and any(formset.has_changed() for formset in formsets):
             self._rescore(form.cleaned_data['key'])
+        # Organizers and testers are left out of the scoreboard and of the rating: the ratings of a contest rated
+        # before the change still count them, or leave them out (round 1 of the review, 2026-10-29).
+        before = getattr(form, 'staff_before', None)
+        if before is not None and before != self._staff(form.instance) and \
+                Rating.objects.filter(contest=form.instance).exists():
+            self.message_user(request, _('The authors, curators or testers of this contest changed after it was '
+                                         'rated: rate it again so that its ratings match its scoreboard.'),
+                              messages.WARNING)
 
     def has_change_permission(self, request, obj=None):
         if not request.user.has_perm('judge.edit_own_contest'):
@@ -428,12 +525,19 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
         # It rates every contest, so it also takes being able to edit every contest.
         if not request.user.has_perm('judge.contest_rating') or not request.user.has_perm('judge.edit_all_contest'):
             raise PermissionDenied()
+        skipped = []
         with transaction.atomic():
             # Not TRUNCATE: MariaDB commits it on the spot, and a failure halfway left the table empty.
             Rating.objects.all().delete()
             Profile.objects.update(rating=None)
             for contest in Contest.objects.filter(is_rated=True, end_time__lte=timezone.now()).order_by('end_time'):
-                rate_contest(contest)
+                if not rate_contest(contest):
+                    skipped.append(contest.name)
+        if skipped:
+            # rate_contest passes over a frozen scoreboard (congelacion-revelador-1).
+            self.message_user(request, _('Not rated, because their scoreboard is still frozen: %(contests)s. Reveal '
+                                         'it, then rate each one from its page.') % {'contests': ', '.join(skipped)},
+                              messages.WARNING)
         return HttpResponseRedirect(reverse('admin:judge_contest_changelist'))
 
     @method_decorator(require_POST)
@@ -445,6 +549,11 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
             raise PermissionDenied()
         if not contest.is_rated or not contest.ended:
             raise Http404()
+        if contest.freeze_active:
+            # The ratings would give away the real standings before the reveal (congelacion-revelador-1).
+            self.message_user(request, _('Reveal the scoreboard before rating: while it is frozen, the ratings would '
+                                         'show the real standings.'), messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:judge_contest_change', args=(contest.id,)))
         with transaction.atomic():
             contest.rate()
         return HttpResponseRedirect(request.headers.get('referer', reverse('admin:judge_contest_changelist')))

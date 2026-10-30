@@ -1,4 +1,5 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.db import transaction
 from django.db.models import Count
 from django.forms import ModelForm
 from django.urls import reverse
@@ -8,6 +9,7 @@ from django.utils.translation import gettext, gettext_lazy as _
 
 from judge.admin.purge import PurgeMixin, purge_team, team_plan
 from judge.models.team import Team, TeamInvitation, TeamMembership
+from judge.team_services import clean_team_name
 from judge.widgets import AdminHeavySelect2Widget
 
 
@@ -41,6 +43,10 @@ class TeamForm(ModelForm):
             'is_active': _('Activo'),
             'created': _('Creado'),
         }
+
+    def clean_name(self):
+        # The same rules as on the site: no invisible or control characters (equipos-globos-4).
+        return clean_team_name(self.cleaned_data['name'])
 
 
 class TeamAdmin(PurgeMixin, admin.ModelAdmin):
@@ -142,7 +148,18 @@ class TeamAdmin(PurgeMixin, admin.ModelAdmin):
 
     @admin.action(description=_('Activar los equipos seleccionados'))
     def make_active(self, request, queryset):
-        self._set_active(request, queryset, True, gettext('Equipos activados: %d.'))
+        ids = list(queryset.values_list('pk', flat=True))
+        with transaction.atomic():
+            self._set_active(request, Team.objects.filter(pk__in=ids), True, gettext('Equipos activados: %d.'))
+            # Deleting a team from the site empties it; activated as it was, it had no members and its owner got a 404
+            # on its page, as with save_related (equipos-globos-5, 2026-10-29).
+            for team in Team.objects.filter(pk__in=ids):
+                TeamMembership.objects.get_or_create(team=team, profile_id=team.owner_id)
+        inactive = [team.name for team in Team.objects.filter(pk__in=ids, owner__user__is_active=False)]
+        if inactive:
+            self.message_user(request, gettext('La cuenta del propietario no está activa en: %(teams)s. Nadie más '
+                                               'puede gestionar esos equipos; cambia el propietario en su ficha.')
+                              % {'teams': ', '.join(inactive)}, messages.WARNING)
 
     # --- borrado total, sólo para la cuenta dueña del servidor ------------------
 

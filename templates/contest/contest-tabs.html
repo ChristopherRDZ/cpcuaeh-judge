@@ -30,7 +30,8 @@
         {% endif %}
         {{ make_tab('edit', 'fa-edit', url('admin:judge_contest_change', contest.id), _('Edit')) }}
     {% endif %}
-    {% if perms.judge.clone_contest %}
+    {# Copying takes being able to edit the original (ContestClone, 2026-10-29). #}
+    {% if can_edit and perms.judge.clone_contest %}
         {{ make_tab('clone', 'fa-copy', url('contest_clone', contest.key), _('Clone')) }}
     {% endif %}
 

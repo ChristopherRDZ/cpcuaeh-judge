@@ -1,10 +1,11 @@
-from django.urls import reverse
+from django.db import connection
 from django.db.models import OuterRef, Subquery
+from django.urls import reverse
 from django.utils.html import escape, format_html
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
 
-from judge.models import Language, Submission
+from judge.models import Contest, Language, Submission
 from judge.utils.problems import get_result_data
 from judge.utils.raw_sql import join_sql_subquery
 from judge.views.submission import ForceContestMixin, ProblemSubmissions
@@ -20,9 +21,29 @@ class RankedSubmissions(ProblemSubmissions):
         if self.in_contest:
             from judge.contest_teams import ranking_division
             division = ranking_division(self.request, self.contest)
-            queryset = super().get_queryset().filter(contest__participation__team__isnull=division == 'individual')
-            best = queryset.filter(contest__participation_id=OuterRef('contest__participation_id'),
-                                   contest__points__gt=0).order_by('-contest__points', 'time', 'id').values('pk')[:1]
+            team_null = division == 'individual'
+            # As the original DMOJ did in contests too, and as the list outside a contest does (equipos-globos-v1).
+            queryset = super().get_queryset().filter(contest__participation__team__isnull=team_null,
+                                                     user__is_unlisted=False)
+            # The best of each participation comes from the plain submissions of this problem in this contest, with
+            # the same freeze, languages and results as the list. Built from the list itself, it carried the DISTINCT
+            # that whoever cannot see the whole scoreboard gets: Django then wrapped the subquery in a derived table,
+            # where MariaDB cannot see the outer column, and the page gave 500 (equipos-globos-2, 2026-10-29).
+            best = Submission.objects.filter(problem=self.problem, contest_object=self.contest,
+                                             contest__participation_id=OuterRef('contest__participation_id'),
+                                             contest__participation__team__isnull=team_null,
+                                             user__is_unlisted=False, contest__points__gt=0)
+            frozen = Contest.frozen_submission_filter(self.request.user)
+            if frozen is not None:
+                if self.request.user.is_authenticated:
+                    best = best.exclude(frozen & ~Submission.ownership_filter(self.request.profile))
+                else:
+                    best = best.exclude(frozen)
+            if self.selected_languages:
+                best = best.filter(language__key__in=self.selected_languages)
+            if self.selected_statuses:
+                best = best.filter(result__in=self.selected_statuses)
+            best = best.order_by('-contest__points', 'time', 'id').values('pk')[:1]
             return queryset.filter(pk=Subquery(best)).order_by('-contest__points', 'time', 'id')
         params = [self.problem.id]
         if self.in_contest:
@@ -36,6 +57,18 @@ class RankedSubmissions(ProblemSubmissions):
             constraint = (' AND NOT EXISTS (SELECT 1 FROM judge_contestsubmission team_cs '
                           'INNER JOIN judge_contestparticipation team_cp ON team_cp.id = team_cs.participation_id '
                           'WHERE team_cs.submission_id = sub.id AND team_cp.team_id IS NOT NULL)')
+            # The best of each user is chosen without what a frozen scoreboard hides from this reader, the same that
+            # the list leaves out (never their own): chosen among all of them, somebody who improved during the freeze
+            # dropped out of the list, which already told it (congelacion-revelador-3, 2026-10-29). Written so that a
+            # submission outside any contest passes: NOT (contest_object_id = %s AND ...) is NULL for it.
+            own = self.request.profile.id if self.request.user.is_authenticated else None
+            for contest_id, cutoff in Contest.frozen_windows_for(self.request.user):
+                constraint += ' AND (sub.contest_object_id IS NULL OR sub.contest_object_id <> %s OR sub.date < %s'
+                params.extend([contest_id, connection.ops.adapt_datetimefield_value(cutoff)])
+                if own is not None:
+                    constraint += ' OR sub.user_id = %s'
+                    params.append(own)
+                constraint += ')'
 
         if self.selected_languages:
             lang_ids = Language.objects.filter(key__in=self.selected_languages).values_list('id', flat=True)

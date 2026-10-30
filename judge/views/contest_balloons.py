@@ -40,9 +40,11 @@ def accepted_submissions(contest):
     """ContestSubmissions that earn a balloon, before the freeze is taken into account.
 
     Same rule as `contest_reveal.first_to_solve`: full points on a problem worth something, finally judged, not
-    a pretest-only result, inside the contest window of a live participation that is not disqualified.
+    a pretest-only result, inside the contest window of a live participation that is not disqualified, and not of
+    whoever organizes or tests the contest today (without_contest_staff, 2026-10-29).
     """
     accepted = ContestSubmission.objects.filter(
+        participation__in=contest.users.filter(virtual=ContestParticipation.LIVE).without_contest_staff(),
         participation__contest=contest, participation__virtual=ContestParticipation.LIVE,
         participation__is_disqualified=False, problem__contest=contest,
         submission__status='D', submission__result='AC', is_pretest=False,
@@ -118,9 +120,10 @@ def build_balloon_sheet(contest):
 
     participations = {}
     for participation in (contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
-                          .select_related('user__user').only('id', 'real_start', 'virtual', 'contest_id', 'team_id', 'team_name',
-                                                              'user__id', 'user__username_display_override',
-                                                              'user__user__username')):
+                          .without_contest_staff()
+                          .select_related('user__user').prefetch_related('team_roster')
+                          .only('id', 'real_start', 'virtual', 'contest_id', 'team_id', 'team_name',
+                                'user__id', 'user__username_display_override', 'user__user__username')):
         # Reusing the contest already in hand; `participation.contest` would be one query per row.
         participation.contest = contest
         participations[participation.id] = participation
@@ -231,8 +234,10 @@ def contest_balloons(request, contest):
 
 
 def location_profiles(contest):
-    """Official entrants, preassigned private contestants and previously saved locations."""
-    ids = set(contest.users.filter(virtual=ContestParticipation.LIVE, team__isnull=True).values_list('user_id', flat=True))
+    """Official entrants, preassigned private contestants and previously saved locations. Whoever organizes or tests
+    the contest today is not an entrant (without_contest_staff)."""
+    ids = set(contest.users.filter(virtual=ContestParticipation.LIVE, team__isnull=True).without_contest_staff()
+              .values_list('user_id', flat=True))
     ids.update(contest.private_contestants.values_list('id', flat=True))
     ids.update(ContestLocation.objects.filter(contest=contest).values_list('user_id', flat=True))
     return Profile.objects.filter(id__in=ids).select_related('user').order_by('user__username')
@@ -245,7 +250,8 @@ def location_entries(contest, query=''):
     locations = dict(ContestLocation.objects.filter(contest=contest).values_list('user_id', 'location'))
     rows = [{'profile': profile, 'team': None, 'key': str(profile.pk), 'name': profile.display_name,
              'location': locations.get(profile.pk, '')} for profile in profiles]
-    ids = set(contest.users.filter(virtual=0, team__isnull=False).values_list('team_id', flat=True))
+    ids = set(contest.users.filter(virtual=0, team__isnull=False).without_contest_staff()
+              .values_list('team_id', flat=True))
     ids.update(contest.private_teams.values_list('pk', flat=True))
     ids.update(contest.team_locations.values_list('team_id', flat=True))
     team_rows = Team.objects.filter(pk__in=ids)

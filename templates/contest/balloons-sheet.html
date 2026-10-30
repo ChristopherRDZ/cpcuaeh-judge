@@ -9,6 +9,8 @@
     {% set profile = balloon.profile %}
     <span class="balloon-user">{{ balloon.participation.display_name }}</span>
     {% if not balloon.participation.team_id and profile.display_name != profile.username %}<span class="balloon-username">{{ profile.username }}</span>{% endif %}
+    {# Who is on the team, so that two teams with names that look alike are not mixed up (equipos-globos-4). #}
+    {% if balloon.participation.team_id %}<span class="balloon-username">{{ balloon.participation.team_roster.all()|map(attribute='username')|join(', ') }}</span>{% endif %}
 {%- endmacro %}
 
 {% macro location(balloon) -%}

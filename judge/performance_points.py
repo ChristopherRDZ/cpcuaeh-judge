@@ -13,8 +13,17 @@ PPBreakdown = namedtuple('PPBreakdown', 'points weight scaled_points problem_nam
                                         'sub_short_status sub_long_status sub_lang')
 
 
-def get_pp_breakdown(user, start=0, end=settings.DMOJ_PP_ENTRIES):
+def get_pp_breakdown(user, start=0, end=settings.DMOJ_PP_ENTRIES, hidden=()):
+    """`hidden` holds the (contest id, cutoff) of the frozen scoreboards whose submissions the reader may not see: the
+    table is public, and it listed an AC inside the freeze with its points (congelacion-revelador-3, 2026-10-29)."""
     join_type = 'STRAIGHT_JOIN' if connection.vendor == 'mysql' else 'INNER JOIN'
+    # Written so that a submission outside any contest passes: NOT (contest_object_id = %s AND ...) is NULL for it.
+    frozen = ''
+    frozen_params = []
+    for contest_id, cutoff in hidden:
+        frozen += (' AND (judge_submission.contest_object_id IS NULL OR judge_submission.contest_object_id <> %s'
+                   ' OR judge_submission.date < %s)')
+        frozen_params += [contest_id, connection.ops.adapt_datetimefield_value(cutoff)]
 
     with connection.cursor() as cursor:
         cursor.execute(f"""
@@ -38,20 +47,20 @@ def get_pp_breakdown(user, start=0, end=settings.DMOJ_PP_ENTRIES):
                 WHERE (judge_problem.is_public AND
                        NOT judge_problem.is_organization_private AND
                        judge_submission.points IS NOT NULL AND
-                       judge_submission.user_id = %s)
+                       judge_submission.user_id = %s{frozen})
                 GROUP BY judge_problem.id
                 HAVING MAX(judge_submission.points) > 0.0
             ) AS max_points_table
             {join_type} judge_submission ON (
                 judge_submission.problem_id = max_points_table.problem_id AND
                 judge_submission.points = max_points_table.max_points AND
-                judge_submission.user_id = %s
+                judge_submission.user_id = %s{frozen}
             )
             {join_type} judge_language ON (judge_submission.language_id = judge_language.id)
             GROUP BY max_points_table.problem_id
             ORDER BY max_points DESC, judge_submission.date DESC
             LIMIT %s OFFSET %s
-        """, (user.id, user.id, end - start + 1, start))
+        """, (user.id, *frozen_params, user.id, *frozen_params, end - start + 1, start))
         data = cursor.fetchall()
 
     breakdown = []

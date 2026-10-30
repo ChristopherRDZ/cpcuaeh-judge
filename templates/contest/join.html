@@ -71,6 +71,14 @@
         {% endif %}
         <div class="team-actions"><button type="submit">{{ _('Continuar') }}</button></div>
     </form>
+    {# Quien fue inscrito por otra persona se puede retirar mientras el equipo no haya enviado nada (equipos-globos-3). #}
+    {% for entry in withdrawable %}
+        <form method="post" class="team-card">{% csrf_token %}
+            <input type="hidden" name="withdraw" value="{{ entry.pk }}">
+            <p>{{ _('%(user)s inscribió al equipo %(team)s y te puso en su lista. Mientras el equipo no envíe nada, puedes retirarte de esa lista y después, si el concurso te deja entrar, participar por tu cuenta o con otro equipo.', user=entry.user.username, team=entry.display_name) }}</p>
+            <div class="team-actions"><button type="submit" class="team-btn-danger">{{ _('Retirarme de la lista') }}</button></div>
+        </form>
+    {% endfor %}
 </div>
 {% endblock %}
 

@@ -79,7 +79,8 @@
 {% endblock %}
 
 {% block after_field_sets %}{{ block.super }}
-    {% if original and original.is_rated and original.ended and perms.judge.contest_rating and has_change_permission %}
+    {# Not while the scoreboard is frozen: the ratings would show the real standings (congelacion-revelador-1). #}
+    {% if original and original.is_rated and original.ended and not original.freeze_active and perms.judge.contest_rating and has_change_permission %}
         <a style="display: none" title="{% trans "Rate" %}" href="{% url 'admin:judge_contest_rate' original.pk %}"
            class="button rerate-link action-link">
             <i class="fa fa-lg fa-signal"></i>

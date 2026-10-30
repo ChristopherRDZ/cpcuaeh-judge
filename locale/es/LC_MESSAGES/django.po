@@ -6851,7 +6851,7 @@ msgid "Bronze medal"
 msgstr "Medalla de bronce"
 
 msgid "First to solve: %(problem)s"
-msgstr "First to solve: %(problem)s"
+msgstr "Primero en resolver: %(problem)s"
 
 msgid "Total time"
 msgstr "Tiempo total"
@@ -12545,3 +12545,131 @@ msgstr "Resend ya no tiene este correo (%(id)s): se borró allí, o la clave aho
 #: cpc 2026-10-28
 msgid "deleted"
 msgstr "borrado"
+
+#: cpc 2026-10-29
+msgid "Reveal the scoreboard before rating: while it is frozen, the ratings would show the real standings."
+msgstr "Revela el marcador antes de calificar: mientras está congelado, la calificación dejaría ver las posiciones reales."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "Not rated, because their scoreboard is still frozen: %(contests)s. Reveal it, then rate each one from its page."
+msgstr "Sin calificar, porque su marcador sigue congelado: %(contests)s. Revélalo y después califica cada uno desde su página."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "The freeze started at %(cutoff)s and the scoreboard has not been revealed."
+msgstr "La congelación empezó el %(cutoff)s y el marcador no se ha revelado."
+
+#: cpc 2026-10-29
+msgid "To lift the freeze, reveal the scoreboard."
+msgstr "Para levantar la congelación, revela el marcador."
+
+#: cpc 2026-10-29
+msgid "Until it is revealed, the start, the end, the time limit and the freeze cannot change: each participation would leave or enter its freeze at another moment."
+msgstr "Hasta revelarlo no pueden cambiar el inicio, el final, el límite de tiempo ni la congelación: cada participación saldría de su congelación o entraría en ella en otro momento."
+
+#: cpc 2026-10-29
+msgid "Until it is revealed, the freeze cannot start at another moment. To change the end of the contest, change only the end: the freeze minutes follow by themselves."
+msgstr "Hasta revelarlo, la congelación no puede empezar en otro momento. Para cambiar el final del concurso, cambia sólo el final: los minutos de congelación se ajustan solos."
+
+#: cpc 2026-10-29
+msgid "The contest cannot end before the freeze began."
+msgstr "El concurso no puede terminar antes de que empezara la congelación."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "The freeze had already started, so it now lasts %(new)d minutes instead of %(old)d: the scoreboard stays frozen from the same moment."
+msgstr "La congelación ya había empezado, así que ahora dura %(new)d minutos en lugar de %(old)d: el marcador sigue congelado desde el mismo momento."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "The scoreboard of this contest is already revealed: to freeze it again, use «%(action)s» in the list of contests (a rated contest also loses its ratings until it is revealed and rated again). If you did not mean to freeze it, open this page again: the scoreboard was revealed after this form was opened."
+msgstr "El marcador de este concurso ya está revelado: para volver a congelarlo, usa «%(action)s» en la lista de concursos (uno calificado pierde además sus calificaciones hasta revelarlo y calificarlo de nuevo). Si no querías congelarlo, vuelve a abrir esta página: el marcador se reveló después de abrir este formulario."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "The scoreboard of this contest was frozen again after this form was opened: open this page again to save it without revealing the scoreboard, or reveal it with «%(action)s» in the list of contests."
+msgstr "El marcador de este concurso se volvió a congelar después de abrir este formulario: vuelve a abrir esta página para guardarlo sin revelar el marcador, o revélalo con «%(action)s» en la lista de concursos."
+
+#: cpc 2026-10-29
+msgid "The authors, curators or testers of this contest changed after it was rated: rate it again so that its ratings match its scoreboard."
+msgstr "Cambiaron los autores, curadores o probadores de este concurso después de calificarlo: vuelve a calificarlo para que su calificación coincida con su marcador."
+
+#: cpc 2026-10-29
+msgid "Equipo"
+msgstr "Equipo"
+
+#: cpc 2026-10-29
+#, python-format
+msgid "%(user)s inscribió al equipo %(team)s y te puso en su lista. Mientras el equipo no envíe nada, puedes retirarte de esa lista y después, si el concurso te deja entrar, participar por tu cuenta o con otro equipo."
+msgstr "%(user)s inscribió al equipo %(team)s y te puso en su lista. Mientras el equipo no envíe nada, puedes retirarte de esa lista y después, si el concurso te deja entrar, participar por tu cuenta o con otro equipo."
+
+#: cpc 2026-10-29
+msgid "Retirarme de la lista"
+msgstr "Retirarme de la lista"
+
+#: cpc 2026-10-29
+msgid "Esa inscripción ya no existe."
+msgstr "Esa inscripción ya no existe."
+
+#: cpc 2026-10-29
+msgid "Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo o la participación terminó."
+msgstr "Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo o la participación terminó."
+
+#: cpc 2026-10-29
+msgid "Esa persona está en la lista de una participación del equipo que sigue en curso: podrás expulsarla cuando termine."
+msgstr "Esa persona está en la lista de una participación del equipo que sigue en curso: podrás expulsarla cuando termine."
+
+#: cpc 2026-10-29
+msgid "Estás en la lista de una participación del equipo que sigue en curso: podrás salir cuando termine."
+msgstr "Estás en la lista de una participación del equipo que sigue en curso: podrás salir cuando termine."
+
+#: cpc 2026-10-29
+msgid "El nombre del equipo no puede llevar caracteres invisibles ni de control."
+msgstr "El nombre del equipo no puede llevar caracteres invisibles ni de control."
+
+#: cpc 2026-10-29
+msgid "El nombre de este equipo lleva caracteres que ya no se admiten (invisibles o de control). Para inscribirlo, un administrador tiene que cambiarle el nombre."
+msgstr "El nombre de este equipo lleva caracteres que ya no se admiten (invisibles o de control). Para inscribirlo, un administrador tiene que cambiarle el nombre."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "Ya hay otro equipo inscrito en este concurso con el nombre %(name)s. Para inscribirse, este equipo necesita otro nombre: un administrador puede cambiárselo, o se puede crear un equipo nuevo."
+msgstr "Ya hay otro equipo inscrito en este concurso con el nombre %(name)s. Para inscribirse, este equipo necesita otro nombre: un administrador puede cambiárselo, o se puede crear un equipo nuevo."
+
+#: cpc 2026-10-29
+msgid "La cuenta de quien es propietario de este equipo ya no está activa, así que nadie más puede invitar, expulsar ni eliminar. Como el integrante activo más antiguo, puedes tomar la propiedad."
+msgstr "La cuenta de quien es propietario de este equipo ya no está activa, así que nadie más puede invitar, expulsar ni eliminar. Como el integrante activo más antiguo, puedes tomar la propiedad."
+
+#: cpc 2026-10-29
+msgid "Tomar la propiedad"
+msgstr "Tomar la propiedad"
+
+#: cpc 2026-10-29
+msgid "¿Tomar la propiedad de este equipo?"
+msgstr "¿Tomar la propiedad de este equipo?"
+
+#: cpc 2026-10-29
+msgid "La cuenta de esa persona no está activa, así que no puede ser propietaria del equipo."
+msgstr "La cuenta de esa persona no está activa, así que no puede ser propietaria del equipo."
+
+#: cpc 2026-10-29
+msgid "Esa persona ya es propietaria del máximo de equipos activos."
+msgstr "Esa persona ya es propietaria del máximo de equipos activos."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "La cuenta del propietario no está activa en: %(teams)s. Nadie más puede gestionar esos equipos; cambia el propietario en su ficha."
+msgstr "La cuenta del propietario no está activa en: %(teams)s. Nadie más puede gestionar esos equipos; cambia el propietario en su ficha."
+
+#: cpc 2026-10-29
+msgid "Esta invitación venció: pide a quien es propietario del equipo que te invite de nuevo."
+msgstr "Esta invitación venció: pide a quien es propietario del equipo que te invite de nuevo."
+
+#: cpc 2026-10-29
+msgid "Vencida"
+msgstr "Vencida"
+
+#: cpc 2026-10-29
+msgid "Quitar"
+msgstr "Quitar"

@@ -7415,3 +7415,82 @@ msgstr "Contest rankings"
 #: cpc 2026-10-25 (revision-20261025)
 msgid "Te has registrado exitosamente. Para confirmar tu cuenta checa el correo que se envió a tu dirección que proporcionaste. P.D.: Revisa la bandeja de Spam :c"
 msgstr "You have signed up successfully. To confirm your account, check the email we sent to the address you gave us. P.S.: Check your spam folder :c"
+
+#: cpc 2026-10-29
+msgid "Equipo"
+msgstr "Team"
+
+#: cpc 2026-10-29
+#, python-format
+msgid "%(user)s inscribió al equipo %(team)s y te puso en su lista. Mientras el equipo no envíe nada, puedes retirarte de esa lista y después, si el concurso te deja entrar, participar por tu cuenta o con otro equipo."
+msgstr "%(user)s registered the team %(team)s and put you on its roster. As long as the team has not submitted anything, you can withdraw from that roster and then, if the contest lets you in, take part on your own or with another team."
+
+#: cpc 2026-10-29
+msgid "Retirarme de la lista"
+msgstr "Withdraw from the roster"
+
+#: cpc 2026-10-29
+msgid "Esa inscripción ya no existe."
+msgstr "That registration no longer exists."
+
+#: cpc 2026-10-29
+msgid "Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo o la participación terminó."
+msgstr "You can no longer withdraw from this registration: you opened it, the team has already submitted something, or the participation is over."
+
+#: cpc 2026-10-29
+msgid "Esa persona está en la lista de una participación del equipo que sigue en curso: podrás expulsarla cuando termine."
+msgstr "That person is on the roster of a team participation that is still in progress: you can remove them when it ends."
+
+#: cpc 2026-10-29
+msgid "Estás en la lista de una participación del equipo que sigue en curso: podrás salir cuando termine."
+msgstr "You are on the roster of a team participation that is still in progress: you can leave when it ends."
+
+#: cpc 2026-10-29
+msgid "El nombre del equipo no puede llevar caracteres invisibles ni de control."
+msgstr "The team name cannot contain invisible or control characters."
+
+#: cpc 2026-10-29
+msgid "El nombre de este equipo lleva caracteres que ya no se admiten (invisibles o de control). Para inscribirlo, un administrador tiene que cambiarle el nombre."
+msgstr "The name of this team has characters that are no longer allowed (invisible or control characters). To register it, an administrator has to change its name."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "Ya hay otro equipo inscrito en este concurso con el nombre %(name)s. Para inscribirse, este equipo necesita otro nombre: un administrador puede cambiárselo, o se puede crear un equipo nuevo."
+msgstr "Another team is already registered in this contest with the name %(name)s. To register, this team needs another name: an administrator can change it, or a new team can be created."
+
+#: cpc 2026-10-29
+msgid "La cuenta de quien es propietario de este equipo ya no está activa, así que nadie más puede invitar, expulsar ni eliminar. Como el integrante activo más antiguo, puedes tomar la propiedad."
+msgstr "The account of the owner of this team is no longer active, so nobody else can invite, remove or delete. As the longest-standing active member, you can take ownership."
+
+#: cpc 2026-10-29
+msgid "Tomar la propiedad"
+msgstr "Take ownership"
+
+#: cpc 2026-10-29
+msgid "¿Tomar la propiedad de este equipo?"
+msgstr "Take ownership of this team?"
+
+#: cpc 2026-10-29
+msgid "La cuenta de esa persona no está activa, así que no puede ser propietaria del equipo."
+msgstr "The account of that person is not active, so they cannot own the team."
+
+#: cpc 2026-10-29
+msgid "Esa persona ya es propietaria del máximo de equipos activos."
+msgstr "That person already owns the maximum number of active teams."
+
+#: cpc 2026-10-29
+#, python-format
+msgid "La cuenta del propietario no está activa en: %(teams)s. Nadie más puede gestionar esos equipos; cambia el propietario en su ficha."
+msgstr "The owner account is not active in: %(teams)s. Nobody else can manage those teams; change the owner on the page of each one."
+
+#: cpc 2026-10-29
+msgid "Esta invitación venció: pide a quien es propietario del equipo que te invite de nuevo."
+msgstr "This invitation has expired: ask the owner of the team to invite you again."
+
+#: cpc 2026-10-29
+msgid "Vencida"
+msgstr "Expired"
+
+#: cpc 2026-10-29
+msgid "Quitar"
+msgstr "Remove"

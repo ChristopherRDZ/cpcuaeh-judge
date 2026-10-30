@@ -88,7 +88,11 @@
                                     <li>
                                         <span class="team-roster-name">
                                             {{ invitation.recipient.username }}
-                                            <span class="team-badge">{{ _('Pendiente') }}</span>
+                                            {% if invitation.expired %}
+                                                <span class="team-badge">{{ _('Vencida') }}</span>
+                                            {% else %}
+                                                <span class="team-badge">{{ _('Pendiente') }}</span>
+                                            {% endif %}
                                         </span>
                                         <form action="{{ url('team_invitation_action', invitation.pk) }}" method="post" class="team-actions">{% csrf_token %}
                                             <button name="action" value="cancel" class="team-btn-secondary team-btn-small">{{ _('Cancelar') }}</button>
@@ -122,6 +126,14 @@
                             </form>
                         </details>
                     {% else %}
+                        {% if can_take %}
+                            {# La cuenta del propietario ya no está activa (equipos-globos-5). #}
+                            <p class="team-note" style="margin-top: 0">{{ _('La cuenta de quien es propietario de este equipo ya no está activa, así que nadie más puede invitar, expulsar ni eliminar. Como el integrante activo más antiguo, puedes tomar la propiedad.') }}</p>
+                            <form method="post" class="team-actions" style="margin-bottom: .8em">{% csrf_token %}
+                                <button name="action" value="take" class="team-btn-secondary"
+                                        data-team-confirm="{{ _('¿Tomar la propiedad de este equipo?') }}">{{ _('Tomar la propiedad') }}</button>
+                            </form>
+                        {% endif %}
                         <p class="team-note" style="margin-top: 0">{{ _('Dejarás de aparecer en futuras participaciones de este equipo. Los concursos que ya jugaste se conservan.') }}</p>
                         <form method="post" class="team-actions">{% csrf_token %}
                             <button name="action" value="leave" class="team-btn-danger"

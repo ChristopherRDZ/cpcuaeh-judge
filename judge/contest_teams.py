@@ -59,6 +59,28 @@ def _access_blocker(contest, profile, virtual=False):
     return _roster_blocker(contest, profile, virtual)
 
 
+def _require_presentable_name(contest, team):
+    """The name a team is shown with on this contest's scoreboard, at its ceremony and on its balloon sheet has to be
+    its own (equipos-globos-4, 2026-10-29): without invisible or control characters, and, for the official
+    registration, not the name of another team already registered here, comparing without capitals or Unicode
+    variants. The contest row is locked by then, so two teams cannot register the same name at once. Virtual
+    participations are not compared: each one is ranked apart."""
+    from judge.team_services import clean_team_name, team_name_key
+    try:
+        clean_team_name(team.name)
+    except ValidationError:
+        raise ValidationError(_('El nombre de este equipo lleva caracteres que ya no se admiten (invisibles o de '
+                                'control). Para inscribirlo, un administrador tiene que cambiarle el nombre.'))
+    if contest.ended:
+        return
+    key = team_name_key(team.name)
+    taken = contest.users.filter(virtual=0, team__isnull=False).exclude(team=team).values_list('team_name', flat=True)
+    if any(team_name_key(name) == key for name in taken):
+        raise ValidationError(_('Ya hay otro equipo inscrito en este concurso con el nombre %(name)s. '
+                                'Para inscribirse, este equipo necesita otro nombre: un administrador puede '
+                                'cambiárselo, o se puede crear un equipo nuevo.') % {'name': team.name})
+
+
 def _chosen_members(members, member_ids, actor):
     """Narrow a team down to who will actually compete. `None` takes the whole team."""
     if member_ids is None:
@@ -156,6 +178,7 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
             if existing is None:
                 from judge.team_services import require_teams_enabled
                 require_teams_enabled()
+                _require_presentable_name(contest, team)
             members = list(team.members.select_related('user').order_by('pk'))
             if existing is None:
                 # The roster is picked now and frozen; joining an existing attempt never re-picks it.
@@ -208,3 +231,37 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
     Profile.objects.filter(pk=actor.pk).update(current_contest=existing)
     actor.current_contest = existing
     return existing
+
+
+def can_withdraw(participation, profile_id):
+    """Whether this person may take themselves off this roster: somebody else registered it, and the team has not sent
+    anything in it (equipos-globos-3, 2026-10-29). Being registered spends the one official registration of each
+    person in a contest, and in a mixed rated contest their rating, and until then nobody asked them."""
+    return (participation.team_id is not None and participation.user_id != profile_id and
+            not participation.ended and not participation.is_disqualified and
+            participation.contains_profile(profile_id) and not participation.submissions.exists())
+
+
+@transaction.atomic
+def withdraw_from_roster(contest_id, actor, participation_id):
+    """Take `actor` off a roster somebody else registered, while the team has sent nothing (can_withdraw); after that
+    they can register on their own. The team keeps competing with the others, also below the minimum size, as when
+    somebody does not show up. The contest row first, as join_attempt locks it, then the participation."""
+    contest = Contest.objects.select_for_update().get(pk=contest_id)
+    try:
+        participation = contest.users.select_for_update().get(pk=participation_id, team__isnull=False)
+    except (ValueError, ContestParticipation.DoesNotExist):
+        raise ValidationError(_('Esa inscripción ya no existe.'))
+    participation.contest = contest
+    if not can_withdraw(participation, actor.pk):
+        raise ValidationError(_('Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo '
+                                'o la participación terminó.'))
+    participation.team_roster.filter(profile=actor).delete()
+    Profile.objects.filter(pk=actor.pk, current_contest=participation).update(current_contest=None)
+    # A submission that landed in the meantime is seen here (READ COMMITTED): then nothing changes.
+    if participation.submissions.exists():
+        raise ValidationError(_('Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo '
+                                'o la participación terminó.'))
+    if actor.current_contest_id == participation.pk:
+        actor.current_contest = None
+    return participation

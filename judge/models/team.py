@@ -52,7 +52,9 @@ class TeamInvitation(models.Model):
 
 
 class ContestTeamMember(models.Model):
-    """Immutable roster of one attempt; changing a team never rewrites contest history."""
+    """Roster of one attempt, fixed when it is registered; changing a team never rewrites contest history. The one
+    change: a member that somebody else registered takes themselves off before the team sends anything
+    (contest_teams.withdraw_from_roster, 2026-10-29)."""
     participation = models.ForeignKey('ContestParticipation', on_delete=models.CASCADE, related_name='team_roster')
     profile = models.ForeignKey('Profile', on_delete=models.PROTECT, related_name='team_contest_entries')
     username = models.CharField(max_length=150)

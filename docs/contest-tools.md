@@ -10,9 +10,10 @@ everyone except the contest's editors sees the standings as they were when the
 freeze began, and the results after that point are also hidden from:
 
 - participation pages and the ranking of each division;
-- submission lists, submission details and live updates;
-- contest statistics, and the **AC rate** and **Users** columns of the contest's
-  problem lists;
+- submission lists, submission details, best solutions and live updates;
+- contest statistics, and the **AC rate** and **Users** of each problem, in the
+  contest and in the site's problem list;
+- user pages: points, performance points, solved problems and the activity map;
 - the API, including the contest history in `/api/v2/user/<name>`.
 
 Your own submissions are never hidden from you. On your own row, a **?** marks a
@@ -26,8 +27,28 @@ its own last minutes. The scoreboard stays frozen after the contest ends, until 
 editor publishes it. Freezing does not change how a contest format calculates
 points.
 
-When you clone a contest, the freeze minutes are copied but the clone starts
-unrevealed.
+Once the freeze has started, its cutoff stays where it is until the reveal. If
+you move the end of a contest without a per-participant window, the freeze
+minutes change to keep the cutoff (rounded up to whole minutes) and the form says
+so. Other changes that would move the cutoff (the start, the time limit, the
+freeze minutes, removing the freeze, or an end before the cutoff) are refused
+until the reveal. A contest that nobody has taken part in live hides nothing, so
+its schedule can change freely.
+
+A contest whose freeze has started cannot be rated until it is revealed: **Rate**
+is hidden and **Rate all ratable contests** skips it. Freezing a rated contest
+again removes its ratings until it is revealed and rated again.
+
+Cloning a contest requires being able to edit it. The clone copies the freeze
+minutes but starts unrevealed.
+
+## Authors, curators and testers
+
+A contest's authors, curators and testers are not contestants. If one of them
+took part before getting the role, alone or on a team's roster, that
+participation is left out of the scoreboard, the API, the balloon desk, the
+ceremony awards and rating. It is kept, and counts again if they lose the role.
+Virtual participations are not affected.
 
 ## Reveal ceremony
 
@@ -49,15 +70,22 @@ playing the ceremony does not publish anything. In a mixed contest, publishing
 unfreezes both divisions. The admin also has **Reveal frozen scoreboards** and
 **Freeze scoreboards again** actions.
 
+A revealed scoreboard is frozen again only with **Freeze scoreboards again**; the
+contest form refuses to do it. The form also refuses to reveal a scoreboard that
+was frozen again after the form was opened. In both cases, open the page again
+to save your other changes. Ticking **scoreboard revealed** on a freshly opened
+form still reveals the scoreboard.
+
 ## Balloon desk
 
 Set each problem's balloon color and color name, and assign **balloon staff** to
 the contest. The color field has a picker, an editable hex value and **No color**.
 
-The **Balloons** tab lists pending and delivered balloons and an activity log.
-Only editors and balloon staff can open it. Staff do not gain contest editing or
-submission access. If two volunteers deliver the same balloon, the second gets a
-notice instead of a duplicate. Undo is recorded in the log; nothing is erased.
+The **Balloons** tab lists pending and delivered balloons, with the members of
+each team, and an activity log. Only editors and balloon staff can open it.
+Staff do not gain contest editing or submission access. If two volunteers
+deliver the same balloon, the second gets a notice instead of a duplicate. Undo
+is recorded in the log; nothing is erased.
 
 A balloon is due for the first fully accepted, finally judged submission of an
 official participation on a problem, within its contest window. Accepted

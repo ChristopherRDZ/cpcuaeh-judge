@@ -112,8 +112,10 @@ class BalloonTest(TestCase):
         self.assertEqual(sheet.held, 2)
 
     def test_no_freeze_configured(self):
+        # A freeze that has started cannot be removed before the scoreboard is revealed (Contest.save refuses
+        # it), so this contest loses its freeze directly in the database.
         self.contest.freeze_minutes = None
-        self.contest.save()
+        type(self.contest).objects.filter(pk=self.contest.pk).update(freeze_minutes=None)
         sheet = build_balloon_sheet(self.contest)
         self.assertEqual(len(sheet.pending), 5)
         self.assertEqual(sheet.held, 0)

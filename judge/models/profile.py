@@ -238,23 +238,35 @@ class Profile(models.Model):
     _pp_table = [pow(settings.DMOJ_PP_STEP, i) for i in range(settings.DMOJ_PP_ENTRIES)]
 
     def calculate_points(self, table=_pp_table):
-        from judge.models import Problem
+        from judge.models import Contest, Problem, Submission
         public_problems = Problem.get_public_problems()
-        data = (
-            public_problems.filter(submission__user=self, submission__points__isnull=False,
-                                   submission__contest__participation__team__isnull=True)
-                           .annotate(max_points=Max('submission__points')).order_by('-max_points')
-                           .values_list('max_points', flat=True).filter(max_points__gt=0)
-        )
+        hidden = Contest.public_freeze_filter()
+        if hidden is None:
+            data = (
+                public_problems.filter(submission__user=self, submission__points__isnull=False,
+                                       submission__contest__participation__team__isnull=True)
+                               .annotate(max_points=Max('submission__points')).order_by('-max_points')
+                               .values_list('max_points', flat=True).filter(max_points__gt=0)
+            )
+            problems = (
+                public_problems.filter(submission__user=self, submission__result='AC',
+                                       submission__contest__participation__team__isnull=True,
+                                       submission__case_points__gte=F('submission__case_total'))
+                .values('id').distinct().count()
+            )
+        else:
+            # The same, without what a frozen scoreboard still hides: points and solved problems are public, and an
+            # AC inside the freeze on a public problem showed up in them before the reveal. Revealing counts it
+            # (Contest.refresh_after_freeze_change; congelacion-revelador-3 and costuras-v1, 2026-10-29).
+            sent = Submission.objects.filter(user=self, problem__in=public_problems,
+                                             contest__participation__team__isnull=True).exclude(hidden)
+            data = (sent.filter(points__isnull=False).values('problem_id').annotate(max_points=Max('points'))
+                    .filter(max_points__gt=0).order_by('-max_points').values_list('max_points', flat=True))
+            problems = (sent.filter(result='AC', case_points__gte=F('case_total'))
+                        .values('problem_id').distinct().count())
         bonus_function = settings.DMOJ_PP_BONUS_FUNCTION
         points = sum(data)
         entries = min(len(data), len(table))
-        problems = (
-            public_problems.filter(submission__user=self, submission__result='AC',
-                                   submission__contest__participation__team__isnull=True,
-                                   submission__case_points__gte=F('submission__case_total'))
-            .values('id').distinct().count()
-        )
         pp = sum(map(mul, table[:entries], data[:entries])) + bonus_function(problems)
         if self.points != points or problems != self.problem_count or self.performance_points != pp:
             self.points = points

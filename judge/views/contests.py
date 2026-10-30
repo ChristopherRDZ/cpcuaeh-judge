@@ -13,7 +13,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.cache import cache
-from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist, PermissionDenied
 from django.db import IntegrityError
 from django.db.models import (BooleanField, Case, Count, F, FloatField, IntegerField, Max, Min, Prefetch, Q,
                               Sum, Value, When)
@@ -368,6 +368,15 @@ class ContestClone(ContestMixin, PermissionRequiredMixin, TitleMixin, SingleObje
     form_class = ContestCloneForm
     permission_required = 'judge.clone_contest'
 
+    def get_object(self, queryset=None):
+        contest = super().get_object(queryset)
+        # The copy hands its problems and settings to whoever makes it, as its author, so it takes being able to edit
+        # the original, not only to see it: a contest that has not started could be copied by anyone it was shown
+        # to (2026-10-29, at the owner's request).
+        if not contest.is_editable_by(self.request.user):
+            raise PermissionDenied()
+        return contest
+
     def form_valid(self, form):
         contest = self.object
 
@@ -428,8 +437,18 @@ class ContestJoin(LoginRequiredMixin, ContestMixin, SingleObjectMixin, View):
 
     def post(self, request, *args, **kwargs):
         from django.core.exceptions import ValidationError
-        from judge.contest_teams import join_attempt
+        from judge.contest_teams import join_attempt, withdraw_from_roster
         self.object = self.get_object()
+        if 'withdraw' in request.POST:
+            # Taking oneself off a roster somebody else registered (equipos-globos-3, 2026-10-29).
+            try:
+                withdraw_from_roster(self.object.pk, request.profile, request.POST.get('withdraw', ''))
+            except ValidationError as exc:
+                return self.choose_participation(' '.join(exc.messages), status=400)
+            # Whoever only saw a private contest through the roster no longer sees it (round 1 of the review).
+            if Contest.objects.get(pk=self.object.pk).is_accessible_by(request.user):
+                return HttpResponseRedirect(reverse('contest_join', args=(self.object.key,)))
+            return HttpResponseRedirect(reverse('contest_list'))
         selection = request.POST.get('selection', '')
         if not selection and self.object.participation_mode == Contest.INDIVIDUAL:
             selection = 'individual'
@@ -453,13 +472,16 @@ class ContestJoin(LoginRequiredMixin, ContestMixin, SingleObjectMixin, View):
         return HttpResponseRedirect(reverse('problem_list'))
 
     def choose_participation(self, error=None, selection='', status=200, picked=None):
+        from judge.contest_teams import can_withdraw
         from judge.models import Profile, Team
         contest = self.object
         resumable = [p for p in contest.users.for_profile(self.request.profile).filter(virtual__gte=0)
-                     .select_related('contest', 'user__user').order_by('-virtual') if not p.ended and not p.is_disqualified]
+                     .select_related('contest', 'user__user').prefetch_related('team_roster').order_by('-virtual')
+                     if not p.ended and not p.is_disqualified]
         return render(self.request, 'contest/join.html', {
             'title': _('Entrar al concurso'), 'contest': contest, 'error': error, 'selection': selection,
             'resumable': resumable, 'can_edit': self.can_edit,
+            'withdrawable': [p for p in resumable if can_withdraw(p, self.request.profile.id)],
             'teams': Team.objects.filter(members=self.request.profile, is_active=True).prefetch_related(
                 Prefetch('members', queryset=Profile.objects.select_related('user').order_by('id'))),
             'picked': picked, 'own_id': self.request.profile.id,
@@ -840,7 +862,9 @@ def base_contest_ranking_list(contest, problems, queryset, frozen=False, own_pro
 def contest_ranking_list(contest, problems, frozen=False, own_profile_id=None, division=None):
     from judge.contest_teams import in_division
     division = division or ('team' if contest.participation_mode == Contest.TEAM else 'individual')
-    queryset = in_division(contest.users.filter(virtual=0), division).prefetch_related('user__organizations')
+    # Whoever organizes or tests the contest today is not on the scoreboard (without_contest_staff, 2026-10-29).
+    queryset = in_division(contest.users.filter(virtual=0).without_contest_staff(), division) \
+        .prefetch_related('user__organizations')
     if frozen:
         # Rank by what the reader is allowed to see. A participation with no frozen copy has not moved since
         # the freeze, so its live fields are also its frozen ones.

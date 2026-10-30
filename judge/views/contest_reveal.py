@@ -22,6 +22,7 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import F, OuterRef, Subquery
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -378,8 +379,10 @@ def build_reveal(contest, division=None):
     problems = [RevealProblem(problem.id, problem.points, contest.get_label_for_problem(i), problem.problem.name)
                 for i, problem in enumerate(contest_problems)]
 
+    # Whoever organizes or tests the contest today is not a contestant: no row, no award (without_contest_staff).
     participations = list(
-        in_division(contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False), division)
+        in_division(contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
+                    .without_contest_staff(), division)
         .select_related('user__user').prefetch_related('user__organizations', 'team_roster__profile__user')
         .defer('user__about', 'user__organizations__about').order_by('id'),
     )
@@ -521,9 +524,14 @@ def contest_reveal_publish(request, contest):
     if not contest.is_editable_by(request.user):
         raise Http404()
 
-    # The same update as the administration's "Reveal frozen scoreboards" action, for this one contest.
-    updated = Contest.objects.filter(id=contest.id, freeze_minutes__isnull=False,
-                                     scoreboard_revealed=False).update(scoreboard_revealed=True)
+    # The same as the administration's "Reveal frozen scoreboards" action, for this one contest: also what is stored
+    # and depends on the freeze is recomputed, in the same transaction (Contest.refresh_after_freeze_change).
+    with transaction.atomic():
+        updated = Contest.objects.filter(id=contest.id, freeze_minutes__isnull=False,
+                                         scoreboard_revealed=False).update(scoreboard_revealed=True)
+        if updated:
+            contest.refresh_after_freeze_change()
+        transaction.on_commit(lambda: cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY))
     cache.delete(Contest.FROZEN_WINDOWS_CACHE_KEY)
     already = contest.freeze_minutes is not None and contest.scoreboard_revealed
     return JsonResponse({'published': bool(updated), 'public': bool(updated) or already})

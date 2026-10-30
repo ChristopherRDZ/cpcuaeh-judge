@@ -65,7 +65,10 @@ class SubmissionDetailBase(LoginRequiredMixin, TitleMixin, SubmissionMixin, Deta
 
     def no_permission(self, submission):
         problem = submission.problem
-        if problem.is_accessible_by(self.request.user) and \
+        # Which problem a submission behind a frozen scoreboard was for is part of what the freeze hides: the page named
+        # it, and going through the numbers after the cutoff told what each team was trying (2026-10-29, noted by the
+        # review of the first batch).
+        if not submission.is_hidden_by_freeze(self.request.user) and problem.is_accessible_by(self.request.user) and \
                 problem.submission_source_visibility == SubmissionSourceAccess.SOLVED:
 
             message = escape(_('Permission denied. Solve %(problem)s in order to view it.')) % {
