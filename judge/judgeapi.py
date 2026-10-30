@@ -116,14 +116,17 @@ def update_disable_judge(judge):
 
 def abort_submission(submission):
     from .models import Submission
-    # We only want to try to abort a submission if it's still grading, otherwise this can lead to fully graded
-    # submissions marked as aborted.
-    if submission.status == 'D':
+    # We only want to try to abort a submission if it's still queued or grading, otherwise this can lead to fully
+    # graded submissions marked as aborted. That includes the other final states: an internal error marked as aborted
+    # showed its text, the compile log of an interactor among others, as compilation warnings to the contestant, and
+    # a custom test gave back the traceback of the judge (problemas-datos-3 and problemas-prueba-pdf-3).
+    if submission.is_graded:
         return
     response = judge_request({'name': 'terminate-submission', 'submission-id': submission.id})
     # This defaults to true, so that in the case the JudgeList fails to remove the submission from the queue,
     # and returns a bad-request, the submission is not falsely shown as "Aborted" when it will still be judged.
-    if not response.get('judge-aborted', True):
-        Submission.objects.filter(id=submission.id).update(status='AB', result='AB', points=0)
+    # And only while it is still queued or grading: a result that arrived meanwhile stays.
+    still_running = Submission.objects.filter(id=submission.id, status__in=('QU', 'P', 'G'))
+    if not response.get('judge-aborted', True) and still_running.update(status='AB', result='AB', points=0):
         event.post('sub_%s' % Submission.get_id_secret(submission.id), {'type': 'aborted'})
         _post_update_submission(submission, done=True)

@@ -26,7 +26,7 @@ from jinja2.utils import htmlsafe_json_dumps
 from judge.highlight_code import highlight_code
 from judge.models import Problem, ProblemData, ProblemTestCase, Submission, problem_data_storage
 from judge.utils.problem_data import INTERACTIVE_EXAMPLE_DIR, INTERACTOR_LANGUAGES, ProblemDataCompiler, \
-    interactor_uses_testlib
+    TESTLIB_HEADER, interactor_uses_testlib
 from judge.utils.unicode import utf8text
 from judge.utils.views import TitleMixin, add_file_response
 from judge.views.problem import ProblemMixin
@@ -48,7 +48,9 @@ mimetypes.add_type('application/x-yaml', '.yml')
 FIELDS_PER_CASE_ROW = len(('order', 'type', 'input_file', 'output_file', 'points', 'is_pretest',
                            'output_limit', 'output_prefix', 'checker', 'checker_args',
                            'generator_args', 'batch_dependencies', 'id', 'DELETE'))
-FIELDS_OUTSIDE_CASES = 20  # management form, the data form above the table, CSRF and slack
+# What the form sends besides the case rows, at most: the CSRF token, the management form (4), the data form above the
+# table (6, and 4 boxes when ticked) and the hidden template row of the table (12). 27 in all; the rest is slack.
+FIELDS_OUTSIDE_CASES = 40
 
 
 def max_case_rows(formset_class):
@@ -101,12 +103,33 @@ class ProblemDataForm(ModelForm):
             raise ValidationError(_('The interactor must not be larger than 1 MB.'))
         return interactor
 
+    def stored_name(self, field, value):
+        """Where a file of this form is, or will be once saved: an upload goes through the same steps as when it is
+        saved (the problem's folder, and the name the storage makes valid: «gen 2.py» becomes gen_2.py)."""
+        if isinstance(value, UploadedFile):
+            return self.instance._meta.get_field(field).generate_filename(self.instance, value.name)
+        return value.name
+
+    def submission_names(self):
+        """The names the judge gives a submission in C or C++ to compile it, which its compile errors start with:
+        the problem's code and the extension, twice (sumacpp.cpp, sumac.c; dmoj.executors.gcc_executor). The bridge
+        tells the errors of the interactor apart by its name (judge.bridge.judge_handler), so it cannot have one."""
+        code = self.instance.problem.code
+        return {code + extension[1:] + extension for extension in ('.c', '.cc', '.cpp')
+                if extension in INTERACTOR_LANGUAGES}
+
     def clean(self):
         cleaned_data = super().clean()
-        interactor, generator = cleaned_data.get('interactor'), cleaned_data.get('generator')
-        if interactor and generator and \
-                os.path.basename(interactor.name) == os.path.basename(generator.name):
+        # The three files share the problem's folder, and saving one where another is would write over it.
+        names = {field: self.stored_name(field, cleaned_data[field]) for field in ProblemData.FILE_FIELDS
+                 if cleaned_data.get(field)}
+        if 'interactor' in names and names['interactor'] == names.get('generator'):
             self.add_error('interactor', _('The generator and the interactor need different file names.'))
+        if 'zipfile' in names and names['zipfile'] == names.get('generator'):
+            self.add_error('generator', _('The generator and the data zip need different file names.'))
+        if 'interactor' in names and os.path.basename(names['interactor']) in self.submission_names():
+            self.add_error('interactor', _('This is the name the judge gives to the C and C++ submissions of this '
+                                           'problem. Give the interactor another name.'))
         return cleaned_data
 
     def clean_zipfile(self):
@@ -134,8 +157,14 @@ class ProblemDataForm(ModelForm):
 
     def clean_generator(self):
         generator = self.cleaned_data['generator']
-        if generator and generator.name == 'init.yml':
-            raise ValidationError(_('Generators must not be named init.yml.'))
+        # By the name it would be saved under: « init.yml» is stored as init.yml as well.
+        if isinstance(generator, UploadedFile):
+            name = os.path.basename(self.stored_name('generator', generator))
+            if name == 'init.yml':
+                raise ValidationError(_('Generators must not be named init.yml.'))
+            # The site writes the header next to an interactor that includes it (ProblemDataCompiler).
+            if name == TESTLIB_HEADER:
+                raise ValidationError(_('Generators must not be named testlib.h.'))
 
         return generator
 
@@ -275,7 +304,9 @@ class ProblemDataView(TitleMixin, ProblemManagerMixin):
 
     def get_context_data(self, **kwargs):
         context = super(ProblemDataView, self).get_context_data(**kwargs)
-        valid_files = []
+        # A form sent back with errors keeps what was sent: its rows with their errors, and the files they chose from.
+        # Both used to be built again, empty, so the errors of the rows were never shown.
+        valid_files = kwargs.get('valid_files', [])
         if 'data_form' not in context:
             context['data_form'] = self.get_data_form()
             try:
@@ -290,7 +321,8 @@ class ProblemDataView(TitleMixin, ProblemManagerMixin):
         context['valid_files_json'] = htmlsafe_json_dumps(valid_files)
         context['max_case_rows_json'] = htmlsafe_json_dumps(max_case_rows(ProblemCaseFormSet))
 
-        context['cases_formset'] = self.get_case_formset(valid_files)
+        if 'cases_formset' not in context:
+            context['cases_formset'] = self.get_case_formset(valid_files)
         context['all_case_forms'] = chain(context['cases_formset'], [context['cases_formset'].empty_form])
         return context
 
@@ -324,6 +356,11 @@ class ProblemDataView(TitleMixin, ProblemManagerMixin):
                 case.delete()
             ProblemDataCompiler.generate(problem, data, problem.cases.order_by('order'), valid_files)
             return HttpResponseRedirect(request.get_full_path())
+        # The browser does not keep a file it sent. A zip that came with a form sent back was not saved, and the rows
+        # come back pointing to its files: sent again without it, they would point to files that are not there, and
+        # the problem would lose its init.yml.
+        if 'problem-data-zipfile' in request.FILES and not data_form.has_error('zipfile'):
+            data_form.add_error('zipfile', _('This zip file was not saved: choose it again before you submit.'))
         return self.render_to_response(self.get_context_data(data_form=data_form, cases_formset=cases_formset,
                                                              valid_files=valid_files))
 

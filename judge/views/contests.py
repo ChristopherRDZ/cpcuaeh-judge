@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import os
-import tempfile
 from calendar import Calendar, SUNDAY
 from collections import defaultdict, namedtuple
 from datetime import date, datetime, time, timedelta, timezone as datetime_timezone
@@ -45,7 +44,8 @@ from judge.models import ArenaGame, Contest, ContestMoss, ContestParticipation, 
 from judge.tasks import run_moss
 from judge.utils.celery import redirect_to_task_status
 from judge.utils.opengraph import generate_opengraph
-from judge.utils.pdfoid import PDF_RENDERING_ENABLED, render_pdf
+from judge.utils.pdfoid import PDF_RENDERING_ENABLED, free_render_slots, keep_pdf, release_pdf_lock, \
+    release_render_slot, render_pdf, take_pdf_lock, take_render_slot
 from judge.utils.problems import _get_result_data
 from judge.utils.ranker import ranker
 from judge.utils.stats import get_bar_chart, get_pie_chart
@@ -1219,24 +1219,36 @@ class ContestProblemsPdf(LoginRequiredMixin, ContestMixin, SingleObjectMixin, Vi
         if not can_download_contest_pdf(request, contest):
             return self.not_found(request, contest)
         language = request.LANGUAGE_CODE if request.LANGUAGE_CODE in self.languages else settings.LANGUAGE_CODE
+        # Contest keys and language codes have no dots or slashes, and the PDF of a problem is <code>.<language>.pdf
+        # with a code of letters and digits only: the dash keeps the two kinds apart.
+        prefix = 'contest-%s.%s.' % (contest.key, language)
+        # One render at a time of the PDF of a contest in a language, whichever its version.
+        lock_key = 'contest_pdf:' + prefix
+        folder = settings.DMOJ_PDF_PROBLEM_CACHE
+        # CPC (problemas-prueba-pdf-1, 2026-10-30): when it starts, everybody asks for its PDF, and each page that waits
+        # asks again every few seconds. While it was never printed, and either it is being printed or no render slot
+        # is free for it, they wait without building the HTML of every statement each time.
+        if folder and not self.kept(folder, prefix) and (cache.get(lock_key) is not None or not free_render_slots()):
+            return self.preparing(request)
         html, count = contest_pdf_html(request, contest, language)
         if not count:
             return self.not_found(request, contest)
         fingerprint = hashlib.sha256(html.encode('utf-8')).hexdigest()[:16]
-        # Contest keys and language codes have no dots or slashes, and the PDF of a problem is <code>.<language>.pdf
-        # with a code of letters and digits only: the dash keeps the two kinds apart.
-        prefix = 'contest-%s.%s.' % (contest.key, language)
         basename = prefix + fingerprint + '.pdf'
-        folder = settings.DMOJ_PDF_PROBLEM_CACHE
         path = os.path.join(folder, basename) if folder else None
 
         if path is None or not os.path.exists(path):
-            lock = 'contest_pdf:' + basename
-            if not cache.add(lock, 1, CONTEST_PDF_LOCK_SECONDS):
+            lock = take_pdf_lock(lock_key, CONTEST_PDF_LOCK_SECONDS)
+            if lock is None:
                 return self.preparing(request)
             try:
                 # Another request may have finished it between the check and the lock.
                 if path is None or not os.path.exists(path):
+                    # One of the render slots of the whole site, shared with the PDF of each problem; the PDF of a
+                    # contest may take the last free one (problemas-prueba-pdf-1, 2026-10-30).
+                    slot = take_render_slot(CONTEST_PDF_LOCK_SECONDS, last=True)
+                    if slot is None:
+                        return self.preparing(request)
                     self.logger.info('Rendering contest PDF in %s: %s (%d problems)', language, contest.key, count)
                     try:
                         pdf = render_pdf(html=html, title=contest.name, footer=True,
@@ -1246,18 +1258,13 @@ class ContestProblemsPdf(LoginRequiredMixin, ContestMixin, SingleObjectMixin, Vi
                         return generic_message(request, _('Could not prepare the PDF'),
                                                _('The PDF with every statement could not be prepared right now. '
                                                  'Please try again in a moment.'), status=503)
+                    finally:
+                        release_render_slot(slot)
                     if path is None:
                         return self.pdf_response(contest, content=pdf)
                     # Written aside and moved into place at once, like the PDF of each problem: a failed write
                     # leaves nothing behind and nobody reads a half-written file.
-                    with tempfile.NamedTemporaryFile(dir=folder, prefix=basename, suffix='.part',
-                                                     delete=False) as stream:
-                        try:
-                            stream.write(pdf)
-                        except BaseException:
-                            os.unlink(stream.name)
-                            raise
-                    os.replace(stream.name, path)
+                    keep_pdf(path, pdf)
                     for name in os.listdir(folder):
                         if name.startswith(prefix) and name.endswith('.pdf') and name != basename:
                             try:
@@ -1265,7 +1272,8 @@ class ContestProblemsPdf(LoginRequiredMixin, ContestMixin, SingleObjectMixin, Vi
                             except OSError:
                                 pass
             finally:
-                cache.delete(lock)
+                # Only its own lock: if it expired meanwhile, another request may hold it now.
+                release_pdf_lock(lock)
         response = self.pdf_response(contest)
         internal = settings.DMOJ_PDF_PROBLEM_INTERNAL
         try:
@@ -1274,6 +1282,14 @@ class ContestProblemsPdf(LoginRequiredMixin, ContestMixin, SingleObjectMixin, Vi
             # Replaced just now by a newer version, after a statement changed: that one is on its way.
             return self.preparing(request)
         return response
+
+    @staticmethod
+    def kept(folder, prefix):
+        """Whether the PDF cache holds some version of this PDF, maybe an old one; when unsure, as if it did."""
+        try:
+            return any(name.startswith(prefix) and name.endswith('.pdf') for name in os.listdir(folder))
+        except OSError:
+            return True
 
     def not_found(self, request, contest):
         return generic_message(request, _('No such contest'),

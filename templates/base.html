@@ -3,13 +3,6 @@
 <head>
 
 
-    <meta property="og:title" content="{{ title }} - {{ SITE_LONG_NAME }}">
-    <meta property="og:description" content="{{ meta_description|default('Servidor para organizar concursos y resolver problemas del Club de Programación Competitiva UAEH') }}">
-    <meta property="og:image" content="{{ request.build_absolute_uri(static('icons/logo.png')) }}">
-    <meta property="og:url" content="{{ request.build_absolute_uri(request.get_full_path()) }}">
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="{{ SITE_LONG_NAME }}">
-
     <title>{% block title %}{{ title }} - {{ SITE_LONG_NAME }}{% endblock %}</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     {% if misc_config.meta_keywords %}
@@ -69,16 +62,18 @@
     <meta name="msapplication-TileImage" content="/mstile-144x144.png">
     {# Chrome 39 for Android colour #}
     <meta name="theme-color" content="#FFBB33">
-    {% if og_image %}
-        <meta property="og:image" content="{{ request.build_absolute_uri(og_image) }}">
-    {% endif %}
-    {% block og_title %}{% endblock %}
+    {# One set of Open Graph tags (markdown-plantillas-2, 2026-10-30). The fork had added a second one at the top of
+       the head: pages of problems, contests and posts went out with two descriptions, two site names and two
+       addresses, and the logo before the image of the page. The site's defaults are kept where the page has none:
+       the logo, and the description of the club, also when the page's own is empty. #}
+    {% block og_title %}<meta property="og:title" content="{{ title }} - {{ SITE_LONG_NAME }}">{% endblock %}
+    <meta property="og:type" content="website">
+    <meta property="og:image"
+          content="{{ request.build_absolute_uri(og_image or static('icons/logo.png')) }}">
     <meta property="og:site_name" content="{{ SITE_LONG_NAME }}">
     <meta property="og:url"
           content="{{ DMOJ_SCHEME }}://{{ DMOJ_CANONICAL|default(site.domain) }}{{ request.get_full_path() }}">
-    {% if meta_description %}
-        <meta property="og:description" content="{{ meta_description }}">
-    {% endif %}
+    <meta property="og:description" content="{{ meta_description or 'Servidor para organizar concursos y resolver problemas del Club de Programación Competitiva UAEH' }}">
     {% block meta %}{% endblock %}
     {% if not INLINE_FONTAWESOME %}
         <link rel="stylesheet" href="{{ FONTAWESOME_CSS }}">
@@ -427,6 +422,11 @@
         font-family: Arial, sans-serif;
     }
 
+    /* It takes the keyboard when nobody is typing, without a ring around the whole box. */
+    #announcement-box:focus {
+        outline: none;
+    }
+
     #announcement-box-title {
         font-size: 1.1em;
         margin-bottom: 0.8em;
@@ -518,7 +518,7 @@
 </style>
 
 <div id="announcement-overlay">
-    <div id="announcement-box" role="alertdialog" aria-labelledby="announcement-box-title">
+    <div id="announcement-box" role="alertdialog" aria-labelledby="announcement-box-title" tabindex="-1">
         <div id="announcement-box-title">{{ SITE_NAME }}</div>
         <div id="announcement-box-items"></div>
         <div id="announcement-box-actions">
@@ -533,16 +533,28 @@
         // channel, so nothing that can reach the daemon's publishing port can put
         // words on this page.
         var POLL_INTERVAL = 60000;
-        var STORAGE_KEY = 'announcements_seen';
+        // What each account closed is kept apart (aclaraciones-anuncios-10, 2026-10-30): on a shared computer, what
+        // one person closed stopped popping up for whoever signed in next. The list from before, under the old name,
+        // is what this browser had closed: each account starts from it, so nobody is shown again what was already
+        // closed here, and it is never written again.
+        var OLD_STORAGE_KEY = 'announcements_seen';
+        var STORAGE_KEY = OLD_STORAGE_KEY + ':{% if request.user.is_authenticated %}{{ request.user.id }}{% else %}anon{% endif %}';
+        // The box neither takes the keyboard from whoever is typing nor closes with a key pressed without looking
+        // (aclaraciones-anuncios-4): Enter no longer closes it, and Escape only once it has been on screen this long.
+        var KEY_DELAY = 1500;
         var url = '{{ url('announcements_active') }}';
 
         var $overlay = $('#announcement-overlay');
         var $items = $('#announcement-box-items');
         var showing = [];
+        var opened_at = 0;
+        var focus_before = null;
 
         function seen_ids() {
             try {
                 var raw = localStorage.getItem(STORAGE_KEY);
+                if (raw === null)
+                    raw = localStorage.getItem(OLD_STORAGE_KEY);
                 var parsed = raw ? JSON.parse(raw) : [];
                 if (!Array.isArray(parsed))
                     return [];
@@ -589,19 +601,37 @@
                 $items.append(item);
                 showing.push(pending[j].key);
             }
+            focus_before = document.activeElement;
             $overlay.show();
-            $('#announcement-ok').focus();
+            opened_at = Date.now();
+            // Whoever is typing keeps the keyboard. Otherwise the box takes it, but not its button, where Enter or the
+            // space bar would close it.
+            if (!typing())
+                $('#announcement-box').focus();
+        }
+
+        function typing() {
+            var element = document.activeElement;
+            if (!element || element === document.body)
+                return false;
+            var tag = element.tagName;
+            return element.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' &&
+                !/^(button|checkbox|color|file|hidden|image|radio|range|reset|submit)$/i.test(element.type));
         }
 
         function dismiss() {
             remember(showing);
             showing = [];
             $overlay.hide();
+            // Back to where the keyboard was, the editor of a submission for instance.
+            if (focus_before && focus_before !== document.body && document.contains(focus_before))
+                focus_before.focus();
+            focus_before = null;
         }
 
         $('#announcement-ok').click(dismiss);
         $(document).on('keydown.announcement', function (e) {
-            if ($overlay.is(':visible') && (e.which === 27 || e.which === 13))
+            if ($overlay.is(':visible') && e.which === 27 && Date.now() - opened_at >= KEY_DELAY)
                 dismiss();
         });
 

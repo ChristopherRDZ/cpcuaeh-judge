@@ -12673,3 +12673,112 @@ msgstr "Vencida"
 #: cpc 2026-10-29
 msgid "Quitar"
 msgstr "Quitar"
+
+#: cpc 2026-10-30
+msgid "Search contests..."
+msgstr "Buscar concursos..."
+
+#: cpc 2026-10-30
+msgid "There are no past contests."
+msgstr "No hay concursos pasados."
+
+#: cpc 2026-10-30
+msgid "The question as published only changes along with a public answer. Write the answer and make it public, or leave it as it was."
+msgstr "La pregunta tal como se publica sólo cambia junto con una respuesta pública. Escribe la respuesta y hazla pública, o déjala como estaba."
+
+#: cpc 2026-10-30
+msgid "Clarifications are published when the contest ends."
+msgstr "Las aclaraciones se publican al terminar el concurso."
+
+#: cpc 2026-10-30
+msgid "Send this answer, with the question, to every contestant"
+msgstr "Enviar esta respuesta, con la pregunta, a todos los concursantes"
+
+#: cpc 2026-10-30
+msgid "Question as it will be published"
+msgstr "Pregunta tal como se publicará"
+
+#: cpc 2026-10-30
+msgid "Rewrite it if it gives away how somebody is solving a problem, or empty it to publish only the answer. Whoever asked keeps seeing their question as they wrote it."
+msgstr "Reescríbela si revela cómo alguien está resolviendo un problema, o vacíala para publicar sólo la respuesta. Quien preguntó sigue viendo su pregunta como la escribió."
+
+#: cpc 2026-10-30
+msgid "This question had already been answered, so your answer was not saved."
+msgstr "Esta pregunta ya tenía respuesta, así que la tuya no se guardó."
+
+#: cpc 2026-10-30
+#, python-format
+msgid "Your answer was: %(answer)s"
+msgstr "Tu respuesta era: %(answer)s"
+
+#: cpc 2026-10-30
+msgid "The answer is empty."
+msgstr "La respuesta está vacía."
+
+#: cpc 2026-10-30
+msgid "question as published"
+msgstr "pregunta tal como se publica"
+
+#: cpc 2026-10-30
+msgid "What every contestant reads above a public answer. Rewrite it if it gives away how somebody is solving a problem, or empty it to publish only the answer. Whoever asked keeps seeing the question above as they wrote it."
+msgstr "Lo que todos los concursantes leen arriba de una respuesta pública. Reescríbela si revela cómo alguien está resolviendo un problema, o vacíala para publicar sólo la respuesta. Quien preguntó sigue viendo la pregunta de arriba como la escribió."
+
+#: cpc 2026-10-30
+msgid "A public answer is shown to every contestant, with the question as published below. A private one only goes back to whoever asked."
+msgstr "Una respuesta pública se muestra a todos los concursantes, con la pregunta tal como se publica (abajo). Una privada sólo le llega a quien preguntó."
+
+#: cpc 2026-10-30
+msgid "A question asked by a team stays in the contest where the team asked it."
+msgstr "Una pregunta de un equipo se queda en el concurso donde el equipo la hizo."
+
+#: cpc 2026-10-30
+msgid "Only the answer is published."
+msgstr "Sólo se publica la respuesta."
+
+#: cpc 2026-10-30
+msgid "The PDF of this problem is being prepared. It opens by itself in a few seconds."
+msgstr "Se está preparando el PDF de este problema. Se abrirá solo en unos segundos."
+
+#: cpc 2026-10-30
+msgid "The PDF of this problem could not be prepared right now. Please try again in a moment."
+msgstr "Ahora mismo no se pudo preparar el PDF de este problema. Vuelve a intentarlo en un momento."
+
+#: cpc 2026-10-30
+msgid "This zip file was not saved: choose it again before you submit."
+msgstr "Este archivo zip no se guardó: vuelve a elegirlo antes de enviar."
+
+#: cpc 2026-10-30
+msgid "Generators must not be named testlib.h."
+msgstr "Los generadores no deben ser llamados testlib.h."
+
+#: cpc 2026-10-30
+msgid "This is the name the judge gives to the C and C++ submissions of this problem. Give the interactor another name."
+msgstr "Es el nombre que el juez da a los envíos en C y C++ de este problema. Ponle otro nombre al interactor."
+
+#: cpc 2026-10-30
+msgid "This zip file and the {count} saved case(s) it replaces do not fit in one submission. The saved cases are now marked for deletion: press Submit to delete them, and the table then fills in from the zip file by itself. Until you submit it as well, the problem has no test cases."
+msgstr "Este archivo zip y los {count} caso(s) guardados que reemplaza no caben en un solo envío. Los casos guardados ya quedaron marcados para borrarse: pulsa Enviar para borrarlos y después la tabla se llenará sola con el archivo zip. Hasta que también la envíes, el problema se queda sin casos de prueba."
+
+#: cpc 2026-10-30
+msgid "The generator and the data zip need different file names."
+msgstr "El generador y el zip de datos necesitan nombres de archivo distintos."
+
+#: cpc 2026-10-30
+msgid "Another registration with this email address or username is being processed. Please try again in a minute."
+msgstr "Se está procesando otro registro con este correo o nombre de usuario. Inténtalo de nuevo en un minuto."
+
+#: cpc 2026-10-30
+msgid "Mi cuenta"
+msgstr "Mi cuenta"
+
+#: cpc 2026-10-30
+msgid "Hecho por CPC-UAEH."
+msgstr "Hecho por CPC-UAEH."
+
+#: cpc 2026-10-30
+msgid "Invitaciones de equipos pendientes"
+msgstr "Invitaciones de equipos pendientes"
+
+#: cpc 2026-10-30
+msgid "Publicar resultados descongela ambos rankings."
+msgstr "Publicar resultados descongela ambos rankings."

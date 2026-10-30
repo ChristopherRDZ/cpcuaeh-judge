@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import tempfile
 from datetime import timedelta
 from operator import itemgetter
 from random import randrange
@@ -9,6 +8,7 @@ from statistics import mean, median
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db import transaction
 from django.db.models import BooleanField, Case, CharField, Count, F, FilteredRelation, Prefetch, Q, When
@@ -33,7 +33,8 @@ from judge.models import ContestSubmission, Judge, Language, Problem, ProblemGro
     ProblemTranslation, ProblemType, RuntimeVersion, Solution, Submission, SubmissionSource
 from judge.utils.diggpaginator import DiggPaginator
 from judge.utils.opengraph import generate_opengraph
-from judge.utils.pdfoid import PDF_RENDERING_ENABLED, render_pdf
+from judge.utils.pdfoid import PDF_RENDERING_ENABLED, keep_pdf, release_pdf_lock, release_render_slot, render_pdf, \
+    take_pdf_lock, take_render_slot
 from judge.utils.problems import contest_attempted_ids, contest_completed_ids, hot_problems, user_attempted_ids, \
     user_completed_ids
 from judge.utils.strings import safe_float_or_none, safe_int_or_none
@@ -294,9 +295,37 @@ class LatexError(Exception):
     pass
 
 
-class ProblemPdfView(ProblemMixin, SingleObjectMixin, View):
+# CPC (problemas-prueba-pdf-1, 2026-10-30): pdfoid prints one PDF at a time and uWSGI kills a worker that waits more
+# than 120 s (harakiri). A render gives up after 5 s to connect and 60 s to answer; the lock of each PDF and its render
+# slot (judge.utils.pdfoid) expire a little after that, in case the worker dies holding them.
+PROBLEM_PDF_RENDER_TIMEOUT = (5, 60)
+PROBLEM_PDF_LOCK_SECONDS = 75
+# The page that says the PDF is on its way asks again by itself after this many seconds.
+PROBLEM_PDF_RETRY_SECONDS = 5
+
+
+def default_pdf_language():
+    """The language of the site as one of settings.LANGUAGES: in production LANGUAGE_CODE is en-ca, that is, en."""
+    try:
+        return translation.get_supported_language_variant(settings.LANGUAGE_CODE)
+    except LookupError:
+        return 'en'
+
+
+class ProblemPdfView(LoginRequiredMixin, ProblemMixin, SingleObjectMixin, View):
+    """The statement of a problem in one PDF, kept in the PDF cache once printed.
+
+    CPC (problemas-prueba-pdf-1, 2026-10-30): only with a session, like the PDF of a contest. Only one request renders
+    a given PDF, and the PDF of one problem at a time in the whole site, leaving the other render slot for the PDFs of
+    contests (judge.utils.pdfoid.take_render_slot); the others get a page that asks again by itself instead of
+    holding a worker. A new PDF is only printed in Spanish, English and the languages the problem is translated to;
+    any other language goes to the PDF in the language of the site. What the cache already holds is served in any
+    language.
+    """
     logger = logging.getLogger('judge.problem.pdf')
     languages = set(map(itemgetter(0), settings.LANGUAGES))
+    # Printed for every problem, besides the languages it is translated to.
+    printed_languages = frozenset(('es', 'en'))
 
     def get(self, request, *args, **kwargs):
         if not PDF_RENDERING_ENABLED:
@@ -327,33 +356,68 @@ class ProblemPdfView(ProblemMixin, SingleObjectMixin, View):
                         'url': request.build_absolute_uri(),
                     }).replace('"//', '"https://').replace("'//", "'https://"),
                     title=problem_name,
+                    timeout=PROBLEM_PDF_RENDER_TIMEOUT,
                 )
 
         response = HttpResponse()
         response['Content-Type'] = 'application/pdf'
         response['Content-Disposition'] = f'inline; filename={pdf_basename}'
 
-        if settings.DMOJ_PDF_PROBLEM_CACHE:
-            pdf_filename = os.path.join(settings.DMOJ_PDF_PROBLEM_CACHE, pdf_basename)
-            if not os.path.exists(pdf_filename):
-                # CPC: render first and then move the file into place. Opening it before rendering left an empty PDF
-                # behind whenever a render failed (pdfoid down, MathJax not loading), and it was served from then on;
-                # a request arriving meanwhile could also read a half-written one.
-                pdf = render_problem_pdf()
-                with tempfile.NamedTemporaryFile(dir=settings.DMOJ_PDF_PROBLEM_CACHE, prefix=pdf_basename,
-                                                 suffix='.part', delete=False) as f:
-                    f.write(pdf)
-                os.replace(f.name, pdf_filename)
+        folder = settings.DMOJ_PDF_PROBLEM_CACHE
+        pdf_filename = os.path.join(folder, pdf_basename) if folder else None
+        if pdf_filename is None or not os.path.exists(pdf_filename):
+            default = default_pdf_language()
+            if language not in self.printed_languages | {default} and \
+                    not problem.translations.filter(language=language).exists():
+                return HttpResponseRedirect(reverse('problem_pdf', args=[problem.code, default]))
+            lock = take_pdf_lock('problem_pdf:' + pdf_basename, PROBLEM_PDF_LOCK_SECONDS)
+            if lock is None:
+                return self.preparing(request)
+            try:
+                # Another request may have finished it between the check and the lock.
+                if pdf_filename is None or not os.path.exists(pdf_filename):
+                    slot = take_render_slot(PROBLEM_PDF_LOCK_SECONDS)
+                    if slot is None:
+                        return self.preparing(request)
+                    try:
+                        pdf = render_problem_pdf()
+                    except Exception:
+                        self.logger.exception('Problem PDF failed: %s', problem.code)
+                        return generic_message(request, _('Could not prepare the PDF'),
+                                               _('The PDF of this problem could not be prepared right now. '
+                                                 'Please try again in a moment.'), status=503)
+                    finally:
+                        release_render_slot(slot)
+                    if pdf_filename is None:
+                        response.content = pdf
+                        return response
+                    # CPC: render first and then move the file into place. Opening it before rendering left an empty
+                    # PDF behind whenever a render failed (pdfoid down, MathJax not loading), and it was served from
+                    # then on; a request arriving meanwhile could also read a half-written one.
+                    keep_pdf(pdf_filename, pdf)
+            finally:
+                # Only its own lock: if it expired meanwhile, another request may hold it now.
+                release_pdf_lock(lock)
 
-            if settings.DMOJ_PDF_PROBLEM_INTERNAL:
-                url_path = f'{settings.DMOJ_PDF_PROBLEM_INTERNAL}/{pdf_basename}'
-            else:
-                url_path = None
-
-            add_file_response(request, response, url_path, pdf_filename)
+        if settings.DMOJ_PDF_PROBLEM_INTERNAL:
+            url_path = f'{settings.DMOJ_PDF_PROBLEM_INTERNAL}/{pdf_basename}'
         else:
-            response.content = render_problem_pdf()
+            url_path = None
 
+        try:
+            add_file_response(request, response, url_path, pdf_filename)
+        except FileNotFoundError:
+            # Removed just now, when the problem was saved: printed again on the next request.
+            return self.preparing(request)
+        return response
+
+    def preparing(self, request):
+        response = generic_message(request, _('Preparing the PDF'),
+                                   _('The PDF of this problem is being prepared. It opens by itself in a few seconds.'),
+                                   status=202)
+        response['Refresh'] = str(PROBLEM_PDF_RETRY_SECONDS)
+        response['Retry-After'] = str(PROBLEM_PDF_RETRY_SECONDS)
+        response['Cache-Control'] = 'no-store'
         return response
 
 
@@ -861,10 +925,9 @@ import shutil
 import stat
 import uuid
 from django.core import signing
-from django.core.cache import cache
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from judge.models import SubmissionTestCase
+from judge.models import Profile, SubmissionTestCase
 
 CUSTOM_TEST_TIME_LIMIT = 2.0
 CUSTOM_TEST_MEMORY_LIMIT = 524288
@@ -945,6 +1008,10 @@ def _custom_test_in_flight_refusal(profile):
 def _custom_test_refusal(profile):
     # Cheapest control first: the cache counter before the database query.
     return _custom_test_window_refusal(profile) or _custom_test_in_flight_refusal(profile)
+
+
+class _CustomTestRefused(Exception):
+    """The in-flight limit, counted again while the request holds the row of the profile (problemas-prueba-pdf-6)."""
 
 
 def _is_owned_custom_test(submission, profile):
@@ -1091,6 +1158,15 @@ def custom_test_run(request):
 
             # Roll back only rows created by this request if preparation fails.
             with transaction.atomic():
+                # Two requests of the same user used to count the tests in flight
+                # before either one had created its own, and both got in. Counted
+                # again here, holding the row of the profile until this test is
+                # created, every test admitted before this one is seen
+                # (problemas-prueba-pdf-6).
+                list(Profile.objects.select_for_update().filter(pk=request.profile.pk).values_list('pk', flat=True))
+                refusal = _custom_test_in_flight_refusal(request.profile)
+                if refusal is not None:
+                    raise _CustomTestRefused(refusal)
                 group = ProblemGroup.objects.first()
                 if not group:
                     group = ProblemGroup.objects.create(name='default', full_name='Default')
@@ -1108,18 +1184,21 @@ def custom_test_run(request):
                     user=request.profile, problem=problem, language=language, status='QU')
                 source = SubmissionSource.objects.create(submission=submission, source=source_code)
                 submission.source = source
-        except Exception:
+        except Exception as error:
             if directory_identity is not None:
                 try:
                     _remove_custom_test_directory(problem_code, directory_identity)
                 except Exception:
                     pass
+            if isinstance(error, _CustomTestRefused):
+                return JsonResponse({'error': str(error)}, status=429)
             return JsonResponse({'error': 'Unable to prepare the custom test. Please try again.'}, status=500)
 
         try:
-            online_dedicated = Judge.objects.filter(name__startswith='cpc-custom-', online=True)
-            target_judge = online_dedicated.first().name if online_dedicated.exists() else None
-            submission.judge(force_judge=True, judge_id=target_judge, batch_rejudge=False)
+            # No judge by name: the bridge gives it to whichever cpc-custom-*
+            # judge is free, or to any judge while none of them can take it
+            # (judge/bridge/judge_list.py; problemas-prueba-pdf-2).
+            submission.judge(force_judge=True, judge_id=None, batch_rejudge=False)
         except Exception:
             # The bridge may have accepted the job before the connection failed.
             # Preserve its data rather than deleting a possibly active execution.
@@ -1147,6 +1226,12 @@ def custom_test_run(request):
         'status': 'done', 'result': submission.result, 'time': submission.time,
         'memory': submission.memory, 'error': submission.error or '', 'output': '',
     }
+    # The text of an internal error is the traceback of the judge, with its
+    # paths and versions. The page of a submission only shows it to whoever
+    # edits the problem; this page just says "internal error"
+    # (problemas-prueba-pdf-3).
+    if 'IE' in (submission.status, submission.result):
+        response_data['error'] = ''
     if submission.status == 'D':
         testcases = SubmissionTestCase.objects.filter(submission=submission).order_by('case')
         if testcases.exists():

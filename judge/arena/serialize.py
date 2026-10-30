@@ -304,7 +304,10 @@ def player_submission(profile, game, submission_id):
         'time': submission.time,
         'memory': submission.memory,
         'case': submission.current_testcase,
-        'error': (submission.error or '') if submission.status in ('CE', 'IE') else '',
+        # Only a compile error tells the player something about their code. An internal error carries what the judge
+        # says about itself and, since problemas-datos-3 (2026-10-30), the compile log of an interactor that does not
+        # compile: the code of whoever wrote the problem.
+        'error': (submission.error or '') if submission.status == 'CE' else '',
         'cases': cases,
         'language': submission.language.name,
     }

@@ -19,6 +19,8 @@ def generate_opengraph(cache_key, data, style):
             for remove in (r'\[', r'\]', r'\(', r'\)'):
                 description = description.replace(remove, '')
         img = tree.xpath('.//img')
-        metadata = truncatewords(description, 60), img[0].get('src') if img else None
+        # CPC: with no paragraph there is no description. truncatewords(None) gave the text «None», which became the
+        # description of the page and of its Open Graph card.
+        metadata = (truncatewords(description, 60) if description else None), (img[0].get('src') if img else None)
         cache.set(cache_key, metadata, 86400)
     return metadata

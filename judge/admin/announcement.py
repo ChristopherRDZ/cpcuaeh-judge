@@ -13,6 +13,7 @@ from django.utils.html import format_html
 from django.utils.translation import gettext, gettext_lazy as _
 
 from judge.models import Announcement, Contest
+from judge.models.clarification import plain_text
 
 # The button on the clarifications tab of a contest (judge/views/announcement.py) opens the form below with the
 # contest already chosen and this in the address, so that saving goes back to that tab.
@@ -78,8 +79,24 @@ class AnnouncementAdmin(admin.ModelAdmin):
     target.short_description = _('target')
 
     def summary(self, obj):
-        return obj.body if len(obj.body) <= 80 else obj.body[:77] + '...'
+        # A public answer is listed by what everybody was shown: the question as published, or else the answer.
+        text = (obj.published_question or obj.clarification.answer) if obj.clarification_id else obj.body
+        return text if len(text) <= 80 else text[:77] + '...'
     summary.short_description = _('announcement')
+
+    def published_question(self, obj):
+        return obj.published_question or gettext('Only the answer is published.')
+    published_question.short_description = _('question as published')
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        # The text of a public answer's announcement is its question as published (aclaraciones-anuncios-3): it is
+        # written with the answer, on the contest tab or in the clarification, and only read here. As a text field the
+        # form trimmed a question left out (judge.models.announcement.QUESTION_LEFT_OUT) into an empty text, which
+        # means the question as asked: saving the announcement for anything else would have published it.
+        if obj is not None and obj.clarification_id:
+            fields = tuple('published_question' if field == 'body' else field for field in fields)
+        return fields
 
     def get_readonly_fields(self, request, obj=None):
         fields = tuple(super().get_readonly_fields(request, obj))
@@ -87,11 +104,11 @@ class AnnouncementAdmin(admin.ModelAdmin):
         # the answer vanish from its contest; to move the question and its answer, change the clarification,
         # and `sync_announcement` brings the announcement along.
         if obj is not None and obj.clarification_id:
-            fields += ('contest',)
+            fields += ('contest', 'published_question')
         return fields
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request).select_related('contest', 'author__user')
+        queryset = super().get_queryset(request).select_related('contest', 'author__user', 'clarification')
         if request.user.has_perm('judge.edit_all_contest'):
             return queryset
         # Otherwise you see the site-wide ones and the ones for your own contests.
@@ -133,7 +150,12 @@ class AnnouncementAdmin(admin.ModelAdmin):
         return form
 
     def save_model(self, request, obj, form, change):
-        if not change or obj.author_id is None:
+        # The name shown with an announcement is whoever wrote the text on show (aclaraciones-anuncios-9): writing it
+        # anew makes whoever saves it its author. Changing only when or where it shows does not, nor sending the text
+        # back as it was. Who did what stays in the history of the administration.
+        rewritten = (form is not None and 'body' in form.changed_data and
+                     plain_text(form.cleaned_data.get('body')) != plain_text(form.initial.get('body')))
+        if not change or obj.author_id is None or rewritten:
             obj.author = request.profile
         super().save_model(request, obj, form, change)
 

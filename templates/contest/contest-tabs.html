@@ -1,5 +1,22 @@
 {% extends "tabs-base.html" %}
 
+{% block tabs_class %} contest-tabs{% endblock %}
+
+{% block post_tab_spacer %}
+    {# The tabs that do not fit go down to a second line (the owner, 2026-10-30). The bar of the site keeps them in one
+       row that scrolls sideways (`.tabs > ul` in resources/widgets.scss), and with up to eight tabs and the button to
+       join, the last ones (Clone) were out of sight on the right. Only this bar, and from 481 px: a phone, laid out
+       at 480 px (base.html), keeps sliding it. Here rather than in the stylesheets, which are compressed with a
+       manifest. #}
+    <style>
+        @media (min-width: 481px) {
+            .tabs.contest-tabs > ul {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+{% endblock %}
+
 {% block tabs %}
     {{ make_tab('detail', 'fa-info-circle', url('contest_view', contest.key), _('Info')) }}
     {# While the scoreboard is frozen the per-problem counts would give away what it hides, so the tab goes
@@ -18,7 +35,12 @@
             {{ make_tab('ranking', 'fa-bar-chart', None, _('Hidden Rankings')) }}
         {% endif %}
     {% endif %}
-    {% if contest.started or can_edit %}
+    {# While the contest runs, only for whoever is inside it, the same rule as the tab itself
+       (ContestAnnouncements.can_read, aclaraciones-anuncios-1); it also shows to whoever tests or runs a contest that
+       has not started. Anybody else who comes straight to the address is told that the clarifications are published
+       when the contest ends. #}
+    {% if contest.ended or can_edit or is_editor or is_tester or (is_spectator and contest.started) or has_joined or
+          contest.is_in_contest(request.user) %}
         {{ make_tab('announcements', 'fa-bullhorn', url('contest_announcements', contest.key), _('Clarifications')) }}
     {% endif %}
     {% if can_edit or contest.is_balloon_staff(request.user) %}

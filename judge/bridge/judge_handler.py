@@ -1,6 +1,8 @@
 import hmac
 import json
 import logging
+import os
+import re
 import threading
 import time
 from collections import deque, namedtuple
@@ -22,6 +24,16 @@ json_log = logging.getLogger('judge.json.bridge')
 UPDATE_RATE_LIMIT = 5
 UPDATE_RATE_TIME = 0.5
 SubmissionData = namedtuple('SubmissionData', 'time memory short_circuit pretests_only contest_no attempt_no user_id')
+
+# Compiler logs come with colour codes (g++ -fdiagnostics-color=always).
+ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+# What the judge names an auxiliary program that is not C or C++ when it compiles it, such as a Python interactor
+# (dmoj.utils.helper_files.compile_with_auxiliary_files), and the two lines in which compileall -q names the file it
+# could not compile. The log comes through a terminal, with \r\n.
+AUXILIARY_SOURCE = '_aux_file'
+AUXILIARY_PYTHON_LOG = re.compile(r'''^(?:\*\*\* Error compiling '[^'\r\n]*/%(name)s\.py'\.\.\.|'''
+                                  r'''  File "[^"\r\n]*/%(name)s\.py", line \d+)\r?$''' % {'name': AUXILIARY_SOURCE},
+                                  re.M)
 
 
 def _ensure_connection():
@@ -437,6 +449,19 @@ class JudgeHandler(ZlibPacketHandler):
         logger.info('%s: Submission failed to compile: %s', self.name, packet['submission-id'])
         self._free_self(packet)
 
+        if self._is_interactor_compile_error(packet):
+            # The judge compiles the interactor of an interactive problem right after the submission, and reports a
+            # failure the same way, with the lines of the interactor that the compiler quotes. The fault and the code
+            # are the problem's: as an internal error, the contestant gets the usual message, and only the editors of
+            # the problem see the log (submission/internal-error-message.html), without the colours, which that page
+            # does not read. A warning and not an error: anyone can make their own log look like this, and errors of
+            # this logger may go to the administrators by email.
+            logger.warning('%s: The interactor failed to compile while grading submission %s', self.name,
+                           packet['submission-id'])
+            self._internal_error({'submission-id': packet['submission-id'],
+                                  'message': ANSI_ESCAPE.sub('', packet['log'])})
+            return
+
         if Submission.objects.filter(id=packet['submission-id']).update(status='CE', result='CE', error=packet['log']):
             event.post('sub_%s' % Submission.get_id_secret(packet['submission-id']), {
                 'type': 'compile-error',
@@ -449,6 +474,21 @@ class JudgeHandler(ZlibPacketHandler):
             logger.warning('Unknown submission: %s', packet['submission-id'])
             json_log.error(self._make_json_log(packet, action='compile-error', info='unknown submission',
                                                log=packet['log'], finish=True, result='CE'))
+
+    def _is_interactor_compile_error(self, packet):
+        """Whether a compile error is the interactor's rather than the submission's. Each message of the compiler
+        starts with the file it was reading: a C or C++ interactor goes by its own name, which the data form keeps
+        apart from the one the judge gives a submission (the problem's code and the extension, twice: sumacpp.cpp),
+        and a Python one by the name the judge gives every auxiliary program, in the lines of compileall."""
+        interactor = Submission.objects.filter(id=packet['submission-id']) \
+            .values_list('problem__data_files__interactor', flat=True).first()
+        if not interactor:
+            return False
+        name = os.path.basename(interactor)
+        log = ANSI_ESCAPE.sub('', packet.get('log') or '')
+        if os.path.splitext(name)[1].lower() == '.py':
+            return AUXILIARY_PYTHON_LOG.search(log) is not None
+        return re.search(r'^(?:In file included from )?%s:' % re.escape(name), log, re.M) is not None
 
     def on_compile_message(self, packet):
         logger.info('%s: Submission generated compiler messages: %s', self.name, packet['submission-id'])
@@ -467,7 +507,9 @@ class JudgeHandler(ZlibPacketHandler):
         except ValueError:
             logger.exception('Judge %s failed while handling submission %s', self.name, packet['submission-id'])
         self._free_self(packet)
+        self._internal_error(packet)
 
+    def _internal_error(self, packet):
         id = packet['submission-id']
         if Submission.objects.filter(id=id).update(status='IE', result='IE', error=packet['message']):
             event.post('sub_%s' % Submission.get_id_secret(id), {'type': 'internal-error'})

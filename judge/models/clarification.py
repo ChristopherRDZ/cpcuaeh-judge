@@ -18,6 +18,11 @@ MAX_PENDING_PER_USER = 3
 MIN_SECONDS_BETWEEN = 30
 
 
+def plain_text(text):
+    """`text` as it is compared and kept: the line breaks a browser sends as CR LF, as LF; no blanks around it."""
+    return (text or '').replace('\r\n', '\n').strip()
+
+
 class ContestClarification(models.Model):
     contest = models.ForeignKey(Contest, verbose_name=_('contest'), related_name='clarifications',
                                 on_delete=models.CASCADE)
@@ -53,7 +58,32 @@ class ContestClarification(models.Model):
     def is_answered(self):
         return bool(self.answer)
 
-    def sync_announcement(self, author=None):
+    def announcement_body(self, published_question):
+        """What `Announcement.body` keeps for `published_question`, the question as everybody reads it above the
+        answer (judge.models.announcement.QUESTION_LEFT_OUT): nothing for the question as asked, so that the
+        announcement follows it as it always did, the mark of a question left out, or the rewritten text."""
+        from judge.models.announcement import QUESTION_LEFT_OUT
+
+        published = plain_text(published_question)
+        if not published:
+            return QUESTION_LEFT_OUT
+        return '' if published == plain_text(self.question) else published
+
+    def question_as_published(self):
+        """The question as everybody reads it above this answer when it is public: what its announcement says, also
+        when it was withdrawn, or the question as asked while there is none (aclaraciones-anuncios-3). A list of
+        questions brings their announcements in one query, as `announcements_by_age` (ContestAnnouncements)."""
+        announcements = getattr(self, 'announcements_by_age', None)
+        if announcements is None:
+            announcement = self.announcements.order_by('created', 'pk').first()
+        else:
+            announcement = announcements[0] if announcements else None
+        if announcement is None:
+            return self.question
+        announcement.clarification = self
+        return announcement.published_question
+
+    def sync_announcement(self, author=None, published_question=None):
         """Make the announcements match this answer's visibility.
 
         Visibility and delivery are one decision, so both places that edit an
@@ -65,6 +95,15 @@ class ContestClarification(models.Model):
         Nothing is deleted: an announcement that no longer applies is withdrawn
         with `is_visible`, which is what that field is for, so the record that
         it was sent survives.
+
+        `published_question` is the question as everybody reads it above the answer (aclaraciones-anuncios-3,
+        2026-10-30): what the jury left of it, or '' to publish the answer alone. None keeps what the announcement
+        already says (the question as asked, on a new one), so that saving the answer for anything else neither loses
+        a rewritten question nor puts the original one back. Withdrawing keeps it too, for when it is published again.
+
+        The announcement is signed by whoever wrote the answer, and follows `answered_by` when somebody else rewrites
+        it (aclaraciones-anuncios-9); `author` only stands in, on a new announcement, for an answer that has nobody on
+        record.
         """
         from judge.models.announcement import Announcement
 
@@ -78,8 +117,8 @@ class ContestClarification(models.Model):
             return Announcement.objects.create(
                 contest=self.contest,
                 clarification=self,
-                body='',
-                author=author,
+                body='' if published_question is None else self.announcement_body(published_question),
+                author_id=self.answered_by_id or (author.pk if author is not None else None),
                 expires=self.contest.end_time,
             )
 
@@ -99,6 +138,14 @@ class ContestClarification(models.Model):
         if current.expires != self.contest.end_time:
             current.expires = self.contest.end_time
             updated.append('expires')
+        if published_question is not None:
+            body = self.announcement_body(published_question)
+            if current.body != body:
+                current.body = body
+                updated.append('body')
+        if self.answered_by_id and current.author_id != self.answered_by_id:
+            current.author_id = self.answered_by_id
+            updated.append('author')
         if updated:
             current.save(update_fields=updated)
         announcements.exclude(pk=current.pk).filter(is_visible=True).update(is_visible=False)
@@ -128,7 +175,10 @@ def withdraw_deleted_clarification_announcement(sender, instance, **kwargs):
     `Announcement.clarification` is SET_NULL, so without this the announcement outlived its question as an
     empty hand-written one. A signal rather than `delete()`, because most of these deletions are cascades —
     removing the contest problem the question was about, purging a team— and those never call `delete()`.
-    Withdrawn, not deleted, as `sync_announcement` does: the record that it was sent survives.
+    Withdrawn, not deleted, as `sync_announcement` does: the record that it was sent survives, with the question as
+    it was published when the jury rewrote it (aclaraciones-anuncios-3). Nothing shows a withdrawn announcement, and
+    one made visible again by hand in the administration shows that text, which the form puts in front of whoever
+    does it.
     """
     from judge.models.announcement import Announcement
 

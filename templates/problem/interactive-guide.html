@@ -71,8 +71,9 @@
             </li>
             <li>
                 Con el problema todavía oculto, envía tu solución de referencia y alguna incorrecta. El juez compila
-                el interactor al calificar: si no compila, <b>todos</b> los envíos salen como <b>Error de
-                Compilación</b> con los errores del interactor, y el participante vería esas líneas de tu código.
+                el interactor al calificar: si no compila, <b>todos</b> los envíos salen como <b>Error Interno</b>. El
+                participante no ve tu código; tú, como autor o curador del problema, ves los errores del compilador en
+                el envío.
             </li>
         </ol>
         <p>
@@ -204,9 +205,10 @@
                 </td>
             </tr>
             <tr>
-                <td>Error de Compilación en todos los envíos</td>
+                <td>Error Interno en todos los envíos</td>
                 <td>
-                    El que no compila es el interactor, no el participante. El mensaje muestra líneas del interactor.
+                    Lo más probable es que el interactor no compile. El participante no ve tu código; los autores y
+                    curadores del problema ven los errores del compilador en el envío.
                 </td>
             </tr>
             <tr>
@@ -228,6 +230,11 @@
             <li>
                 El interactor puede ser adaptativo, es decir, cambiar su respuesta según las preguntas, siempre que
                 sea coherente con todo lo que ya contestó.
+            </li>
+            <li>
+                El interactor no puede llamarse como el archivo que el juez da al envío (por ejemplo
+                <code>sumacpp.cpp</code> en el problema <code>suma</code>): el juez no distinguiría sus errores de
+                compilación de los del participante.
             </li>
         </ul>
     </div>

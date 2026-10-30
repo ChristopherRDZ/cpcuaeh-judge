@@ -6,7 +6,8 @@
     </li>
 {% endmacro %}
 
-<div class="tabs">
+{# `tabs_class` gives one bar a class of its own, for a style of its own (contest-tabs.html). #}
+<div class="tabs{% block tabs_class %}{% endblock %}">
     <h2>{{ content_title or title }}</h2>
     {% block post_tab_spacer %}{% endblock %}
     <ul>

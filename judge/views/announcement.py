@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -43,11 +43,12 @@ def _carries_a_public_answer(announcement):
 def _has_something_to_say(announcement):
     """Whether an announcement has any text to put on screen.
 
-    A clarification's announcement stores no text of its own: it prints the question and the answer. If the
-    clarification is deleted —directly, or along with the contest problem it was about— the foreign key is set
-    to null and what is left looks like a hand-written announcement with an empty body. That used to pop up as
-    an empty box for every participant until the contest ended. Deleting a clarification now withdraws its
-    announcement as well; this is the check that also covers rows left behind before that existed.
+    A clarification's announcement prints the answer of its clarification, under the question as the jury published
+    it (`Announcement.published_question`). If the clarification is deleted —directly, or along with the contest
+    problem it was about— the foreign key is set to null and what is left looks like a hand-written announcement with
+    an empty body. That used to pop up as an empty box for every participant until the contest ended. Deleting a
+    clarification now withdraws its announcement as well; this is the check that also covers rows left behind before
+    that existed.
     """
     if announcement.clarification_id:
         return _carries_a_public_answer(announcement)
@@ -89,9 +90,12 @@ def active_announcements(request):
             if not _carries_a_public_answer(announcement):
                 continue
             # Laid out here rather than stored, so each reader gets the labels in
-            # their own language.
-            body = '%s: %s\n\n%s: %s' % (_('Question'), announcement.clarification.question,
-                                         _('Answer'), announcement.clarification.answer)
+            # their own language. The question is the one the jury published: as
+            # asked, rewritten, or left out (aclaraciones-anuncios-3).
+            question = announcement.published_question
+            body = '%s: %s' % (_('Answer'), announcement.clarification.answer)
+            if question:
+                body = '%s: %s\n\n%s' % (_('Question'), question, body)
         else:
             if not _has_something_to_say(announcement):
                 continue
@@ -166,6 +170,25 @@ class ClarificationForm(forms.ModelForm):
         return question
 
 
+def _may_ask(contest, participation, user):
+    """Whether `participation`, the caller's current one, lets them put a question to the jury of `contest`.
+
+    The official participation, alone or on the roster of a team, while it lasts and is not disqualified; and, as a
+    spectator, whoever runs or tests the contest, so they can try the form (aclaraciones-anuncios-v1, 2026-10-30).
+    Anybody else spectating asks nothing, also whoever finished their participation and came back to watch: it
+    skipped the cut of a team that finished, with three more questions of their own.
+    """
+    if contest.ended or participation is None or participation.contest_id != contest.id:
+        return False
+    profile_id = user.profile.pk
+    if participation.live:
+        return (not participation.ended and not participation.is_disqualified and
+                participation.contains_profile(profile_id))
+    if participation.spectate:
+        return contest.is_editable_by(user) or profile_id in contest.editor_ids or profile_id in contest.tester_ids
+    return False
+
+
 def _visible_clarifications(contest, profile, can_edit):
     queryset = contest.clarifications.select_related('user__user', 'answered_by__user', 'problem__problem',
                                                      'team_participation')
@@ -177,8 +200,10 @@ def _visible_clarifications(contest, profile, can_edit):
     # «Really reached» means an announcement of this same contest: one moved elsewhere is not shown here —the
     # check in `_carries_a_public_answer` hides it— and excluding the question anyway made the answer vanish
     # from both halves of the page.
+    # And with the question as it was asked: when the jury rewrote it or left it out (aclaraciones-anuncios-3), the
+    # words of whoever asked are only here, for them and for the jury.
     announced = Announcement.objects.filter(clarification=OuterRef('pk'), is_visible=True,
-                                            contest_id=OuterRef('contest_id'))
+                                            contest_id=OuterRef('contest_id'), body='')
     queryset = queryset.annotate(is_announced=Exists(announced)) \
                        .exclude(is_public=True, answered__isnull=False, is_announced=True)
     if can_edit:
@@ -200,10 +225,22 @@ class ContestAnnouncements(ContestMixin, TitleMixin, DetailView):
         return self.object.name
 
     def can_ask(self):
-        if not self.request.user.is_authenticated or self.object.ended:
+        if not self.request.user.is_authenticated:
             return False
-        participation = self.request.profile.current_contest
-        return participation is not None and participation.contest_id == self.object.id
+        return _may_ask(self.object, self.request.profile.current_contest, self.request.user)
+
+    def can_read(self, has_joined):
+        """Whether this caller may read the clarifications of this contest (aclaraciones-anuncios-1, 2026-10-30).
+
+        The announcements and the public answers name the problems and tell things about them, so while the contest
+        runs they are only for whoever is inside it, as the problems are: a participation in it (also on the roster
+        of a team, or spectating), running or testing it, or being one of its spectators once it started. Everybody
+        else, also straight at the address, is told that they are published when the contest ends; from then on,
+        whoever sees the contest reads them, as before. contest-tabs.html shows the tab by the same rule.
+        """
+        contest = self.object
+        return (contest.ended or self.can_edit or self.is_editor or self.is_tester or
+                (self.is_spectator and contest.started) or has_joined or contest.is_in_contest(self.request.user))
 
     def announce_url(self):
         """Where the button to announce to this contest goes, or None for whoever may not.
@@ -220,21 +257,35 @@ class ContestAnnouncements(ContestMixin, TitleMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['tab'] = self.tab
+        context['can_read'] = self.can_read(context['has_joined'])
+        if not context['can_read']:
+            # Only the notice that they are published when the contest ends (contest/announcements.html).
+            return context
         profile = self.request.profile if self.request.user.is_authenticated else None
         # Same defence as the pop-up box: the tab prints the question and the
         # answer straight out of the clarification the announcement points at.
+        # With the name of the problem of each answer in the same query: it took two more per answer, on every
+        # refresh of every open tab (aclaraciones-anuncios-6).
         announcements = (self.object.announcements.filter(is_visible=True)
-                             .select_related('author__user', 'clarification')
+                             .select_related('author__user', 'clarification__problem__problem')
                              .order_by('-created'))
         context['announcements'] = [announcement for announcement in announcements
                                     if _has_something_to_say(announcement)]
-        context['clarifications'] = _visible_clarifications(self.object, profile, self.can_edit).order_by('-asked')
+        clarifications = _visible_clarifications(self.object, profile, self.can_edit).order_by('-asked')
+        if self.can_edit:
+            # The form of a question waiting for an answer comes with the question to publish already written: what
+            # its announcement said if it was published and withdrawn since, so that answering again does not put
+            # back the question as asked (ContestClarification.question_as_published). One query for all of them.
+            clarifications = clarifications.prefetch_related(Prefetch(
+                'announcements', queryset=Announcement.objects.order_by('created', 'pk'),
+                to_attr='announcements_by_age'))
+        context['clarifications'] = clarifications
         context['can_ask'] = self.can_ask()
         context['ask_form'] = ClarificationForm(contest=self.object) if context['can_ask'] else None
         context['announce_url'] = self.announce_url()
         context['max_question'] = MAX_QUESTION
         context['clarification_errors'] = self.request.session.pop('clarification_errors', [])
-        context['tab'] = self.tab
         return context
 
 
@@ -258,11 +309,14 @@ def ask_clarification(request, contest):
 
     # Teammates share the jury conversation and its limits. Serialize on the
     # participation so simultaneous questions do not bypass the shared cap.
+    # Also for one person on their own: the two caps were counted without a lock there, and questions sent at once
+    # got past both (aclaraciones-anuncios-7).
+    participation = ContestParticipation.objects.select_for_update().get(pk=participation.pk)
+    participation.contest = contest
+    if not _may_ask(contest, participation, request.user):
+        raise PermissionDenied()
     team_participation = None
     if participation.team_id:
-        participation = ContestParticipation.objects.select_for_update().get(pk=participation.pk)
-        if participation.ended or participation.is_disqualified or not participation.contains_profile(profile.pk):
-            raise PermissionDenied()
         team_participation = participation
         questions = ContestClarification.objects.filter(team_participation=participation)
     else:
@@ -302,10 +356,25 @@ def answer_clarification(request, contest, pk):
     if not contest.is_editable_by(request.user):
         raise PermissionDenied()
 
-    clarification = get_object_or_404(ContestClarification, pk=pk, contest=contest)
+    # Locked: two members of the jury answering at once are taken one after the other, and the second one finds the
+    # question answered (aclaraciones-anuncios-2).
+    clarification = get_object_or_404(ContestClarification.objects.select_for_update(), pk=pk, contest=contest)
     answer = request.POST.get('answer', '').strip()
-    if not answer:
-        raise Http404()
+    errors = []
+    if clarification.answer:
+        # The tab only offers to answer what nobody answered, but a form left open —the refresh waits while
+        # something is being written— or two members of the jury at once replaced the first answer without a
+        # trace, and could take it public or private. An answer is changed in the administration, which keeps a
+        # record of it. The text is given back, so that it is not lost.
+        errors.append(_('This question had already been answered, so your answer was not saved.'))
+        if answer:
+            errors.append(_('Your answer was: %(answer)s') % {'answer': answer[:MAX_QUESTION]})
+    elif not answer:
+        # It used to be a 404 page.
+        errors.append(_('The answer is empty.'))
+    if errors:
+        request.session['clarification_errors'] = [str(error) for error in errors]
+        return HttpResponseRedirect(reverse('contest_announcements', args=[contest.key]))
 
     clarification.answer = answer[:MAX_QUESTION]
     clarification.answered = timezone.now()
@@ -313,11 +382,18 @@ def answer_clarification(request, contest, pk):
     clarification.is_public = request.POST.get('is_public') == 'on'
     clarification.save()
 
+    # The question as everybody will read it above a public answer (aclaraciones-anuncios-3): the tab sends it
+    # already written, and the jury may rewrite it or empty it. A page from before 2026-10-30 does not send it, and
+    # the question goes as it was asked, as it always did.
+    published = request.POST.get('published_question') if clarification.is_public else None
+    if published is not None:
+        published = published.strip()[:MAX_QUESTION]
+
     # A public answer is exactly what the announcement box is for, so it reuses
     # it instead of growing a second delivery path. Answer and announcement move
     # together, in the same transaction and through the same helper the admin
     # uses: editing an answer down to private has to take the announcement with
     # it, or the new text keeps going out to everybody.
-    clarification.sync_announcement(author=request.profile)
+    clarification.sync_announcement(author=request.profile, published_question=published)
 
     return HttpResponseRedirect(reverse('contest_announcements', args=[contest.key]))

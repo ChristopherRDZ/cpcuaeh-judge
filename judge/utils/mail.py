@@ -1,6 +1,7 @@
 import hashlib
 import re
 import smtplib
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Pattern
 
@@ -84,7 +85,10 @@ def spend_email_budget(count: int = 1) -> None:
 
 
 def _attempt_key(kind: str, target: str) -> str:
-    return 'mailattempt!%s!%s' % (kind, hashlib.sha256(target.strip().lower().encode()).hexdigest())
+    # Folded as Django compares addresses before sending a password reset (NFKC, then casefold): written with «ſ»
+    # instead of «s», an address reaches the same inbox, and lower() alone would count it apart.
+    folded = unicodedata.normalize('NFKC', target.strip()).casefold()
+    return 'mailattempt!%s!%s' % (kind, hashlib.sha256(folded.encode()).hexdigest())
 
 
 def claim_email_attempt(kind: str, target: str, limit: int) -> bool:

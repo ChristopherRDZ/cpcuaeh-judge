@@ -60,6 +60,8 @@ class ProblemData(models.Model):
 
     # Files whose previous version is removed from disk once replaced or cleared.
     REPLACED_FILES = ('zipfile', 'interactor')
+    # Every file of the problem's folder that this row names.
+    FILE_FIELDS = ('zipfile', 'generator', 'interactor')
 
     __original_files = None
 
@@ -73,10 +75,13 @@ class ProblemData(models.Model):
         # call FieldFile.delete first, which also blanks the field on this very
         # instance: a zip uploaded over another one was never stored, and the
         # problem was left with test cases and no archive. A new upload that ends
-        # up with the old name has already replaced the file, so it stays.
+        # up with the old name has already replaced the file, so it stays; and so
+        # does one that took the old name of another field, such as a generator
+        # named like the interactor it replaces in the same save.
+        in_use = {getattr(self, field).name for field in self.FILE_FIELDS}
         for field, original in self.__original_files.items():
             current = getattr(self, field).name
-            if original and original != current:
+            if original and original != current and original not in in_use:
                 problem_data_storage.delete(original)
             self.__original_files[field] = current
         return result

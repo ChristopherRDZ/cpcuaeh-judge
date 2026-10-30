@@ -73,6 +73,21 @@
             color: #a94442;
         }
 
+        /* An answer that was not saved comes back in here, with its lines. */
+        .clarification-errors div {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* The question as it will be published: only while the answer is marked for everybody. */
+        .clarification-published[hidden] {
+            display: none;
+        }
+
+        .clarification-published label {
+            display: block;
+        }
+
         .clarification-form textarea {
             width: 100%;
             box-sizing: border-box;
@@ -109,6 +124,10 @@
 {% endblock %}
 
 {% block body %}
+    {# While the contest runs, only for whoever is inside it (ContestAnnouncements.can_read, aclaraciones-anuncios-1). #}
+    {% if not can_read %}
+    <p class="clarification-closed">{{ _('Clarifications are published when the contest ends.') }}</p>
+    {% else %}
     {# Only for whoever runs this contest and may write announcements (ContestAnnouncements.announce_url). #}
     {% if announce_url %}
         <div class="clarification-announce">
@@ -156,10 +175,14 @@
                             {% endif %}
                         </div>
                         {% if announcement.clarification %}
-                            {# Came from a question, so say which half is which. #}
-                            <div class="clarification-label">{{ _('Question') }}</div>
-                            <div class="announcement-body">{{ announcement.clarification.question }}</div>
-                            <div class="clarification-answer">
+                            {# Came from a question, so say which half is which. The question is the one the jury
+                               published: as asked, rewritten, or left out (aclaraciones-anuncios-3). #}
+                            {% set question = announcement.published_question %}
+                            {% if question %}
+                                <div class="clarification-label">{{ _('Question') }}</div>
+                                <div class="announcement-body">{{ question }}</div>
+                            {% endif %}
+                            <div{% if question %} class="clarification-answer"{% endif %}>
                                 <div class="clarification-label">{{ _('Answer') }}</div>
                                 <div class="announcement-body">{{ announcement.clarification.answer }}</div>
                             </div>
@@ -207,14 +230,28 @@
                                   action="{{ url('contest_clarification_answer', contest.key, clarification.id) }}">
                                 {% csrf_token %}
                                 <div class="row">
-                                    <textarea name="answer" rows="3" maxlength="{{ max_question }}"
+                                    <textarea name="answer" rows="3" maxlength="{{ max_question }}" required
                                               placeholder="{{ _('Answer this question.') }}"></textarea>
                                 </div>
                                 <div class="row">
                                     <label>
                                         <input type="checkbox" name="is_public">
-                                        {{ _('Send this answer to every contestant') }}
+                                        {{ _('Send this answer, with the question, to every contestant') }}
                                     </label>
+                                </div>
+                                {# The question as everybody will read it above the answer, already written as it
+                                   was published if it was before (ContestClarification.question_as_published), to
+                                   rewrite it or empty it and publish only the answer (aclaraciones-anuncios-3). It
+                                   shows when the answer is for everybody; without JavaScript it goes as it comes. #}
+                                <div class="row clarification-published" hidden>
+                                    <label class="clarification-label" for="published-question-{{ clarification.id }}">
+                                        {{- _('Question as it will be published') -}}
+                                    </label>
+                                    <textarea name="published_question" id="published-question-{{ clarification.id }}"
+                                              rows="3" maxlength="{{ max_question }}">{{ clarification.question_as_published() }}</textarea>
+                                    <div class="clarification-meta">
+                                        {{- _('Rewrite it if it gives away how somebody is solving a problem, or empty it to publish only the answer. Whoever asked keeps seeing their question as they wrote it.') -}}
+                                    </div>
                                 </div>
                                 <div class="row">
                                     <input type="submit" class="button" value="{{ _('Answer') }}">
@@ -237,14 +274,33 @@
 
             function being_written() {
                 // A half-typed answer must not be wiped by a refresh, so the
-                // refresh waits until the jury is done writing.
-                var busy = false;
+                // refresh waits until the jury is done writing. The question to
+                // publish comes already written: only a change to it counts, and
+                // so does an answer marked for everybody.
+                var busy = $sections.find('input[name="is_public"]:checked').length > 0;
                 $sections.find('textarea').each(function () {
-                    if ($(this).is(':focus') || $.trim($(this).val()) !== '')
+                    if ($(this).is(':focus') || $.trim($(this).val()) !== $.trim(this.defaultValue))
                         busy = true;
                 });
                 return busy;
             }
+
+            // Marking an answer for everybody shows the question as it will be
+            // published (aclaraciones-anuncios-3). Bound to the sections, whose
+            // content the refresh replaces. The browser can also bring the page
+            // back with an answer already marked and no change (reloading in
+            // Firefox, going back to it), so the question follows the box on
+            // load, on pageshow and after every refresh as well: never hidden
+            // under a marked box.
+            function show_published() {
+                $sections.find('input[name="is_public"]').each(function () {
+                    $(this).closest('form').find('.clarification-published').prop('hidden', !this.checked);
+                });
+            }
+
+            $sections.on('change', 'input[name="is_public"]', show_published);
+            $(window).on('pageshow', show_published);
+            show_published();
 
             function refresh() {
                 if ($('body').hasClass('window-hidden') || being_written())
@@ -253,8 +309,10 @@
                 // it, so it refetches itself and keeps only the part that changes.
                 $.get(window.location.pathname).done(function (data) {
                     var fresh = $(data).find('#clarification-sections');
-                    if (fresh.length)
+                    if (fresh.length) {
                         $sections.html(fresh.html());
+                        show_published();
+                    }
                 });
             }
 
@@ -262,4 +320,5 @@
             $(window).on('dmoj:window-visible', refresh);
         });
     </script>
+    {% endif %}
 {% endblock %}

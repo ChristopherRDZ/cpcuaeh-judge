@@ -22,7 +22,9 @@ class UserSitemap(Sitemap):
     priority = 0.5
 
     def items(self):
-        return User.objects.values_list('username')
+        # CPC: only accounts in use. Registrations never activated are inactive, and cpc-cancelar-cuenta leaves a
+        # cancelled account (anonimo_<id>) both inactive and unlisted.
+        return User.objects.filter(is_active=True, profile__is_unlisted=False).values_list('username')
 
     def location(self, obj):
         return reverse('user_page', args=obj)

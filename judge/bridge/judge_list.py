@@ -14,6 +14,12 @@ logger = logging.getLogger('judge.bridge')
 
 PriorityMarker = namedtuple('PriorityMarker', 'priority')
 
+# CPC (problemas-prueba-pdf-2, 2026-10-30): the custom test (its problems are ct_...) runs on the judges whose name
+# starts with this, whichever is free or frees up first; only while none of them can run it (none connected and
+# enabled, or none with its language), on any judge. The site used to ask for the first of them by name, so every test
+# waited for that one even with the others free, and for good if it was disabled.
+CUSTOM_TEST_JUDGES = 'cpc-custom-'
+
 
 class JudgeList(object):
     priorities = 4
@@ -41,7 +47,7 @@ class JudgeList(object):
                     return
                 else:
                     id, problem, language, source, judge_id = node.value
-                    if judge.can_judge(problem, language, judge_id):
+                    if self._can_judge(judge, problem, language, judge_id):
                         self.submission_map[id] = judge
                         try:
                             judge.submit(id, problem, language, source)
@@ -82,6 +88,24 @@ class JudgeList(object):
     def current_tier_judges(self):
         return [judge for judge in self.judges if judge.tier == self.min_tier and not judge.is_disabled]
 
+    def _can_judge(self, judge, problem, language, judge_id):
+        if not judge.can_judge(problem, language, judge_id):
+            return False
+        # A custom test asked of no judge in particular: one of CUSTOM_TEST_JUDGES while any of them can run it.
+        if judge_id or not problem.startswith('ct_') or judge.name.startswith(CUSTOM_TEST_JUDGES):
+            return True
+        return not any(other.name.startswith(CUSTOM_TEST_JUDGES) and other.can_judge(problem, language)
+                       for other in self.current_tier_judges())
+
+    def _offer_queue(self):
+        # CPC (problemas-prueba-pdf-2): what a free judge may take can change without it freeing up, since a custom test
+        # waits for the cpc-custom-* judges only while one of them can run it. When judges are disabled, enabled or
+        # leave, the queue is offered again to every free judge of the current tier; _handle_free_judge keeps the
+        # reservation for rejudges.
+        for judge in self.current_tier_judges():
+            if not judge.working:
+                self._handle_free_judge(judge)
+
     def should_reserve_judge(self):
         judges = self.current_tier_judges()
         if len(judges) <= 1:
@@ -114,6 +138,9 @@ class JudgeList(object):
                 if judge.name == judge_id:
                     judge.is_disabled = is_disabled
             self._update_min_tier()
+            # CPC (problemas-prueba-pdf-2): a judge enabled again takes at once what it can judge from the queue, as one
+            # that connects does, and disabling the custom judges hands what waited for them to the others.
+            self._offer_queue()
 
     def remove(self, judge):
         with self.lock:
@@ -128,11 +155,9 @@ class JudgeList(object):
 
             # Since we reserve a judge for high priority submissions when there are more than one,
             # we'll need to start judging if there is exactly one judge and it's free.
-            current_tier = self.current_tier_judges()
-            if len(current_tier) == 1:
-                judge = next(iter(current_tier))
-                if not judge.working:
-                    self._handle_free_judge(judge)
+            # CPC (problemas-prueba-pdf-2): and any free judge may now take a custom test that waited for the judges
+            # that left, so the queue goes to every free judge (with one left, the same as before).
+            self._offer_queue()
 
     def __iter__(self):
         return iter(self.judges)
@@ -170,7 +195,8 @@ class JudgeList(object):
                 # idempotent.
                 return
 
-            candidates = [judge for judge in self.current_tier_judges() if judge.can_judge(problem, language, judge_id)]
+            candidates = [judge for judge in self.current_tier_judges()
+                          if self._can_judge(judge, problem, language, judge_id)]
             available = [judge for judge in candidates if not judge.working and not judge.is_disabled]
             if judge_id:
                 logger.info('Specified judge %s is%savailable', judge_id, ' ' if available else ' not ')

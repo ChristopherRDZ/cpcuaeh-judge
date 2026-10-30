@@ -2,14 +2,29 @@ from collections import defaultdict
 from math import e
 
 from django.core.cache import cache
-from django.db.models import Case, Count, ExpressionWrapper, F, When
+from django.db.models import Case, Count, ExpressionWrapper, F, Q, When
 from django.db.models.fields import FloatField
 from django.utils import timezone
 from django.utils.translation import gettext_noop
 
-from judge.models import Problem, Submission
+from judge.models import Contest, Problem, Submission
 
 __all__ = ['contest_completed_ids', 'get_result_data', 'user_completed_ids', 'user_editable_ids', 'user_tester_ids']
+
+
+def public_submissions_filter(prefix=''):
+    """Q matching, through `prefix`, the submissions that no frozen scoreboard hides from the public, or None while no
+    freeze hides anything (then the queries of always run).
+
+    Contest.public_freeze_filter seen from another model, for what everybody reads alike: the popular problems and the
+    statistics by language (problemas-prueba-pdf-5, 2026-10-30). Inside an aggregate, so that the condition applies
+    to each joined submission.
+    """
+    windows = Contest.unrevealed_freezes()
+    hidden = Q()
+    for contest_id, cutoff in windows:
+        hidden |= Q(**{prefix + 'contest_object_id': contest_id, prefix + 'date__gte': cutoff})
+    return ~hidden if windows else None
 
 
 def user_tester_ids(profile):
@@ -92,14 +107,19 @@ def hot_problems(duration, limit):
     if qs is None:
         qs = Problem.get_public_problems() \
                     .filter(submission__date__gt=timezone.now() - duration, points__gt=3, points__lt=25)
-        qs0 = qs.annotate(k=Count('submission__user', distinct=True)).order_by('-k').values_list('k', flat=True)
+        # What a frozen scoreboard still hides does not make a problem popular: the list would tell which problems of
+        # the contest are being solved during the freeze (problemas-prueba-pdf-5).
+        shown = public_submissions_filter('submission__')
+        qs0 = qs.annotate(k=Count('submission__user', distinct=True, filter=shown)).order_by('-k') \
+            .values_list('k', flat=True)
 
-        if not qs0:
+        # Nothing at all once every recent submission is behind a freeze.
+        if not qs0 or not qs0[0]:
             return []
         # make this an aggregate
         mx = float(qs0[0])
 
-        qs = qs.annotate(unique_user_count=Count('submission__user', distinct=True))
+        qs = qs.annotate(unique_user_count=Count('submission__user', distinct=True, filter=shown))
         # fix braindamage in excluding CE
         qs = qs.annotate(submission_volume=Count(Case(
             When(submission__result='AC', then=1),
@@ -109,11 +129,11 @@ def hot_problems(duration, limit):
             When(submission__result='TLE', then=1),
             When(submission__result='OLE', then=1),
             output_field=FloatField(),
-        )))
+        ), filter=shown))
         qs = qs.annotate(ac_volume=Count(Case(
             When(submission__result='AC', then=1),
             output_field=FloatField(),
-        )))
+        ), filter=shown))
         qs = qs.filter(unique_user_count__gt=max(mx / 3.0, 1))
 
         qs = qs.annotate(ordering=ExpressionWrapper(

@@ -1,6 +1,7 @@
 """Problem PDFs: what the site does once DMOJ_PDF_PDFOID_URL and DMOJ_PDF_PROBLEM_CACHE are set.
 
-pdfoid itself is replaced by a stub that records the HTML it gets.
+pdfoid itself is replaced by a stub that records the HTML it gets. The PDF of a problem asks to sign in, the view
+gives render_pdf a timeout, and a PDF that could not be prepared answers a 503 page.
 """
 import os
 import shutil
@@ -11,7 +12,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 import judge.views.problem as problem_views
-from judge.models.tests.util import create_problem
+from judge.models.tests.util import create_problem, create_user
 
 FAKE_PDF = b'%PDF-1.4 fake'
 
@@ -28,9 +29,10 @@ class PdfTestCase(TestCase):
         cache.clear()
         self.folder = tempfile.mkdtemp(prefix='pdf-cache-')
         self.addCleanup(shutil.rmtree, self.folder, True)
+        self.client.force_login(create_user('pdfreader'))
         self.calls = []
 
-        def fake_render(*, title, html, footer=False):
+        def fake_render(*, title, html, footer=False, timeout=None):
             self.calls.append({'title': title, 'html': html})
             return FAKE_PDF
 
@@ -58,6 +60,13 @@ class PdfTests(PdfTestCase):
         again = self.get('/problem/pdfpublico/pdf')
         self.assertEqual(again.status_code, 200)
         self.assertEqual(len(self.calls), 1, 'the second request must come from the cache')
+
+    def test_without_a_session_it_asks_to_sign_in(self):
+        self.client.logout()
+        response = self.get('/problem/pdfpublico/pdf')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('next=', response['Location'])
+        self.assertEqual(self.calls, [])
 
     def test_the_title_of_the_pdf_is_the_name_of_the_problem(self):
         self.get('/problem/pdfpublico/pdf')
@@ -91,13 +100,12 @@ class PdfTests(PdfTestCase):
 
     def test_a_failed_render_leaves_nothing_in_the_cache(self):
         # Upstream opened the file before rendering: a failure (pdfoid down, MathJax not loading) left an empty PDF
-        # that was then served to everybody until the problem was saved again.
-        def broken(*, title, html, footer=False):
+        # that was then served to everybody until the problem was saved again. Now it answers a page saying so.
+        def broken(*, title, html, footer=False, timeout=None):
             raise RuntimeError('PDF rendering timed out')
 
         with mock.patch.object(problem_views, 'render_pdf', broken):
-            with self.assertRaises(RuntimeError):
-                self.get('/problem/pdfpublico/pdf')
+            self.assertEqual(self.get('/problem/pdfpublico/pdf').status_code, 503)
         self.assertEqual(os.listdir(self.folder), [])
         # The next request renders it properly.
         response = self.get('/problem/pdfpublico/pdf')
@@ -121,4 +129,5 @@ class PdfDisabledTests(TestCase):
         cache.clear()
         self.assertFalse(problem_views.PDF_RENDERING_ENABLED)
         self.assertNotIn('view-pdf', self.client.get('/problem/pdfapagado').content.decode())
+        self.client.force_login(create_user('pdfreader'))
         self.assertEqual(self.client.get('/problem/pdfapagado/pdf').status_code, 404)

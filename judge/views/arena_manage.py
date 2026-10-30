@@ -383,17 +383,23 @@ def manage_game_code(request, game):
 @manager_required
 @require_GET
 def manage_submission_source(request, submission):
-    submission = get_object_or_404(Submission.objects.select_related('language', 'source', 'contest_object'),
-                                   pk=submission)
+    submission = get_object_or_404(Submission.objects.select_related('language', 'source', 'contest_object',
+                                                                     'problem'), pk=submission)
     game = ArenaGame.objects.select_related('match', 'match__tournament') \
         .filter(contest_id=submission.contest_object_id).first() if submission.contest_object_id else None
     if game is None or not access.can_manage_match(request.user, game.match):
         # Only arena submissions, and only of one's own battles: this is not a way around the normal submission
         # permissions.
         raise Http404()
+    # What the judge said: a compile error, or the warnings of the compiler on a graded submission, are the
+    # contestant's own. An internal error, which may carry the compile log of an interactor (problemas-datos-3), only
+    # for those who may edit the problem.
+    error = submission.error or ''
+    if 'IE' in (submission.status, submission.result) and not submission.problem.is_editable_by(request.user):
+        error = ''
     return json_response({'id': submission.pk, 'language': submission.language.name,
                           'source': submission.source.source, 'status': submission.status,
-                          'result': submission.result, 'error': submission.error or ''})
+                          'result': submission.result, 'error': error})
 
 
 # ---------------------------------------------------------------------------------------------------------------

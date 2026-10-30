@@ -517,6 +517,7 @@
                 nofiles: {{ _('Upload a zip file and press Submit first, so that its file list becomes available.')|htmltojs }},
                 replace: {{ _('This replaces the {count} case(s) already in the table. Continue?')|htmltojs }},
                 toomany: {{ _('This zip file needs {rows} rows, but only {max} fit in one submission. Split the data set, or raise the limits, starting with DATA_UPLOAD_MAX_NUMBER_FIELDS.')|htmltojs }},
+                deletefirst: {{ _('This zip file and the {count} saved case(s) it replaces do not fit in one submission. The saved cases are now marked for deletion: press Submit to delete them, and the table then fills in from the zip file by itself. Until you submit it as well, the problem has no test cases.')|htmltojs }},
                 auto: {{ _('Filled in from the zip file automatically. Check the points, then press Submit.')|htmltojs }}
             };
 
@@ -585,12 +586,15 @@
                 return count;
             }
 
+            // Returns how many saved rows it hands to the delete column.
             function retire_rows() {
+                var saved = 0;
                 $table.find('tbody:first').find('tr').each(function () {
                     var $tr = $(this), $id = $tr.find('input[id$="-id"]');
                     if ($id.length && $id.val()) {
                         // Already in the database: hand it to the delete column.
                         $tr.find('input[id$="DELETE"]').prop('checked', true);
+                        saved++;
                     } else {
                         // Unsaved spare row: blank every field, the order among
                         // them, so the formset sees an untouched extra form and
@@ -606,6 +610,7 @@
                     // the management form to stay contiguous.
                     $tr.hide();
                 });
+                return saved;
             }
 
             function fill_row($tr, row) {
@@ -657,7 +662,19 @@
                         !window.confirm(fill_text(AUTOFILL_TEXT.replace, {count: existing})))
                     return;
 
-                retire_rows();
+                var saved = retire_rows(), max = window.autofill_max_rows;
+                // The retired rows still go with the form, to be deleted, and
+                // count against the same ceiling as the new ones (the hidden
+                // template row is part of what the server leaves room for). When
+                // the new rows fit on their own but not together with them, the
+                // old ones go first, in a submission of their own: the page then
+                // comes back with an empty table and fills it in by itself.
+                if (max && saved && result.rows.length <= max &&
+                        parseInt($total.val(), 10) + result.rows.length > max) {
+                    renumber_rows();
+                    report([{text: fill_text(AUTOFILL_TEXT.deletefirst, {count: saved}), warning: true}]);
+                    return;
+                }
                 result.rows.forEach(function (row) {
                     fill_row(add_case_row(), row);
                 });

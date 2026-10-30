@@ -1,9 +1,10 @@
+import logging
 from operator import attrgetter
 
 from django import forms
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.forms import ModelForm
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -16,6 +17,8 @@ from judge.models import LanguageLimit, Problem, ProblemClarification, ProblemPo
 from judge.utils.views import NoBatchDeleteMixin
 from judge.widgets import AdminHeavySelect2MultipleWidget, AdminMartorWidget, AdminSelect2MultipleWidget, \
     AdminSelect2Widget, CheckboxSelectMultipleWithSelectAll
+
+logger = logging.getLogger(__name__)
 
 
 class ProblemForm(ModelForm):
@@ -234,6 +237,28 @@ class ProblemAdmin(NoBatchDeleteMixin, VersionAdmin):
         form = super(ProblemAdmin, self).get_form(*args, **kwargs)
         form.base_fields['authors'].queryset = Profile.objects.all()
         return form
+
+    def add_view(self, request, form_url='', extra_context=None):
+        return self._save_once_more(request, super(ProblemAdmin, self).add_view, request, form_url, extra_context)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        return self._save_once_more(request, super(ProblemAdmin, self).change_view, request, object_id, form_url,
+                                    extra_context)
+
+    @staticmethod
+    def _save_once_more(request, view, *args):
+        """Save pressed twice: both requests passed the uniqueness checks of the forms before either was stored, and
+        the second one hit a unique index instead (a 500, although the first one saved). Out here, around add_view
+        and change_view of VersionAdmin, its transaction and its revision of django-reversion are both undone by now:
+        the form runs once more, in a revision of its own, sees what the first one stored and says so, as it would
+        have a moment later. Anything that fails again is raised as before."""
+        try:
+            return view(*args)
+        except IntegrityError:
+            if request.method != 'POST':
+                raise
+            logger.warning('Saving a problem hit a unique index; the form runs once more', exc_info=True)
+            return view(*args)
 
     def save_model(self, request, obj, form, change):
         # `organizations` will not appear in `cleaned_data` if user cannot edit it

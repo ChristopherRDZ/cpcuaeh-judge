@@ -594,8 +594,13 @@ class AllSubmissions(InfinitePaginationMixin, SubmissionsListBase):
         result = cache.get(key)
         if result:
             return result
-        result = super(AllSubmissions, self)._get_result_data(
-            Submission.objects.exclude(problem__code__startswith='ct_'))
+        submissions = Submission.objects.exclude(problem__code__startswith='ct_')
+        # The same chart for everybody, so what a frozen scoreboard still hides from the public counts for nobody
+        # (problemas-prueba-pdf-5, 2026-10-30); the list itself already leaves it out.
+        hidden = Contest.public_freeze_filter()
+        if hidden is not None:
+            submissions = submissions.exclude(hidden)
+        result = super(AllSubmissions, self)._get_result_data(submissions)
         cache.set(key, result, self.stats_update_interval)
         return result
 
