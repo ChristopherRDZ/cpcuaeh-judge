@@ -1,3 +1,4 @@
+import json
 import math
 from datetime import datetime, timedelta
 
@@ -5,7 +6,8 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models, transaction
-from django.db.models import CASCADE, Exists, OuterRef, Q
+from django.db.models import CASCADE, Count, Exists, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -139,6 +141,22 @@ class Contest(models.Model):
                                                      validators=[MinValueValidator(1), MaxValueValidator(100)])
     team_max_size = models.PositiveSmallIntegerField(_('Máximo de integrantes'), default=3,
                                                      validators=[MinValueValidator(1), MaxValueValidator(100)])
+    # Where it is competed (2026-10-31): only with both does the scoreboard split and does whoever organizes place each
+    # participant, who starts online (ContestParticipation.onsite). The value in the database is for the code from
+    # before, between migrating and installing.
+    ONLINE, ONSITE, HYBRID = 'online', 'onsite', 'hybrid'
+    attendance_mode = models.CharField(
+        _('Presencial o en línea'), max_length=10, default=ONLINE, db_default=ONLINE,
+        choices=((ONLINE, _('Sólo en línea')), (ONSITE, _('Sólo presencial')), (HYBRID, _('Presencial y en línea'))),
+        help_text=_('Con «Presencial y en línea», el ranking se separa en Global, Presencial y En línea, y en la '
+                    'pestaña «Registrados» del concurso colocas a cada quien en su modalidad; todos empiezan en '
+                    'línea, salvo quienes ya pusiste en la lista de la sede. Con las otras dos, todos compiten '
+                    'juntos, como siempre. «Presencial y en línea» se puede poner en cualquier momento, pero no '
+                    'quitar una vez empezado el concurso.'))
+    # Who competes on site, named ahead in the tab «Registrados» (2026-10-31): the profiles and the teams it was given,
+    # also before they register or join, so that they start on site when they do (designated_onsite). JSON written
+    # only by its own UPDATE under the lock of this row (change_onsite_list), never by a form; save() keeps it.
+    onsite_list = models.TextField(null=True, blank=True, editable=False)
     # Since 2026-10-29 it keeps every freeze that is not revealed, started or not (frozen_windows_for); the name
     # changed with that, so that code from before never reads the new list with the old meaning.
     FROZEN_WINDOWS_CACHE_KEY = 'frozen_contest_windows_v2'
@@ -308,10 +326,26 @@ class Contest(models.Model):
         if self.participation_mode == self.TEAM and self.is_rated:
             raise ValidationError({'is_rated': _('Los concursos exclusivos de equipos no pueden ser calificados.')})
         if self.pk:
-            previous = type(self).objects.filter(pk=self.pk).values('participation_mode').first()
-            if (previous and previous['participation_mode'] != self.participation_mode and
-                    self.users.filter(virtual__gte=0).exists()):
-                raise ValidationError({'participation_mode': _('No se puede cambiar la modalidad después de la primera participación.')})
+            previous = type(self).objects.filter(pk=self.pk).values('participation_mode', 'attendance_mode',
+                                                                    'start_time').first()
+            # Taking «Presencial y en línea» away once the contest started, with somebody in it, would merge the
+            # scoreboard and send balloons also to whoever competes online (2026-10-31). Putting it is always fine:
+            # everybody stays online until whoever organizes places them.
+            if previous and previous['attendance_mode'] == self.HYBRID and self.attendance_mode != self.HYBRID and \
+                    previous['start_time'] <= timezone.now() and \
+                    self.users.filter(virtual=ContestParticipation.LIVE).exists():
+                raise ValidationError({'attendance_mode': _(
+                    'Con el concurso ya empezado no se puede quitar «Presencial y en línea»: el ranking se juntaría y '
+                    'los globos irían también a quienes compiten en línea. Si todos están en la sede, pásalos a '
+                    'presencial en «Registrados».')})
+            if previous and previous['participation_mode'] != self.participation_mode:
+                if self.users.filter(virtual__gte=0).exists():
+                    raise ValidationError({'participation_mode': _(
+                        'No se puede cambiar la modalidad después de la primera participación.')})
+                # A registration was made for that mode: a team cannot stay registered in an individual contest.
+                if self.users.filter(virtual=ContestParticipation.REGISTERED).exists():
+                    raise ValidationError({'participation_mode': _(
+                        'No se puede cambiar la modalidad de participación después del primer registro.')})
         # Django will complain if you didn't fill in start_time or end_time, so we don't have to.
         if self.start_time and self.end_time and self.start_time >= self.end_time:
             raise ValidationError('What is this? A contest that ended before it starts?')
@@ -545,6 +579,86 @@ class Contest(models.Model):
 
     update_user_count.alters_data = True
 
+    def recount_users(self):
+        """`user_count` again, without saving the whole contest (2026-10-31). Everybody registered enters in the same
+        seconds at the start: one full save each would run every signal of the contest that many times. Counted
+        inside the UPDATE itself, so that of two entries at once the older count is never the one left."""
+        live = (ContestParticipation.objects.filter(contest_id=OuterRef('pk'), virtual=ContestParticipation.LIVE)
+                .order_by().values('contest_id').annotate(count=Count('id')).values('count'))
+        type(self).objects.filter(pk=self.pk).update(user_count=Coalesce(Subquery(live), 0))
+        self.user_count = type(self).objects.filter(pk=self.pk).values_list('user_count', flat=True).first() or 0
+
+    recount_users.alters_data = True
+
+    @property
+    def is_hybrid(self):
+        """On site and online at once: the scoreboard splits and whoever organizes places each participant."""
+        return self.attendance_mode == self.HYBRID
+
+    def onsite_designations(self):
+        """(profile ids, team ids) of the list of who competes on site (onsite_list): two empty sets without one, or
+        with a value that is not what change_onsite_list writes."""
+        try:
+            stored = json.loads(self.onsite_list or '{}')
+            return {int(pk) for pk in stored.get('profiles', ())}, {int(pk) for pk in stored.get('teams', ())}
+        except (TypeError, ValueError, AttributeError):
+            return set(), set()
+
+    def designated_onsite(self, profile_ids, team_id=None):
+        """Whether a participation of these people (and of this team) starts on site: only in a contest that is on
+        site and online, and only when the list names the team or one of them (2026-10-31)."""
+        if not self.is_hybrid:
+            return False
+        profiles, teams = self.onsite_designations()
+        return (team_id is not None and team_id in teams) or any(pk in profiles for pk in profile_ids)
+
+    def change_onsite_list(self, add_profiles=(), add_teams=(), remove_profiles=(), remove_teams=()):
+        """Name people and teams on the list of who competes on site, or take them off it. The caller is inside a
+        transaction: the row is locked first, as join_attempt locks it before reading the list."""
+        current = (type(self).objects.select_for_update().filter(pk=self.pk)
+                   .values_list('onsite_list', flat=True).first())
+        self.onsite_list = current
+        profiles, teams = self.onsite_designations()
+        profiles = (profiles | set(add_profiles)) - set(remove_profiles)
+        teams = (teams | set(add_teams)) - set(remove_teams)
+        value = json.dumps({'profiles': sorted(profiles), 'teams': sorted(teams)}) if profiles or teams else None
+        if value != current:
+            type(self).objects.filter(pk=self.pk).update(onsite_list=value)
+        self.onsite_list = value
+
+    change_onsite_list.alters_data = True
+
+    def registered_count(self):
+        """How many registrations wait for the start: the number everybody sees, the same as the tab «Registrados»
+        counts (ContestParticipationQuerySet.waiting_registrations)."""
+        return self.users.waiting_registrations().count()
+
+    def is_registrable_by(self, user):
+        """Whether this user may register before the start (2026-10-31), the same rules as joining: an organizer or a
+        tester enters early as a spectator instead, and whoever is banned from the contest cannot. Assumes the user
+        can access the contest, as is_live_joinable_by; the access code is asked when registering."""
+        if self.started or not user.is_authenticated:
+            return False
+        if self.banned_users.filter(pk=user.profile.pk).exists():
+            return False
+        editor_or_tester = getattr(self, 'editor_or_tester', None)
+        if editor_or_tester is None:
+            editor_or_tester = user.profile.id in self.editor_ids or user.profile.id in self.tester_ids
+        if editor_or_tester:
+            return False
+        if self.limit_join_organizations:
+            return self.join_organizations.filter(id__in=user.profile.organizations.all()).exists()
+        return True
+
+    def registration_for(self, user):
+        """The registration of this user, alone or on the roster of a team, that has not entered yet, or None."""
+        if not user.is_authenticated:
+            return None
+        from judge.contest_registration import superseded
+        entry = (self.users.for_profile(user.profile).filter(virtual=ContestParticipation.REGISTERED)
+                 .select_related('user__user').prefetch_related('team_roster').first())
+        return None if entry is None or superseded(entry) else entry
+
     class Inaccessible(Exception):
         pass
 
@@ -741,11 +855,21 @@ class Contest(models.Model):
 
     def save(self, *args, **kwargs):
         """Keeps the cutoff of a freeze that already started (kept_freeze_minutes), whatever saves the contest: the
-        form of the administration already shows why a change is refused, and adjusts the minutes itself."""
+        form of the administration already shows why a change is refused, and adjusts the minutes itself.
+
+        A full save also keeps the list of who competes on site as it is now (2026-10-31): only its own UPDATE writes
+        it (change_onsite_list), and an older copy would put it back as it was when the copy was read. Inside a
+        transaction it is read under the lock of the row, as that UPDATE takes it."""
         fields = kwargs.get('update_fields')
         if self.pk and (fields is None or set(fields) & set(FREEZE_SCHEDULE)):
-            stored = type(self).objects.filter(pk=self.pk).values(*FREEZE_SCHEDULE).first()
+            stored = type(self).objects.filter(pk=self.pk)
+            if fields is None and transaction.get_connection().in_atomic_block:
+                stored = stored.select_for_update()
+            stored = stored.values(*FREEZE_SCHEDULE, 'onsite_list').first()
             if stored is not None:
+                onsite_list = stored.pop('onsite_list')
+                if fields is None:
+                    self.onsite_list = onsite_list
                 minutes = kept_freeze_minutes(stored, {field: getattr(self, field) for field in FREEZE_SCHEDULE},
                                               getattr(self, '_freeze_checked_at', None), live=self.takes_part_live)
                 if minutes != self.freeze_minutes:
@@ -823,6 +947,18 @@ class ContestParticipationQuerySet(models.QuerySet):
         return self.filter(Q(team__isnull=True, user=profile) |
                            Q(pk__in=profile.team_contest_entries.values('participation_id')))
 
+    def waiting_registrations(self):
+        """The registrations that wait for the start and can enter (2026-10-31): without those of whoever organizes
+        or tests the contest today, nor individual ones of accounts no longer active. A team whose registrant left
+        stays: the rest of its roster still enters."""
+        return (self.filter(virtual=ContestParticipation.REGISTERED).without_contest_staff()
+                .exclude(team__isnull=True, user__user__is_active=False))
+
+    def official(self):
+        """The one official registration of each person in a contest: live, or registered before the start and
+        waiting for it (2026-10-31)."""
+        return self.filter(virtual__in=ContestParticipation.OFFICIAL)
+
     def without_contest_staff(self):
         """Without the official participations of whoever organizes (author or curator) or tests their contest today,
         alone or on the roster of a team (decision of the owner, 2026-10-29).
@@ -845,12 +981,18 @@ class ContestParticipationQuerySet(models.QuerySet):
             member |= Q(Exists(through.objects.filter(contest_id=OuterRef(OuterRef('contest_id')),
                                                       profile_id=OuterRef('profile_id'))))
         staff_member = ContestTeamMember.objects.filter(participation_id=OuterRef('pk')).filter(member)
-        return self.exclude(Q(virtual=ContestParticipation.LIVE) & (alone | Q(Exists(staff_member))))
+        # Also a registration made before getting the role (2026-10-31): the list of the registered and the seats.
+        return self.exclude(Q(virtual__in=ContestParticipation.OFFICIAL) & (alone | Q(Exists(staff_member))))
 
 
 class ContestParticipation(models.Model):
     LIVE = 0
     SPECTATE = -1
+    # Registered before the start (2026-10-31), like SPECTATE a value no reader of the scoreboard takes: the ranking,
+    # the API, the reveal, the balloons, the rating, user_count and MOSS all ask for LIVE. The same row becomes LIVE
+    # when its contest starts (judge/contest_registration.py); until then it never is anybody's current_contest.
+    REGISTERED = -2
+    OFFICIAL = (LIVE, REGISTERED)
 
     contest = models.ForeignKey(Contest, verbose_name=_('associated contest'), related_name='users', on_delete=CASCADE)
     user = models.ForeignKey(Profile, verbose_name=_('user'), related_name='contest_history', on_delete=CASCADE)
@@ -875,6 +1017,9 @@ class ContestParticipation(models.Model):
     frozen_at = models.DateTimeField(verbose_name=_('scoreboard frozen at'), null=True, blank=True,
                                      help_text=_('When the frozen copy above was taken. Empty means no copy was '
                                                  'needed, because nothing has changed since the freeze.'))
+    # On site, in a contest that is both (Contest.HYBRID); only whoever organizes changes it. The value in the database
+    # is for the code from before, between migrating and installing.
+    onsite = models.BooleanField(_('Presencial'), default=False, db_default=False)
 
     @cached_property
     def freeze_starts_at(self):
@@ -914,9 +1059,15 @@ class ContestParticipation(models.Model):
         with transaction.atomic():
             # All team members can finish judging at once. Freeze and scoring must see one serialized state.
             locked = type(self).objects.select_for_update().get(pk=self.pk)
+            # The contest formats save the whole row: also what others change on it meanwhile, so it is read from the
+            # locked row. Entering turns a registration into LIVE with a new start, and whoever organizes moves people
+            # between on site and online at any time (2026-10-31).
             for field in ('frozen_at', 'frozen_score', 'frozen_cumtime', 'frozen_tiebreaker', 'frozen_format_data',
-                          'score', 'cumtime', 'tiebreaker', 'format_data', 'is_disqualified'):
+                          'score', 'cumtime', 'tiebreaker', 'format_data', 'is_disqualified', 'virtual', 'real_start',
+                          'onsite'):
                 setattr(self, field, getattr(locked, field))
+            for name in ('start', 'end_time', 'freeze_starts_at'):
+                self.__dict__.pop(name, None)
             self.freeze_scoreboard()
             self.contest.format.update_participation(self)
             if self.is_disqualified:
@@ -966,12 +1117,17 @@ class ContestParticipation(models.Model):
     def live(self):
         return self.virtual == self.LIVE
 
+    @property
+    def registered(self):
+        return self.virtual == self.REGISTERED
+
     def clean(self):
         super().clean()
-        if self.contest_id and self.user_id and self.virtual == self.LIVE and not self.team_id:
+        if self.contest_id and self.user_id and self.virtual in self.OFFICIAL and not self.team_id:
             if self.contest.participation_mode == Contest.TEAM:
                 raise ValidationError(_('Este concurso sólo admite participaciones oficiales por equipo.'))
-            if type(self).objects.for_profile(self.user).filter(contest_id=self.contest_id, virtual=0).exclude(pk=self.pk).exists():
+            if (type(self).objects.for_profile(self.user).filter(contest_id=self.contest_id).official()
+                    .exclude(pk=self.pk).exists()):
                 raise ValidationError(_('Este usuario ya tiene una inscripción oficial en el concurso.'))
 
     def contains_profile(self, profile_id):
@@ -1001,12 +1157,15 @@ class ContestParticipation(models.Model):
     @cached_property
     def start(self):
         contest = self.contest
+        # A registration has not begun: its clock is the contest's until it enters (2026-10-31).
+        if self.registered:
+            return contest.start_time
         return contest.start_time if contest.time_limit is None and (self.live or self.spectate) else self.real_start
 
     @cached_property
     def end_time(self):
         contest = self.contest
-        if self.spectate:
+        if self.spectate or self.registered:
             return contest.end_time
         if self.virtual:
             if contest.time_limit:
@@ -1034,6 +1193,8 @@ class ContestParticipation(models.Model):
     def __str__(self):
         if self.spectate:
             return _('%(user)s spectating in %(contest)s') % {'user': self.display_name, 'contest': self.contest.name}
+        if self.registered:
+            return _('%(user)s registrado en %(contest)s') % {'user': self.display_name, 'contest': self.contest.name}
         if self.virtual:
             return _('%(user)s in %(contest)s, v%(id)d') % {
                 'user': self.display_name, 'contest': self.contest.name, 'id': self.virtual,

@@ -8,7 +8,10 @@
     <script type="text/javascript">
         $(document).ready(function () {
             $('.time-remaining').each(function () {
-                count_down($(this));
+                // A contest you registered for is counted apart: at the start, the box that asks whether to enter
+                // (contest/enter-countdown.html).
+                if (!$(this).closest('[data-registration]').length)
+                    count_down($(this));
             });
 
             $('.contest-tag').find('a[data-featherlight]').featherlight();
@@ -30,6 +33,7 @@
             // });
         });
     </script>
+    {% include "contest/enter-countdown.html" %}
 {% endblock %}
 
 {% block title_ruler %}{% endblock %}
@@ -75,6 +79,13 @@
                     <i class="fa fa-bar-chart"></i> {{ _('rated') }}
                 </span>
             {% endif %}
+            {# Only online is the usual, and carries no tag (2026-10-31). #}
+            {% if contest.attendance_mode != 'online' %}
+                <span style="background-color: #17689e; color: #ffffff" class="contest-tag">
+                    <i class="fa fa-map-marker"></i>
+                    {{ _('presencial y en línea') if contest.attendance_mode == 'hybrid' else _('presencial') }}
+                </span>
+            {% endif %}
             {% for tag in contest.tags.all() %}
                 <span style="background-color: {{ tag.color }}" class="contest-tag">
                     <a href="{{ url('contest_tag', tag.name) }}"
@@ -113,6 +124,33 @@
     {% else %}
         {{ contest.user_count }}
     {% endif %}
+{% endmacro %}
+
+{# Registering ahead (2026-10-31). One click when there is nothing to choose or type; otherwise the page to register,
+   which asks for the team or the code. #}
+{% macro contest_register(contest, request) %}
+    <td>
+        {% if contest.registered_here %}
+            <a href="{{ url('contest_join', contest.key) }}" class="unselectable button full participate-button contest-registered"
+               title="{{ _('Ver o cancelar tu registro') }}">
+                <i class="fa fa-check" aria-hidden="true"></i> {{ _('Registrado') }}
+            </a>
+        {% elif contest.is_registrable_by(request.user) %}
+            {% if contest.participation_mode == 'individual' and not contest.access_code %}
+                <form action="{{ url('contest_join', contest.key) }}" method="post">
+                    {% csrf_token %}
+                    <input type="submit" class="unselectable button full participate-button" value="{{ _('Registrarse') }}">
+                </form>
+            {% else %}
+                <a href="{{ url('contest_join', contest.key) }}" class="unselectable button full participate-button">
+                    {{- _('Registrarse') -}}
+                </a>
+            {% endif %}
+        {% elif not request.user.is_authenticated %}
+            <a href="{{ url('auth_login') }}?next={{ url('contest_join', contest.key)|urlencode }}"
+               class="unselectable button full participate-button">{{ _('Registrarse') }}</a>
+        {% endif %}
+    </td>
 {% endmacro %}
 
 {% macro contest_join(contest, request, finished_contests) %}
@@ -242,15 +280,46 @@
 
         <h4>{{ _('Upcoming contests') }}</h4>
         {% if future_contests %}
+            {# Registering ahead (2026-10-31): how many registered, public, and the button. #}
+            <style>
+                /* The site styles every button as its blue one with white text, the colour with !important. */
+                .contest-list a.contest-registered {
+                    background: linear-gradient(to bottom, #fff 0, #e0e0e0 100%);
+                    border-color: #ccc;
+                    color: #333 !important;
+                }
+
+                .contest-list a.contest-registered:hover {
+                    background: #e0e0e0;
+                }
+                {% macro registered_dark() %}
+                .contest-list a.contest-registered {
+                    background: linear-gradient(to bottom, #444 0, #333 100%);
+                    border-color: #555;
+                    color: #eee !important;
+                }
+
+                .contest-list a.contest-registered:hover {
+                    background: #333;
+                }
+                {% endmacro %}
+                {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+                    {{ registered_dark() }}
+                {% elif PREFERRED_STYLE_CSS is none %}
+                    @media (prefers-color-scheme: dark) { {{ registered_dark() }} }
+                {% endif %}
+            </style>
             <table class="contest-list table striped">
                 <thead>
                 <tr>
-                    <th>{{ _('Contest') }}</th>
+                    <th style="width:90%">{{ _('Contest') }}</th>
+                    <th>{{ _('Registrados') }}</th>
+                    <th style="width:15%"></th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for contest in future_contests %}
-                    <tr>
+                    <tr{% if contest.registered_here %} data-registration="{{ contest.key }}"{% endif %}>
                         <td>
                             <div class="contest-block">
                                 {{ contest_head(contest) }}
@@ -263,6 +332,8 @@
                                 {% endif %}
                             </div>
                         </td>
+                        <td>{{ contest.registrant_count }}</td>
+                        {{ contest_register(contest, request) }}
                     </tr>
                 {% endfor %}
                 </tbody>

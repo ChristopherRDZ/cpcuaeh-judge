@@ -51,6 +51,30 @@
             color: #f0ad4e;
             margin-left: 0.25em;
         }
+
+        /* Presencial or En línea (2026-10-31): beside the place in the view, the place in the Global. */
+        .global-rank {
+            margin-left: 0.3em;
+            color: #888;
+            font-size: 0.8em;
+            font-weight: normal;
+            white-space: nowrap;
+        }
+
+        .contest-modalities a[aria-current], .contest-divisions a[aria-current] {
+            font-weight: bold;
+            text-decoration: underline;
+        }
+
+        .contest-modality-count {
+            color: #888;
+            font-weight: normal;
+        }
+
+        .contest-modality-note {
+            color: #888;
+            margin: -0.5em 0 1em;
+        }
     </style>
 {% endblock %}
 
@@ -150,7 +174,8 @@
                 // A little past the end, so the last verdicts still land.
                 var STOP_AFTER = {{ (contest.end_time.timestamp() * 1000)|int }} + 300000;
 
-                var url = '{{ url('contest_ranking_ajax', contest.key) }}?division={{ ranking_division }}';
+                var url = '{{ url('contest_ranking_ajax', contest.key) }}?division={{ ranking_division }}
+                    {%- if ranking_modality %}&modality={{ ranking_modality }}{% endif %}';
                 var timer = null;
                 var fetching = false;
                 var failures = 0;
@@ -218,13 +243,28 @@
 {% endblock %}
 
 {% block before_users_table %}
+    {# On site and online (2026-10-31): each link keeps the other choice. #}
+    {% set modality_query = '&modality=' ~ ranking_modality if ranking_modality else '' %}
     {% if tab == 'ranking' and contest.participation_mode == 'mixed' %}
         <div class="contest-divisions" role="navigation" aria-label="{{ _('Rankings del concurso') }}" style="margin: 0 0 1em; display: flex; gap: 1em; flex-wrap: wrap">
-            <a href="{{ url('contest_ranking', contest.key) }}?division=individual" {% if ranking_division == 'individual' %}aria-current="page" style="font-weight: bold; text-decoration: underline"{% endif %}>{{ _('Individuales') }}</a>
-            <a href="{{ url('contest_ranking', contest.key) }}?division=team" {% if ranking_division == 'team' %}aria-current="page" style="font-weight: bold; text-decoration: underline"{% endif %}>{{ _('Equipos') }}</a>
+            <a href="{{ url('contest_ranking', contest.key) }}?division=individual{{ modality_query }}" {% if ranking_division == 'individual' %}aria-current="page"{% endif %}>{{ _('Individuales') }}</a>
+            <a href="{{ url('contest_ranking', contest.key) }}?division=team{{ modality_query }}" {% if ranking_division == 'team' %}aria-current="page"{% endif %}>{{ _('Equipos') }}</a>
         </div>
     {% endif %}
-    {% if can_edit and tab == 'ranking' %}<p><a href="{{ url('contest_reveal', contest.key) }}?division={{ ranking_division }}">{{ _('Reveal scoreboard') }}</a></p>{% endif %}
+    {% if tab == 'ranking' and modality_counts %}
+        <div class="contest-modalities" role="navigation" aria-label="{{ _('Presencial y en línea') }}" style="margin: 0 0 1em; display: flex; gap: 1em; flex-wrap: wrap">
+            <a href="{{ url('contest_ranking', contest.key) }}?division={{ ranking_division }}" {% if not ranking_modality %}aria-current="page"{% endif %}>
+                {{- _('Global') }} <span class="contest-modality-count">({{ modality_counts.all }})</span></a>
+            <a href="{{ url('contest_ranking', contest.key) }}?division={{ ranking_division }}&amp;modality=onsite" {% if ranking_modality == 'onsite' %}aria-current="page"{% endif %}>
+                {{- _('Presencial') }} <span class="contest-modality-count">({{ modality_counts.onsite }})</span></a>
+            <a href="{{ url('contest_ranking', contest.key) }}?division={{ ranking_division }}&amp;modality=online" {% if ranking_modality == 'online' %}aria-current="page"{% endif %}>
+                {{- _('En línea') }} <span class="contest-modality-count">({{ modality_counts.online }})</span></a>
+        </div>
+        {% if ranking_modality %}
+            <p class="contest-modality-note">{{ _('Entre paréntesis y en gris, el lugar de cada quien en el Global.') }}</p>
+        {% endif %}
+    {% endif %}
+    {% if can_edit and tab == 'ranking' %}<p><a href="{{ url('contest_reveal', contest.key) }}?division={{ ranking_division }}{{ modality_query }}">{{ _('Reveal scoreboard') }}</a></p>{% endif %}
     {% if scoreboard_frozen %}
         <div class="scoreboard-freeze-note">
             {{ _('The scoreboard is frozen: it shows the standings as they were %(minutes)d minutes before the '

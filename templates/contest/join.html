@@ -4,17 +4,37 @@
 <div class="teams-layout">
     <p><a href="{{ contest.get_absolute_url() }}">{{ contest.name }}</a> · {{ contest.get_participation_mode_display() }}</p>
     {% if error %}<div class="team-error" role="alert">{{ error }}</div>{% endif %}
+    {# Registrado antes del inicio (2026-10-31): una inscripción oficial por persona, así que en lugar del formulario
+       se ve el registro, con la forma de cancelarlo quien lo hizo. Quien está en la lista de otra persona tiene más
+       abajo «Retirarme de la lista». #}
+    {% if registrations and not contest.started %}
+        {% for entry in registrations %}
+            <form method="post" class="team-card contest-registration-cancel">{% csrf_token %}
+                <h3>{{ _('Ya estás registrado') }}</h3>
+                <p><strong>{{ entry.display_name }}</strong>{% if entry.team_id %} · {{ entry.team_roster.all()|map(attribute='username')|join(', ') }}{% endif %}</p>
+                {% if contest.is_hybrid %}
+                    <p>{{ _('Modalidad') }}: <strong>{{ _('Presencial') if entry.onsite else _('En línea') }}</strong></p>
+                {% endif %}
+                {% if entry.user_id == own_id %}
+                    <input type="hidden" name="cancel_registration" value="{{ entry.pk }}">
+                    <div class="team-actions"><button type="submit" class="team-btn-danger">{{ _('Cancelar registro') }}</button></div>
+                {% else %}
+                    <p class="team-note">{{ _('Te registró %(user)s.', user=entry.user.username) }}</p>
+                {% endif %}
+            </form>
+        {% endfor %}
+    {% else %}
     <form method="post" class="team-card" id="contest-join-form">{% csrf_token %}
         {# Marca el formulario que sí trae casillas de integrantes: los botones «Entrar al
            concurso» de otras páginas no las traen, y para ellos sigue valiendo el equipo entero. #}
         <input type="hidden" name="roster" value="1">
-        <h3>{{ _('Elige cómo participar') }}</h3>
+        <h3>{{ _('Elige cómo participar') if contest.started or spectator else _('Elige cómo registrarte') }}</h3>
         {% for entry in resumable %}
             <label><input type="radio" name="selection" value="entry:{{ entry.pk }}" required {% if loop.first %}checked{% endif %}>
-                {{ _('Continuar participación') }}: {{ entry.display_name }}{% if entry.virtual > 0 %} · {{ _('Virtual') }} #{{ entry.virtual }}{% endif %}
+                {{ _('Entrar con tu registro') if entry.registered else _('Continuar participación') }}: {{ entry.display_name }}{% if entry.virtual > 0 %} · {{ _('Virtual') }} #{{ entry.virtual }}{% endif %}
             </label>
         {% endfor %}
-        {% if resumable %}<p>{{ _('Ya tienes una participación activa. Continuar conserva el equipo, los integrantes y el tiempo original.') }}</p>{% endif %}
+        {% if resumable and not resumable[0].registered %}<p>{{ _('Ya tienes una participación activa. Continuar conserva el equipo, los integrantes y el tiempo original.') }}</p>{% endif %}
         {% if not resumable and not spectator %}
         {% if contest.participation_mode != 'team' %}
             <label><input type="radio" name="selection" value="individual" required {% if selection == 'individual' %}checked{% endif %}>
@@ -57,20 +77,27 @@
                 </div>
             {% else %}<p>{{ _('No tienes equipos activos.') }} <a href="{{ url('my_teams') }}">{{ _('Crear equipo o revisar invitaciones') }}</a></p>{% endfor %}
             <p class="team-note">{{ _('Integrantes por equipo: %(minimum)s a %(maximum)s.', minimum=contest.team_min_size, maximum=contest.team_max_size) }}</p>
-            <p>{{ _('Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al comenzar esta participación.') }}</p>
+            {% if contest.started %}
+                <p>{{ _('Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al comenzar esta participación.') }}</p>
+            {% else %}
+                <p>{{ _('Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al registrarlo.') }}</p>
+            {% endif %}
             {% if contest.is_rated %}<p>{{ _('Sólo las participaciones individuales cuentan para la calificación del sitio.') }}</p>{% endif %}
         {% endif %}
         {% endif %}
         {% if spectator %}
             <label><input type="radio" name="selection" value="spectate" checked>{{ _('Spectate') }}</label>
         {% endif %}
-        {% if contest.access_code and not can_edit %}
+        {# Whoever has a registration enters with it, without the code again (2026-10-31). #}
+        {% if contest.access_code and not can_edit and not registrations %}
             <label for="contest-access-code">{{ _('Access code') }}</label>
             <input type="password" id="contest-access-code" name="access_code" maxlength="255" autocomplete="off">
             <p class="team-note">{{ _('Basta con que lo escriba quien inscribe. Los demás integrantes entran con esa misma inscripción.') }}</p>
         {% endif %}
-        <div class="team-actions"><button type="submit">{{ _('Continuar') }}</button></div>
+        {% set registering = not contest.started and not spectator %}
+        <div class="team-actions"><button type="submit">{{ _('Registrarme') if registering else _('Continuar') }}</button></div>
     </form>
+    {% endif %}
     {# Quien fue inscrito por otra persona se puede retirar mientras el equipo no haya enviado nada (equipos-globos-3). #}
     {% for entry in withdrawable %}
         <form method="post" class="team-card">{% csrf_token %}
@@ -104,6 +131,18 @@
         for (var i = 0; i < radios.length; i++)
             radios[i].addEventListener('change', refresh);
         refresh();
+    });
+</script>
+{# Cancelar un registro pide confirmación (2026-10-31), en el clic y no en el envío: common.js inhabilita todos los
+   botones de la página al enviarse un formulario, aunque después se cancele el envío. #}
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function () {
+        var buttons = document.querySelectorAll('form.contest-registration-cancel [type=submit]');
+        for (var i = 0; i < buttons.length; i++)
+            buttons[i].addEventListener('click', function (event) {
+                if (!confirm({{ _('¿Cancelar el registro?')|htmltojs }}))
+                    event.preventDefault();
+            });
     });
 </script>
 {% endblock %}

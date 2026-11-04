@@ -97,7 +97,13 @@ class ContestMiddleware(object):
             response = arena_locked_response(request)
             if response is not None:
                 return response
+            # Whoever registered ahead: the time next to «Concursos», and the boxes that ask at the start whether to
+            # enter (2026-10-31), on any page, also inside another contest. Never raises: see
+            # judge/contest_registration.py.
+            from judge.contest_registration import registration_hint
+            registration_hint(request, profile)
         else:
+            request.registration_pill, request.registration_prompts = None, []
             request.in_contest = False
             request.participation = None
         return self.get_response(request)

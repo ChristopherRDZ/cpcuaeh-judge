@@ -24,6 +24,23 @@ def in_division(queryset, division):
     return queryset.filter(team__isnull=division == 'individual')
 
 
+MODALITIES = ('onsite', 'online')
+
+
+def ranking_modality(request, contest):
+    """Which part of a contest that is on site and online at once is shown (2026-10-31): 'onsite', 'online', or ''
+    for all of it (Global). Only there; any other contest is always the whole of it."""
+    if not contest.is_hybrid:
+        return ''
+    value = request.GET.get('modality')
+    return value if value in MODALITIES else ''
+
+
+def in_modality(onsite, modality):
+    """Whether a participation that is (or is not) on site belongs to this part of the scoreboard."""
+    return not modality or onsite == (modality == 'onsite')
+
+
 def _active_attempt(contest, profile):
     entries = contest.users.for_profile(profile).filter(virtual__gte=1).select_related('contest').order_by('-virtual')
     return next((entry for entry in entries if not entry.ended), None)
@@ -74,7 +91,8 @@ def _require_presentable_name(contest, team):
     if contest.ended:
         return
     key = team_name_key(team.name)
-    taken = contest.users.filter(virtual=0, team__isnull=False).exclude(team=team).values_list('team_name', flat=True)
+    # Also the teams registered ahead, that will be on the scoreboard with that name (2026-10-31).
+    taken = contest.users.official().filter(team__isnull=False).exclude(team=team).values_list('team_name', flat=True)
     if any(team_name_key(name) == key for name in taken):
         raise ValidationError(_('Ya hay otro equipo inscrito en este concurso con el nombre %(name)s. '
                                 'Para inscribirse, este equipo necesita otro nombre: un administrador puede '
@@ -110,6 +128,11 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
     `member_ids` picks which members of the team compete; `None` takes the whole team.
     The caller must be among them, and it is that registration which admits the rest:
     they neither type the access code again nor need their own access to the contest.
+
+    Before the start it registers instead (2026-10-31): the same checks, the access code and the roster, in a row that
+    waits for the start (ContestParticipation.REGISTERED) and is nobody's current contest. Returns the participation
+    either way; `.registered` tells which. Once started, the same call enters a registration
+    (judge/contest_registration.py) without asking the code again.
     """
     contest = Contest.objects.select_for_update().get(pk=contest_id)
     # The contests behind arena games have exactly two participations, created by the arena itself.
@@ -118,9 +141,8 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
         raise ValidationError(_('This contest belongs to an arena battle.'))
     # Asked separately on purpose: `editor_ids` is built with `union()`, and Django
     # refuses to combine a combined queryset with `|`, which turned an early join
-    # into a 500 instead of the message below.
-    if not contest.started and actor.pk not in contest.editor_ids and actor.pk not in contest.tester_ids:
-        raise ValidationError(_('El concurso todavía no ha comenzado.'))
+    # into a 500. Whoever organizes or tests still enters early, as a spectator; everybody else registers.
+    registering = not contest.started and actor.pk not in contest.editor_ids and actor.pk not in contest.tester_ids
     if contest.banned_users.filter(pk=actor.pk).exists() and not actor.user.is_superuser:
         raise ValidationError(_('No puedes participar en este concurso.'))
     if not contest.is_accessible_by(actor.user):
@@ -169,7 +191,9 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
             if (contest.is_private and contest.private_teams.exists() and
                     not contest.private_teams.filter(pk=team.pk).exists()):
                 raise ValidationError(_('Este equipo no está autorizado para participar en el concurso privado.'))
-            existing = contest.users.filter(team=team, virtual=0).first() if not contest.ended else None
+            # The live one first: after going back to the code before and forward again, a team can have both.
+            existing = (contest.users.filter(team=team).official().order_by('-virtual').first()
+                        if not contest.ended else None)
             if existing is None and contest.ended:
                 existing = next((p for p in contest.users.filter(team=team, virtual__gt=0).order_by('-virtual')
                                  if not p.ended), None)
@@ -190,7 +214,8 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
             if contest.participation_mode == Contest.TEAM:
                 raise ValidationError(_('Este concurso sólo admite equipos.'))
             members = [actor]
-            existing = contest.users.for_profile(actor).filter(virtual=0).first() if not contest.ended else None
+            existing = (contest.users.for_profile(actor).official().order_by('-virtual').first()
+                        if not contest.ended else None)
             if existing and existing.team_id:
                 raise ValidationError(_('Ya estás inscrito en equipo en este concurso.'))
         else:
@@ -205,7 +230,8 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
                     contest, member, contest.ended)
                 if blocker:
                     raise ValidationError(blocker)
-                if not contest.ended and contest.users.for_profile(member).filter(virtual=0).exists():
+                # A registration ahead spends it too (2026-10-31).
+                if not contest.ended and contest.users.for_profile(member).official().exists():
                     raise ValidationError(_('%(user)s ya está inscrito en otra participación de este concurso.')
                                           % {'user': member.username})
                 active = _active_attempt(contest, member) if contest.ended else None
@@ -216,18 +242,43 @@ def join_attempt(contest_id, actor, selection, access_code='', member_ids=None):
                         raise ValidationError(_('%(user)s ya tiene una simulación en curso en este concurso.')
                                               % {'user': member.username})
             if existing is None:
-                attempt = max(1, (contest.users.aggregate(v=Max('virtual'))['v'] or 0) + 1) if contest.ended else 0
+                if registering:
+                    attempt = ContestParticipation.REGISTERED
+                else:
+                    attempt = max(1, (contest.users.aggregate(v=Max('virtual'))['v'] or 0) + 1) if contest.ended else 0
+                # Named ahead on the list of who competes on site (2026-10-31), read under the lock of the contest
+                # that changing it takes: they start on site, registering or joining once started.
+                onsite = attempt in ContestParticipation.OFFICIAL and contest.designated_onsite(
+                    [member.pk for member in members], team.pk if team else None)
                 existing = ContestParticipation.objects.create(contest=contest, user=actor, team=team,
-                    team_name=team.name if team else '', virtual=attempt, real_start=timezone.now())
+                    team_name=team.name if team else '', virtual=attempt, real_start=timezone.now(), onsite=onsite)
                 if team:
                     ContestTeamMember.objects.bulk_create([
                         ContestTeamMember(participation=existing, profile=member, username=member.username)
                         for member in members])
-                contest._updating_stats_only = True
-                contest.update_user_count()
+                if not registering:
+                    contest._updating_stats_only = True
+                    contest.update_user_count()
+                from judge.contest_registration import forget_hints_on_commit
+                forget_hints_on_commit(member.pk for member in members)
 
     if existing.is_disqualified or existing.ended:
         raise ValidationError(_('Esta participación ya terminó o está descalificada.'))
+    if registering:
+        # Before the start nobody is let in: a registration waits, and is nobody's current contest.
+        if not existing.registered:
+            raise ValidationError(_('El concurso todavía no ha comenzado.'))
+        return existing
+    if existing.registered:
+        # Started: entering a registration, with the button or with any join form, without the code again.
+        from judge.contest_registration import attach, enter_after_commit, promote
+        # The participation alone: with select_related MariaDB would lock the team row too.
+        entry = ContestParticipation.objects.select_for_update().get(pk=existing.pk)
+        entry.contest = contest
+        first = promote(entry, actor)
+        enter_after_commit(contest, attach(entry, actor, first, switch=True))
+        actor.current_contest = entry
+        return entry
     Profile.objects.filter(pk=actor.pk).update(current_contest=existing)
     actor.current_contest = existing
     return existing
@@ -258,6 +309,9 @@ def withdraw_from_roster(contest_id, actor, participation_id):
                                 'o la participación terminó.'))
     participation.team_roster.filter(profile=actor).delete()
     Profile.objects.filter(pk=actor.pk, current_contest=participation).update(current_contest=None)
+    # Also off a registration that waits for the start (2026-10-31): the tab «Concursos» stops counting down to it.
+    from judge.contest_registration import forget_hints_on_commit
+    forget_hints_on_commit([actor.pk])
     # A submission that landed in the meantime is seen here (READ COMMITTED): then nothing changes.
     if participation.submissions.exists():
         raise ValidationError(_('Ya no puedes retirarte de esta inscripción: la abriste tú, el equipo ya envió algo '

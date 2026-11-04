@@ -1,0 +1,484 @@
+{% extends "common-content.html" %}
+
+{% block title_ruler %}{% endblock %}
+
+{% block title_row %}
+    {% set title = contest.name %}
+    {% include "contest/contest-tabs.html" %}
+{% endblock %}
+
+{% block content_media %}
+    {# Who registered, and placing them on site or online (2026-10-31). The palette and the shapes of the balloon
+       sheet; here rather than in the stylesheets, which are compressed with a manifest. #}
+    <style>
+        :root {
+            --reg-bg: #fff;
+            --reg-soft: #f8f8f8;
+            --reg-hover: #def;
+            --reg-muted: #666;
+            --reg-border: #ccc;
+            --reg-accent: #17689e;
+            --reg-warning: #a52b21;
+            --reg-onsite: #17689e;
+            --reg-plain: linear-gradient(to bottom, #fff 0, #e0e0e0 100%);
+            --reg-plain-hover: #e0e0e0;
+            --reg-plain-border: #ccc;
+            --reg-plain-text: #333;
+        }
+        {% macro dark_palette() %}
+        :root {
+            --reg-bg: #222;
+            --reg-soft: #111;
+            --reg-hover: #023;
+            --reg-muted: #aaa;
+            --reg-border: #3b3b3b;
+            --reg-accent: #7dc9ff;
+            --reg-warning: #ffaaa1;
+            --reg-onsite: #17689e;
+            --reg-plain: linear-gradient(to bottom, #444 0, #333 100%);
+            --reg-plain-hover: #333;
+            --reg-plain-border: #555;
+            --reg-plain-text: #eee;
+        }
+        {% endmacro %}
+        {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+            {{ dark_palette() }}
+        {% elif PREFERRED_STYLE_CSS is none %}
+            @media (prefers-color-scheme: dark) { {{ dark_palette() }} }
+        {% endif %}
+        .reg-note {
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+            padding: 0.6em 0.9em;
+            margin-bottom: 0.8em;
+        }
+
+        .reg-note.reg-errors {
+            border-color: #d9534f;
+            color: var(--reg-warning);
+        }
+
+        .reg-help, .reg-muted {
+            color: var(--reg-muted);
+        }
+
+        .reg-help {
+            margin: 0 0 0.8em;
+        }
+
+        .reg-counts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3em 1.6em;
+            list-style: none;
+            margin: 0 0 1em;
+            padding: 0.5em 0.9em;
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+        }
+
+        .reg-counts li {
+            white-space: nowrap;
+        }
+
+        .reg-count-number {
+            font-weight: bold;
+        }
+
+        .reg-count-label {
+            color: var(--reg-muted);
+        }
+
+        .reg-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6em;
+            align-items: end;
+            margin-bottom: 0.8em;
+        }
+
+        .reg-filters label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2em;
+            color: var(--reg-muted);
+            font-size: 0.9em;
+        }
+
+        .reg-filters .reg-search {
+            flex: 1;
+            min-width: 12em;
+        }
+
+        .reg-filters input, .reg-filters select, .reg-paste textarea {
+            box-sizing: border-box;
+            min-width: 0;
+            padding: 4px 8px;
+            color: inherit;
+            background: var(--reg-bg);
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            font: inherit;
+        }
+
+        .reg-filters input {
+            width: 100%;
+        }
+
+        .reg-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6em;
+            align-items: center;
+            margin: 0 0 0.6em;
+        }
+
+        /* The site styles every button as its blue one with white text, the colour with !important. */
+        #reg-move .reg-secondary, #waiting .reg-secondary {
+            background: var(--reg-plain);
+            border-color: var(--reg-plain-border);
+            color: var(--reg-plain-text) !important;
+        }
+
+        #reg-move .reg-secondary:hover, #reg-move .reg-secondary:active,
+        #waiting .reg-secondary:hover, #waiting .reg-secondary:active {
+            background: var(--reg-plain-hover);
+        }
+
+        .reg-waiting {
+            columns: 14em;
+            list-style: none;
+            margin: 0 0 0.8em;
+            padding: 0;
+        }
+
+        .reg-waiting li {
+            break-inside: avoid;
+            overflow-wrap: anywhere;
+            padding: 0.15em 0;
+        }
+
+        .reg-table-wrap {
+            overflow-x: auto;
+        }
+
+        /* The table of the site (.table.striped). The name of each row is the header of its row, drawn as a cell. */
+        .reg-table {
+            margin-bottom: 0.8em;
+        }
+
+        .reg-table tbody th {
+            height: auto;
+            padding: 7px 10px;
+            text-align: left;
+            white-space: normal;
+            font-size: 1em;
+            font-weight: normal;
+            color: inherit;
+            background: transparent;
+            border-color: var(--reg-border);
+        }
+
+        .reg-table.table tbody tr:last-child th:first-child {
+            border-bottom-left-radius: 0;
+        }
+
+        .reg-table .reg-check {
+            width: 1.6em;
+        }
+
+        .reg-table tr.reg-selected td, .reg-table tr.reg-selected th {
+            background: var(--reg-hover);
+        }
+
+        .reg-name {
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+
+        .reg-sub {
+            display: block;
+            color: var(--reg-muted);
+            font-size: 0.9em;
+            overflow-wrap: anywhere;
+        }
+
+        /* As the tags of the list of contests (.contest-tag). */
+        .reg-tag {
+            display: inline-block;
+            padding: 0.15em 0.3em;
+            border-radius: 0.15em;
+            box-shadow: inset 0 -0.1em 0 rgba(0, 0, 0, 0.12);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .reg-tag.reg-onsite {
+            background: var(--reg-onsite);
+            color: #fff;
+        }
+
+        .reg-tag.reg-online {
+            border: 1px solid var(--reg-border);
+            background: var(--reg-soft);
+        }
+
+        .reg-state {
+            white-space: nowrap;
+        }
+
+        .reg-state.reg-disqualified {
+            color: var(--reg-warning);
+        }
+
+        .reg-empty {
+            color: var(--reg-muted);
+        }
+
+        .reg-pagination {
+            display: flex;
+            align-items: center;
+            gap: 1em;
+            margin: 0.8em 0;
+        }
+
+        .reg-paste {
+            margin-top: 1.5em;
+        }
+
+        .reg-paste summary {
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .reg-paste textarea {
+            display: block;
+            width: 100%;
+            margin: 0.4em 0 0.6em;
+            resize: vertical;
+        }
+
+        .reg-filters input:focus-visible, .reg-filters select:focus-visible, .reg-paste textarea:focus-visible,
+        .reg-table input:focus-visible {
+            outline: 2px solid var(--reg-accent);
+            outline-offset: 2px;
+        }
+    </style>
+{% endblock %}
+
+{% block content_js_media %}
+    <script type="text/javascript">
+        $(function () {
+            // Without this script every box is ticked one by one; the page works the same.
+            var $boxes = $('#reg-move input[name="selected"]');
+            var $all = $('#reg-all');
+
+            function paint() {
+                $boxes.each(function () {
+                    $(this).closest('tr').toggleClass('reg-selected', this.checked);
+                });
+                var ticked = $boxes.filter(':checked').length;
+                $all.prop('checked', ticked > 0 && ticked === $boxes.length)
+                    .prop('indeterminate', ticked > 0 && ticked < $boxes.length);
+            }
+
+            $all.prop('hidden', false).on('change', function () {
+                $boxes.prop('checked', this.checked);
+                paint();
+            });
+            $boxes.on('change', paint);
+            paint();
+
+            // common.js disables every submit button as a form is sent, and a disabled button does not send its
+            // value: the hidden field carries it. Without scripts the button sends it, and the field stays disabled.
+            $('#reg-move button[name="target"]').on('click', function () {
+                $('#reg-target').val(this.value).prop('disabled', false);
+            });
+        });
+    </script>
+{% endblock %}
+
+{% block body %}
+    {% for error in registration_errors %}
+        <div class="reg-note reg-errors" role="alert">{{ error }}</div>
+    {% endfor %}
+    {% for notice in registration_notices %}
+        <div class="reg-note" role="status">{{ notice }}</div>
+    {% endfor %}
+
+    {% if contest.is_hybrid %}
+        <p class="reg-help">{{ _('Todos empiezan en línea; pasa a presencial a quien compite en la sede, también durante el concurso.') }}</p>
+    {% else %}
+        <p class="reg-help">{{ _('Para separar el ranking en Presencial y En línea, elige «Presencial y en línea» en Editar.') }}</p>
+    {% endif %}
+
+    <ul class="reg-counts">
+        <li><span class="reg-count-number">{{ counts.total }}</span>
+            <span class="reg-count-label">{{ _('En total') if contest.started else _('Registrados') }}</span></li>
+        {% if contest.started %}
+            <li><span class="reg-count-number">{{ counts.entered }}</span>
+                <span class="reg-count-label">{{ _('Ya entraron') }}</span></li>
+            <li><span class="reg-count-number">{{ counts.registered }}</span>
+                <span class="reg-count-label">{{ _('Sin entrar') }}</span></li>
+        {% endif %}
+        {% if contest.is_hybrid %}
+            <li><span class="reg-count-number">{{ counts.onsite }}</span>
+                <span class="reg-count-label">{{ _('Presencial') }}</span></li>
+            <li><span class="reg-count-number">{{ counts.online }}</span>
+                <span class="reg-count-label">{{ _('En línea') }}</span></li>
+        {% endif %}
+    </ul>
+
+    <form method="get" action="{{ url('contest_registrations', contest.key) }}" class="reg-filters" role="search">
+        <label class="reg-search" for="reg-q">{{ _('Buscar por usuario o equipo') }}
+            <input id="reg-q" type="search" name="q" value="{{ query }}" maxlength="150">
+        </label>
+        {% if contest.is_hybrid %}
+            <label for="reg-modality">{{ _('Modalidad') }}
+                <select id="reg-modality" name="modality">
+                    <option value="">{{ _('Las dos') }}</option>
+                    <option value="onsite" {% if modality == 'onsite' %}selected{% endif %}>{{ _('Presencial') }}</option>
+                    <option value="online" {% if modality == 'online' %}selected{% endif %}>{{ _('En línea') }}</option>
+                </select>
+            </label>
+        {% endif %}
+        {% if contest.started %}
+            <label for="reg-state">{{ _('Estado') }}
+                <select id="reg-state" name="state">
+                    <option value="">{{ _('Todos') }}</option>
+                    <option value="entered" {% if state == 'entered' %}selected{% endif %}>{{ _('Ya entraron') }}</option>
+                    <option value="registered" {% if state == 'registered' %}selected{% endif %}>{{ _('Sin entrar') }}</option>
+                </select>
+            </label>
+        {% endif %}
+        <button type="submit" class="button">{{ _('Filtrar') }}</button>
+        {% if filtered %}
+            <a href="{{ url('contest_registrations', contest.key) }}">{{ _('Quitar filtros') }}</a>
+        {% endif %}
+    </form>
+
+    {% if page.object_list %}
+        {% if contest.is_hybrid %}
+            <form method="post" id="reg-move" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
+            {% csrf_token %}
+            <input type="hidden" name="target" id="reg-target" disabled>
+            <div class="reg-actions">
+                <button type="submit" name="target" value="onsite" class="button">{{ _('Pasar a presencial') }}</button>
+                <button type="submit" name="target" value="online" class="button reg-secondary">{{ _('Pasar a en línea') }}</button>
+                <span class="reg-muted">{{ _('Marca en la tabla a quienes quieras mover.') }}</span>
+            </div>
+        {% endif %}
+        <div class="reg-table-wrap">
+            <table class="table striped reg-table">
+                <thead>
+                <tr>
+                    {% if contest.is_hybrid %}
+                        <th scope="col" class="reg-check">
+                            <input type="checkbox" id="reg-all" hidden aria-label="{{ _('Marcar a todos los de esta página') }}">
+                        </th>
+                    {% endif %}
+                    <th scope="col">{{ _('Participante') }}</th>
+                    {% if contest.is_hybrid %}<th scope="col">{{ _('Modalidad') }}</th>{% endif %}
+                    <th scope="col">{{ _('Estado') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in page.object_list %}
+                    <tr>
+                        {% if contest.is_hybrid %}
+                            <td class="reg-check">
+                                <input type="checkbox" name="selected" value="{{ row.pk }}" id="reg-row-{{ row.pk }}">
+                            </td>
+                        {% endif %}
+                        <th scope="row">
+                            {# The name ticks the box, where there are boxes. #}
+                            {% if contest.is_hybrid %}<label for="reg-row-{{ row.pk }}" class="reg-name">{% else %}<span class="reg-name">{% endif %}
+                                {{- row.team_name if row.team_id else row.user.display_name -}}
+                            {% if contest.is_hybrid %}</label>{% else %}</span>{% endif %}
+                            {% if row.team_id %}
+                                <span class="reg-sub">{{ row.team_roster.all()|map(attribute='username')|join(', ') }}</span>
+                            {% elif row.user.display_name != row.user.username %}
+                                <span class="reg-sub">{{ row.user.username }}</span>
+                            {% endif %}
+                        </th>
+                        {% if contest.is_hybrid %}
+                            <td>
+                                {% if row.onsite %}
+                                    <span class="reg-tag reg-onsite">{{ _('Presencial') }}</span>
+                                {% else %}
+                                    <span class="reg-tag reg-online">{{ _('En línea') }}</span>
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                        <td>
+                            {% if row.is_disqualified %}
+                                <span class="reg-state reg-disqualified">{{ _('Descalificado') }}</span>
+                            {% elif not row.team_id and row.user_id in banned %}
+                                {# Banned from the contest without being disqualified: registered, they will not get in. #}
+                                <span class="reg-state reg-disqualified">{{ _('Vetado') }}</span>
+                                <span class="reg-sub">{{ _('No puede entrar al concurso.') }}</span>
+                            {% elif row.registered %}
+                                <span class="reg-state">{{ _('Sin entrar') if contest.started else _('Registrado') }}</span>
+                                <span class="reg-sub">{{ _('Se registró: %(date)s', date=row.real_start|date(_("M j, Y, G:i"))) }}</span>
+                            {% else %}
+                                <span class="reg-state">{{ _('Entró') }}</span>
+                                <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if contest.is_hybrid %}
+            </form>
+        {% endif %}
+        {% if page.has_other_pages() %}
+            <nav class="reg-pagination" aria-label="{{ _('Páginas') }}">
+                {% if page.has_previous() %}<a href="{{ url('contest_registrations', contest.key) }}{{ previous_query }}">{{ _('Previous') }}</a>{% endif %}
+                <span>{{ page.number }} / {{ page.paginator.num_pages }}</span>
+                {% if page.has_next() %}<a href="{{ url('contest_registrations', contest.key) }}{{ next_query }}">{{ _('Next') }}</a>{% endif %}
+            </nav>
+        {% endif %}
+    {% elif filtered %}
+        <p class="reg-empty">{{ _('Nadie coincide con estos filtros.') }}</p>
+    {% elif contest.started %}
+        <p class="reg-empty">{{ _('Nadie se registró ni entró a este concurso.') }}</p>
+    {% else %}
+        <p class="reg-empty">{{ _('Todavía no se registra nadie. Quien se registre aparecerá aquí.') }}</p>
+    {% endif %}
+
+    {% if contest.is_hybrid and waiting %}
+        {# Named on the list of who competes on site before registering (2026-10-31). #}
+        <details class="reg-paste" id="waiting" open>
+            <summary>{{ _('En la lista de la sede, sin registrarse todavía: %(count)s', count=waiting|length) }}</summary>
+            <p class="reg-help">{{ _('Entran como presenciales al registrarse o unirse.') }}</p>
+            <form method="post" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
+                {% csrf_token %}
+                <input type="hidden" name="target" value="online">
+                <ul class="reg-waiting">
+                    {% for row in waiting %}
+                        <li><label><input type="checkbox" name="waiting" value="{{ row.key }}"> {{ row.name }}
+                            {%- if row.team %} <span class="reg-muted">({{ _('equipo') }})</span>{% endif %}</label></li>
+                    {% endfor %}
+                </ul>
+                <button type="submit" class="button reg-secondary">{{ _('Quitar de la lista') }}</button>
+            </form>
+        </details>
+    {% endif %}
+
+    {% if contest.is_hybrid %}
+        <details class="reg-paste" id="paste" {% if paste_open %}open{% endif %}>
+            <summary>{{ _('Pegar una lista para pasarla a presencial') }}</summary>
+            <form method="post" action="{{ url('contest_registrations_move', contest.key) }}{{ search_query }}">
+                {% csrf_token %}
+                <input type="hidden" name="target" value="onsite">
+                <label for="reg-names" class="reg-help">{{ _('Un nombre por renglón o separados por comas: usuario, equipo o integrante. Quien no se ha registrado queda en la lista de la sede.') }}</label>
+                <textarea id="reg-names" name="names" rows="8" maxlength="{{ max_paste }}" autocomplete="off" spellcheck="false"></textarea>
+                <button type="submit" class="button">{{ _('Pasar a presencial') }}</button>
+            </form>
+        </details>
+    {% endif %}
+{% endblock %}

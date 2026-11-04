@@ -7510,3 +7510,498 @@ msgstr "Pending team invitations"
 #: cpc 2026-10-30
 msgid "Publicar resultados descongela ambos rankings."
 msgstr "Publishing the results unfreezes both rankings."
+
+#: cpc 2026-10-31
+msgid "Presencial o en línea"
+msgstr "On site or online"
+
+#: cpc 2026-10-31
+msgid "Sólo en línea"
+msgstr "Online only"
+
+#: cpc 2026-10-31
+msgid "Sólo presencial"
+msgstr "On site only"
+
+#: cpc 2026-10-31
+msgid "Presencial y en línea"
+msgstr "On site and online"
+
+#: cpc 2026-10-31
+msgid "Con «Presencial y en línea», el ranking se separa en Global, Presencial y En línea, y en la pestaña «Registrados» del concurso colocas a cada quien en su modalidad; todos empiezan en línea, salvo quienes ya pusiste en la lista de la sede. Con las otras dos, todos compiten juntos, como siempre. «Presencial y en línea» se puede poner en cualquier momento, pero no quitar una vez empezado el concurso."
+msgstr "With «On site and online», the scoreboard splits into Global, On site and Online, and in the «Registered» tab of the contest you place each participant in their modality; everybody starts online, except whoever you already put on the venue list. With the other two, everybody competes together, as always. «On site and online» can be set at any moment, but not removed once the contest has started."
+
+#: cpc 2026-10-31
+msgid "Con el concurso ya empezado no se puede quitar «Presencial y en línea»: el ranking se juntaría y los globos irían también a quienes compiten en línea. Si todos están en la sede, pásalos a presencial en «Registrados»."
+msgstr "Once the contest has started, «On site and online» cannot be removed: the scoreboard would merge and the balloons would also go to whoever competes online. If everybody is at the venue, move them to on site in «Registered»."
+
+#: cpc 2026-10-31
+msgid "Selecciona dónde se compite"
+msgstr "Choose where it is competed"
+
+#: cpc 2026-10-31
+msgid "No se puede cambiar la modalidad de participación después del primer registro."
+msgstr "The participation mode cannot change after the first registration."
+
+#: cpc 2026-10-31
+msgid "Presencial"
+msgstr "On site"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(user)s registrado en %(contest)s"
+msgstr "%(user)s registered in %(contest)s"
+
+#: cpc 2026-10-31
+msgid "Registrado"
+msgstr "Registered"
+
+#: cpc 2026-10-31
+msgid "No formas parte de la lista de este registro."
+msgstr "You are not on the roster of this registration."
+
+#: cpc 2026-10-31
+msgid "Ese registro ya no existe."
+msgstr "That registration no longer exists."
+
+#: cpc 2026-10-31
+msgid "El equipo de este registro ya no está activo."
+msgstr "The team of this registration is no longer active."
+
+#: cpc 2026-10-31
+msgid "Sólo quien hizo el registro puede cancelarlo; tú puedes retirarte de la lista."
+msgstr "Only whoever made the registration can cancel it; you can take yourself off the roster."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Registraste a este equipo en «%(contest)s». Para salir, cancela antes ese registro desde la página del concurso."
+msgstr "You registered this team in «%(contest)s». To leave, first cancel that registration from the page of the contest."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Esa persona registró al equipo en «%(contest)s». Puede cancelar ese registro desde la página del concurso; después podrás expulsarla."
+msgstr "That person registered the team in «%(contest)s». They can cancel that registration from the page of the contest; then you can remove them."
+
+#: cpc 2026-10-31
+msgid "Registrarse en el concurso"
+msgstr "Register for the contest"
+
+#: cpc 2026-10-31
+msgid "Registrados"
+msgstr "Registered"
+
+#: cpc 2026-10-31
+msgid "Ver o cancelar tu registro"
+msgstr "See or cancel your registration"
+
+#: cpc 2026-10-31
+msgid "Registrarse"
+msgstr "Register"
+
+#: cpc 2026-10-31
+msgid "Inicia sesión para registrarte"
+msgstr "Log in to register"
+
+#: cpc 2026-10-31
+msgid "presencial"
+msgstr "on site"
+
+#: cpc 2026-10-31
+msgid "presencial y en línea"
+msgstr "on site and online"
+
+#: cpc 2026-10-31
+msgid "observando"
+msgstr "spectating"
+
+#: cpc 2026-10-31
+msgid "participación virtual"
+msgstr "virtual participation"
+
+#: cpc 2026-10-31
+msgid "tiempo restante"
+msgstr "time left"
+
+#: cpc 2026-10-31
+msgid "registrado: tu tiempo corre desde que entras"
+msgstr "registered: your time runs from when you enter"
+
+#: cpc 2026-10-31
+msgid "registrado: al empezar, el sitio te pregunta si quieres entrar"
+msgstr "registered: when it starts, the site asks whether you want to enter"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya puedes empezar «%(contest)s»"
+msgstr "You can start «%(contest)s» now"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Empezó «%(contest)s»"
+msgstr "«%(contest)s» has started"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Tu tiempo, %(time)s, corre desde que empieces."
+msgstr "Your time, %(time)s, runs from when you start."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Saldrás de «%(contest)s»."
+msgstr "You will leave «%(contest)s»."
+
+#: cpc 2026-10-31
+msgid "Más tarde"
+msgstr "Later"
+
+#: cpc 2026-10-31
+msgid "Ahora no"
+msgstr "Not now"
+
+#: cpc 2026-10-31
+msgid "Empezar"
+msgstr "Start"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "en %(time)s"
+msgstr "in %(time)s"
+
+#: cpc 2026-10-31
+msgid "ya empezó"
+msgstr "started"
+
+#: cpc 2026-10-31
+msgid "Ya empezó."
+msgstr "It has started."
+
+#: cpc 2026-10-31
+msgid "¿Cancelar el registro?"
+msgstr "Cancel the registration?"
+
+#: cpc 2026-10-31
+msgid "Compites"
+msgstr "You compete"
+
+#: cpc 2026-10-31
+msgid "En línea"
+msgstr "Online"
+
+#: cpc 2026-10-31
+msgid "El concurso ya empezó y estás registrado"
+msgstr "The contest has started and you are registered"
+
+#: cpc 2026-10-31
+msgid "Tu tiempo corre desde que entras."
+msgstr "Your time runs from when you enter."
+
+#: cpc 2026-10-31
+msgid "Estás registrado"
+msgstr "You are registered"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Te registró %(user)s."
+msgstr "%(user)s registered you."
+
+#: cpc 2026-10-31
+msgid "Modalidad"
+msgstr "Modality"
+
+#: cpc 2026-10-31
+msgid "Entrar"
+msgstr "Enter"
+
+#: cpc 2026-10-31
+msgid "Cancelar registro"
+msgstr "Cancel registration"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Registrados: %(count)s"
+msgstr "Registered: %(count)s"
+
+#: cpc 2026-10-31
+msgid "Quien organiza o prueba entra como espectador."
+msgstr "Whoever organizes or tests enters as a spectator."
+
+#: cpc 2026-10-31
+msgid "Regístrate para entrar en cuanto empiece"
+msgstr "Register to enter as soon as it starts"
+
+#: cpc 2026-10-31
+msgid "No puedes registrarte en este concurso"
+msgstr "You cannot register for this contest"
+
+#: cpc 2026-10-31
+msgid "Sólo se pueden registrar quienes pertenecen a las organizaciones que admite."
+msgstr "Only members of the organizations it admits can register."
+
+#: cpc 2026-10-31
+msgid "Ver quiénes se registraron"
+msgstr "See who registered"
+
+#: cpc 2026-10-31
+msgid "Registrar a mi equipo"
+msgstr "Register my team"
+
+#: cpc 2026-10-31
+msgid "Ya estás registrado"
+msgstr "You are already registered"
+
+#: cpc 2026-10-31
+msgid "Elige cómo registrarte"
+msgstr "Choose how to register"
+
+#: cpc 2026-10-31
+msgid "Entrar con tu registro"
+msgstr "Enter with your registration"
+
+#: cpc 2026-10-31
+msgid "Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al registrarlo."
+msgstr "All members share score and time. The roster of the team is fixed when it is registered."
+
+#: cpc 2026-10-31
+msgid "Registrarme"
+msgstr "Register me"
+
+#: cpc 2026-10-31
+msgid "Lugar en el Global"
+msgstr "Place in Global"
+
+#: cpc 2026-10-31
+msgid "Global"
+msgstr "Global"
+
+#: cpc 2026-10-31
+msgid "Entre paréntesis y en gris, el lugar de cada quien en el Global."
+msgstr "In grey and in brackets, the place of each one in Global."
+
+#: cpc 2026-10-31
+msgid "Publicar resultados descongela todos los rankings del concurso."
+msgstr "Publishing the results unfreezes every scoreboard of the contest."
+
+#: cpc 2026-10-31
+msgid "Este concurso es presencial y en línea: aquí sólo aparecen quienes compiten en la sede."
+msgstr "This contest is on site and online: only those who compete at the venue appear here."
+
+#: cpc 2026-10-31
+msgid "¿Quién es presencial?"
+msgstr "Who is on site?"
+
+#: cpc 2026-10-31
+msgid "Quien pasa a presencial a medio concurso trae sus globos de lo que ya había resuelto, como pendientes."
+msgstr "Whoever is moved to on site during the contest brings the balloons of what they had already solved, as pending."
+
+#: cpc 2026-10-31
+msgid "Sin lugar asignado"
+msgstr "No seat assigned"
+
+#: cpc 2026-10-31
+msgid "Ya se entregaron otros globos de este problema"
+msgstr "Other balloons of this problem were already delivered"
+
+#: cpc 2026-10-31
+msgid "Ya no es presencial"
+msgstr "No longer on site"
+
+#: cpc 2026-10-31
+msgid "Este concurso no es presencial y en línea a la vez: no hay modalidades que asignar."
+msgstr "This contest is not on site and online at once: there are no modalities to assign."
+
+#: cpc 2026-10-31
+msgid "Elige si pasan a presencial o a en línea."
+msgstr "Choose whether they move to on site or to online."
+
+#: cpc 2026-10-31
+msgid "No elegiste a nadie."
+msgstr "You did not choose anybody."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "No hay ninguna cuenta ni equipo con estos nombres: %(names)s."
+msgstr "No account or team has these names: %(names)s."
+
+#: cpc 2026-10-31
+msgid "Todos empiezan en línea; pasa a presencial a quien compite en la sede, también durante el concurso."
+msgstr "Everybody starts online; move to on site whoever competes at the venue, also during the contest."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Sin lugar asignado en la hoja de globos: %(names)s."
+msgstr "No seat on the balloon sheet: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Todavía no se registran: quedan en la lista de la sede y entrarán como presenciales en cuanto se registren o se unan: %(names)s."
+msgstr "Not registered yet: they stay on the venue list and will enter as on site as soon as they register or join: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya no están en la lista de la sede: %(names)s."
+msgstr "No longer on the venue list: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "En la lista de la sede, sin registrarse todavía: %(count)s"
+msgstr "On the venue list, not registered yet: %(count)s"
+
+#: cpc 2026-10-31
+msgid "Entran como presenciales al registrarse o unirse."
+msgstr "They enter as on site when they register or join."
+
+#: cpc 2026-10-31
+msgid "Quitar de la lista"
+msgstr "Take off the list"
+
+#: cpc 2026-10-31
+msgid "Para separar el ranking en Presencial y En línea, elige «Presencial y en línea» en Editar."
+msgstr "To split the scoreboard into On site and Online, choose «On site and online» in Edit."
+
+#: cpc 2026-10-31
+msgid "En total"
+msgstr "In total"
+
+#: cpc 2026-10-31
+msgid "Ya entraron"
+msgstr "Entered"
+
+#: cpc 2026-10-31
+msgid "Sin entrar"
+msgstr "Not entered"
+
+#: cpc 2026-10-31
+msgid "Buscar por usuario o equipo"
+msgstr "Search by user or team"
+
+#: cpc 2026-10-31
+msgid "Las dos"
+msgstr "Both"
+
+#: cpc 2026-10-31
+msgid "Todos"
+msgstr "All"
+
+#: cpc 2026-10-31
+msgid "Filtrar"
+msgstr "Filter"
+
+#: cpc 2026-10-31
+msgid "Quitar filtros"
+msgstr "Clear filters"
+
+#: cpc 2026-10-31
+msgid "Pasar a presencial"
+msgstr "Move to on site"
+
+#: cpc 2026-10-31
+msgid "Pasar a en línea"
+msgstr "Move to online"
+
+#: cpc 2026-10-31
+msgid "Marca en la tabla a quienes quieras mover."
+msgstr "Tick in the table whoever you want to move."
+
+#: cpc 2026-10-31
+msgid "Marcar a todos los de esta página"
+msgstr "Tick everybody on this page"
+
+#: cpc 2026-10-31
+msgid "Participante"
+msgstr "Participant"
+
+#: cpc 2026-10-31
+msgid "Descalificado"
+msgstr "Disqualified"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Se registró: %(date)s"
+msgstr "Registered: %(date)s"
+
+#: cpc 2026-10-31
+msgid "Entró"
+msgstr "Entered"
+
+#: cpc 2026-10-31
+msgid "Páginas"
+msgstr "Pages"
+
+#: cpc 2026-10-31
+msgid "Nadie coincide con estos filtros."
+msgstr "Nobody matches these filters."
+
+#: cpc 2026-10-31
+msgid "Nadie se registró ni entró a este concurso."
+msgstr "Nobody registered for or entered this contest."
+
+#: cpc 2026-10-31
+msgid "Todavía no se registra nadie. Quien se registre aparecerá aquí."
+msgstr "Nobody has registered yet. Whoever registers will appear here."
+
+#: cpc 2026-10-31
+msgid "Pegar una lista para pasarla a presencial"
+msgstr "Paste a list to move it to on site"
+
+#: cpc 2026-10-31
+msgid "Un nombre por renglón o separados por comas: usuario, equipo o integrante. Quien no se ha registrado queda en la lista de la sede."
+msgstr "One name per line or separated by commas: user, team or member. Whoever has not registered stays on the venue list."
+
+#: cpc 2026-10-31
+msgid "Mucha gente entra a la vez: inténtalo de nuevo en unos segundos."
+msgstr "Many people are entering at once: try again in a few seconds."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Hay más de un registro o equipo con estos nombres: márcalos en la tabla, o pega el usuario de un integrante: %(names)s."
+msgstr "More than one registration or team has these names: tick them in the table, or paste the username of a member: %(names)s."
+
+#: cpc 2026-10-31
+msgid "Vetado"
+msgstr "Banned"
+
+#: cpc 2026-10-31
+msgid "No puede entrar al concurso."
+msgstr "Cannot enter the contest."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d pasó a presencial: %(names)s."
+msgid_plural "%(count)d pasaron a presencial: %(names)s."
+msgstr[0] "%(count)d is now on site: %(names)s."
+msgstr[1] "%(count)d are now on site: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d pasó a en línea: %(names)s."
+msgid_plural "%(count)d pasaron a en línea: %(names)s."
+msgstr[0] "%(count)d is now online: %(names)s."
+msgstr[1] "%(count)d are now online: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d ya estaba en presencial."
+msgid_plural "%(count)d ya estaban en presencial."
+msgstr[0] "%(count)d was already on site."
+msgstr[1] "%(count)d were already on site."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d ya estaba en línea."
+msgid_plural "%(count)d ya estaban en línea."
+msgstr[0] "%(count)d was already online."
+msgstr[1] "%(count)d were already online."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya tenían problemas resueltos: %(count)d globo quedó pendiente en la hoja de globos."
+msgid_plural "Ya tenían problemas resueltos: %(count)d globos quedaron pendientes en la hoja de globos."
+msgstr[0] "They had already solved problems: %(count)d balloon is now pending on the balloon sheet."
+msgstr[1] "They had already solved problems: %(count)d balloons are now pending on the balloon sheet."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya no reciben globos; %(count)d que ya se les había entregado sigue en la hoja, marcado."
+msgid_plural "Ya no reciben globos; %(count)d que ya se les habían entregado siguen en la hoja, marcados."
+msgstr[0] "They no longer get balloons; %(count)d already delivered to them stays on the sheet, marked."
+msgstr[1] "They no longer get balloons; %(count)d already delivered to them stay on the sheet, marked."

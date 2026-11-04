@@ -9,7 +9,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from judge.models.team import Team, TeamInvitation
-from judge.models import Contest
+from judge.models import Contest, ContestParticipation
 from judge import team_services
 
 
@@ -125,6 +125,8 @@ def team_detail(request, pk):
         'can_take': heir is not None and heir.pk == request.profile.pk,
         'members': team.memberships.select_related('profile__user').order_by('joined', 'id'),
         'pending': pending,
+        # Not the registrations made ahead that wait for their start (2026-10-31): no contest it took part in.
         'history': team.participations.filter(contest__in=Contest.get_visible_contests(request.user))
+                    .exclude(virtual=ContestParticipation.REGISTERED)
                     .select_related('contest').order_by('-real_start')[:50],
     }, status=400 if error else 200)

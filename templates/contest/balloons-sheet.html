@@ -13,9 +13,11 @@
     {% if balloon.participation.team_id %}<span class="balloon-username">{{ balloon.participation.team_roster.all()|map(attribute='username')|join(', ') }}</span>{% endif %}
 {%- endmacro %}
 
-{% macro location(balloon) -%}
+{% macro location(balloon, pending=False) -%}
     {% set place = sheet.team_locations.get(balloon.participation.team_id) if balloon.participation.team_id else sheet.locations.get(balloon.profile.id) %}
-    {% if place %}<span class="balloon-location"><i class="fa fa-map-marker"></i> {{ place }}</span>{% endif %}
+    {% if place %}<span class="balloon-location"><i class="fa fa-map-marker"></i> {{ place }}</span>
+    {#- Where the contest gives seats, one placed on site late may still lack one (2026-10-31). -#}
+    {% elif pending and sheet.seats_in_use %}<span class="balloon-warning"><i class="fa fa-map-marker"></i> {{ _('Sin lugar asignado') }}</span>{% endif %}
 {%- endmacro %}
 
 {% macro mark_form(balloon, action, text, css) -%}
@@ -66,10 +68,15 @@
                                 <span class="balloon-first" title="{{ _('First to solve this problem') }}">
                                     <i class="fa fa-star"></i> {{ _('First to solve') }}
                                 </span>
+                                {% if balloon.first_after_others %}
+                                    <span class="balloon-warning">
+                                        <i class="fa fa-exclamation-triangle"></i> {{ _('Ya se entregaron otros globos de este problema') }}
+                                    </span>
+                                {% endif %}
                             {% endif %}
                         </div>
                         <div class="balloon-meta">
-                            {{ location(balloon) }}
+                            {{ location(balloon, pending=True) }}
                             {% if balloon.problem.balloon_color_name %}
                                 <span>{{ balloon.problem.balloon_color_name }}</span>
                             {% endif %}
@@ -94,7 +101,11 @@
                     <div class="balloon-main">
                         <div>
                             {{ who(balloon) }}
-                            {% if not balloon.is_accepted %}
+                            {% if balloon.not_due == 'online' %}
+                                <span class="balloon-warning">
+                                    <i class="fa fa-exclamation-triangle"></i> {{ _('Ya no es presencial') }}
+                                </span>
+                            {% elif not balloon.is_accepted %}
                                 <span class="balloon-warning">
                                     <i class="fa fa-exclamation-triangle"></i> {{ _('No longer accepted') }}
                                 </span>

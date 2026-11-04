@@ -161,6 +161,17 @@ class ContestList(QueryStringSortMixin, DiggPaginatorMixin, TitleMixin, ContestL
         active.sort(key=attrgetter('end_time', 'key'))
         present.sort(key=attrgetter('end_time', 'key'))
         future.sort(key=attrgetter('start_time'))
+        # Registering ahead (2026-10-31): how many registered, public, and whether this user did.
+        future_ids = [contest.id for contest in future]
+        registrants = dict(ContestParticipation.objects.filter(contest_id__in=future_ids).waiting_registrations()
+                           .values('contest_id').annotate(count=Count('id')).values_list('contest_id', 'count')
+                           ) if future_ids else {}
+        mine = set(ContestParticipation.objects.for_profile(self.request.profile).filter(
+            contest_id__in=future_ids, virtual=ContestParticipation.REGISTERED,
+        ).values_list('contest_id', flat=True)) if future_ids and self.request.user.is_authenticated else set()
+        for contest in future:
+            contest.registrant_count = registrants.get(contest.id, 0)
+            contest.registered_here = contest.id in mine
         context['active_participations'] = active
         context['current_contests'] = present
         context['future_contests'] = future
@@ -227,9 +238,12 @@ class ContestMixin(object):
                 context['has_joined'] = False
             else:
                 context['has_joined'] = True
+            # A registration that waits for the start (2026-10-31); `has_joined` stays false until it enters.
+            context['registration'] = self.object.registration_for(self.request.user)
         else:
             context['live_participation'] = None
             context['has_joined'] = False
+            context['registration'] = None
 
         context['now'] = timezone.now()
         context['is_editor'] = self.is_editor
@@ -391,6 +405,8 @@ class ContestClone(ContestMixin, PermissionRequiredMixin, TitleMixin, SingleObje
         contest.pk = None
         contest.is_visible = False
         contest.user_count = 0
+        # Its mode of attendance is configuration and is copied; who competes on site is of the original (2026-10-31).
+        contest.onsite_list = None
         contest.locked_after = None
         # `freeze_minutes` is configuration and is meant to be inherited; being
         # already revealed is the state of a *finished* contest, and `freeze_active`
@@ -436,9 +452,38 @@ class ContestJoin(LoginRequiredMixin, ContestMixin, SingleObjectMixin, View):
         return self.choose_participation()
 
     def post(self, request, *args, **kwargs):
-        from django.core.exceptions import ValidationError
-        from judge.contest_teams import join_attempt, withdraw_from_roster
+        from django.db import OperationalError
         self.object = self.get_object()
+        try:
+            return self.answer(request)
+        except OperationalError:
+            # A deadlock, or a lock that waited too long, when many enter at once at the start: everything it did was
+            # undone, so it can just be tried again (2026-10-31).
+            logging.getLogger('judge.contest_registration').warning(
+                'Joining contest %s ran into the database', self.object.key, exc_info=True)
+            return self.choose_participation(_('Mucha gente entra a la vez: inténtalo de nuevo en unos segundos.'),
+                                             status=409)
+
+    def answer(self, request):
+        from django.core.exceptions import ValidationError
+        from judge.contest_registration import cancel_registration, enter_registration
+        from judge.contest_teams import join_attempt, withdraw_from_roster
+        if 'enter_registration' in request.POST:
+            # Entering a registration made ahead (2026-10-31): the box that asks at the start, or the button on the
+            # page of the contest. Only the participation is locked, not the contest, so that everybody entering in
+            # the same seconds does not queue on one row (contest_registration.enter_registration).
+            try:
+                enter_registration(self.object.pk, request.profile, request.POST.get('enter_registration', ''))
+            except ValidationError as exc:
+                return self.choose_participation(' '.join(exc.messages), status=400)
+            return HttpResponseRedirect(reverse('problem_list'))
+        if 'cancel_registration' in request.POST:
+            # Undoing a registration made ahead (2026-10-31), only by whoever made it.
+            try:
+                cancel_registration(self.object.pk, request.profile, request.POST.get('cancel_registration', ''))
+            except ValidationError as exc:
+                return self.choose_participation(' '.join(exc.messages), status=400)
+            return HttpResponseRedirect(reverse('contest_view', args=(self.object.key,)))
         if 'withdraw' in request.POST:
             # Taking oneself off a roster somebody else registered (equipos-globos-3, 2026-10-29).
             try:
@@ -465,23 +510,36 @@ class ContestJoin(LoginRequiredMixin, ContestMixin, SingleObjectMixin, View):
             prefix = selection[len('team:'):] + ':'
             member_ids = [value[len(prefix):] for value in picked if value.startswith(prefix)]
         try:
-            join_attempt(self.object.pk, request.profile, selection, request.POST.get('access_code', ''),
-                         member_ids)
+            participation = join_attempt(self.object.pk, request.profile, selection,
+                                         request.POST.get('access_code', ''), member_ids)
         except ValidationError as exc:
             return self.choose_participation(' '.join(exc.messages), selection, status=400, picked=picked)
+        if participation.registered:
+            # Registered ahead (2026-10-31): the page of the contest says so, with its countdown.
+            return HttpResponseRedirect(reverse('contest_view', args=(self.object.key,)))
         return HttpResponseRedirect(reverse('problem_list'))
 
     def choose_participation(self, error=None, selection='', status=200, picked=None):
+        from judge.contest_registration import superseded
         from judge.contest_teams import can_withdraw
         from judge.models import Profile, Team
         contest = self.object
-        resumable = [p for p in contest.users.for_profile(self.request.profile).filter(virtual__gte=0)
-                     .select_related('contest', 'user__user').prefetch_related('team_roster').order_by('-virtual')
-                     if not p.ended and not p.is_disqualified]
+        own = list(contest.users.for_profile(self.request.profile)
+                   .filter(Q(virtual__gte=0) | Q(virtual=ContestParticipation.REGISTERED))
+                   .select_related('contest', 'user__user').prefetch_related('team_roster').order_by('-virtual'))
+        resumable = [p for p in own if p.virtual >= 0 and not p.ended and not p.is_disqualified]
+        # A registration made ahead (2026-10-31): before the start it is shown with its roster and how to undo it;
+        # once started it is one more choice to enter, without the code.
+        registrations = [p for p in own if p.registered and not p.is_disqualified and not p.ended and
+                         not superseded(p)]
+        if contest.started:
+            resumable += registrations
         return render(self.request, 'contest/join.html', {
-            'title': _('Entrar al concurso'), 'contest': contest, 'error': error, 'selection': selection,
-            'resumable': resumable, 'can_edit': self.can_edit,
-            'withdrawable': [p for p in resumable if can_withdraw(p, self.request.profile.id)],
+            'title': _('Entrar al concurso') if contest.started else _('Registrarse en el concurso'),
+            'contest': contest, 'error': error, 'selection': selection,
+            'resumable': resumable, 'can_edit': self.can_edit, 'registrations': registrations,
+            'withdrawable': [p for p in resumable + ([] if contest.started else registrations)
+                             if can_withdraw(p, self.request.profile.id)],
             'teams': Team.objects.filter(members=self.request.profile, is_active=True).prefetch_related(
                 Prefetch('members', queryset=Profile.objects.select_related('user').order_by('id'))),
             'picked': picked, 'own_id': self.request.profile.id,
@@ -500,6 +558,9 @@ class ContestLeave(LoginRequiredMixin, ContestMixin, SingleObjectMixin, View):
                                    _('You are not in contest "%s".') % contest.key, 404)
 
         profile.remove_contest()
+        # What another tab read before entering could still offer to enter again for a minute (2026-10-31).
+        from judge.contest_registration import forget_hints_on_commit
+        forget_hints_on_commit([profile.id])
         return HttpResponseRedirect(reverse('contest_view', args=(contest.key,)))
 
 
@@ -889,14 +950,26 @@ def get_contest_ranking_list(request, contest, participation=None, ranking_list=
     frozen = contest.is_frozen_for(request.user)
     own_profile_id = request.profile.id if request.user.is_authenticated else None
 
-    from judge.contest_teams import ranking_division
+    from judge.contest_teams import in_modality, ranking_division, ranking_modality
     division = ranking_division(request, contest)
+    # On site or online (2026-10-31), only on the whole scoreboard: whoever sees only their own row is not split.
+    modality = ranking_modality(request, contest) if ranking_list is contest_ranking_list else ''
     if ranking_list is contest_ranking_list:
         ranking_list = partial(ranking_list, division=division)
-    users = ranker(ranking_list(contest, problems, frozen=frozen, own_profile_id=own_profile_id),
-                   key=attrgetter('points', 'cumtime', 'tiebreaker'))
+    key = attrgetter('points', 'cumtime', 'tiebreaker')
+    users = ranker(ranking_list(contest, problems, frozen=frozen, own_profile_id=own_profile_id), key=key)
+    if modality:
+        # Ranked as a whole first, for the place in the Global that each row shows beside its own (the owner,
+        # 2026-10-31); then numbered again from 1 within its part, ties as ranker gives them.
+        ranked = list(users)
+        global_rank = {row.participation.id: rank for rank, row in ranked}
+        kept = [row for _rank, row in ranked if in_modality(bool(row.participation.onsite), modality)]
+        title = _('Lugar en el Global')
+        users = [(format_html('{}<span class="global-rank" title="{}">({})</span>', rank, title,
+                              global_rank[row.participation.id]), row)
+                 for rank, row in ranker(kept, key=key)]
 
-    if show_current_virtual:
+    if show_current_virtual and not modality:
         if participation is None and request.user.is_authenticated:
             participation = request.profile.current_contest
             if participation is None or participation.contest_id != contest.id:
@@ -917,7 +990,7 @@ def contest_ranking_ajax(request, contest, participation=None):
     if not contest.can_see_full_scoreboard(request.user):
         raise Http404()
 
-    from judge.contest_teams import ranking_division
+    from judge.contest_teams import ranking_division, ranking_modality
     division = ranking_division(request, contest)
     users, problems = get_contest_ranking_list(request, contest, participation)
     return render(request, 'contest/ranking-table.html', {
@@ -926,6 +999,7 @@ def contest_ranking_ajax(request, contest, participation=None):
         'contest': contest,
         'has_rating': division == 'individual' and contest.ratings.exists(),
         'ranking_division': division,
+        'ranking_modality': ranking_modality(request, contest),
         # The ranking page refreshes itself by swapping in this fragment, so it
         # has to carry everything the first render did: without `can_edit` an
         # editor would lose the disqualify controls on the first refresh, and
@@ -983,9 +1057,22 @@ class ContestRanking(ContestRankingBase):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from judge.contest_teams import ranking_division
+        from judge.contest_teams import in_division, ranking_division, ranking_modality
         context['ranking_division'] = ranking_division(self.request, self.object)
         context['has_rating'] = context['ranking_division'] == 'individual' and self.object.ratings.exists()
+        # The three parts of a contest that is on site and online (2026-10-31), with how many each has, for whoever
+        # sees the whole scoreboard; the same rows the scoreboard ranks.
+        context['ranking_modality'] = ''
+        context['modality_counts'] = None
+        if self.object.is_hybrid and self.object.can_see_full_scoreboard(self.request.user):
+            context['ranking_modality'] = ranking_modality(self.request, self.object)
+            # Named apart from the field: an aggregate called `onsite` would be what the next filter reads.
+            counts = in_division(
+                self.object.users.filter(virtual=ContestParticipation.LIVE).without_contest_staff(),
+                context['ranking_division'],
+            ).aggregate(everyone=Count('id'), in_person=Count('id', filter=Q(onsite=True)))
+            context['modality_counts'] = {'all': counts['everyone'], 'onsite': counts['in_person'],
+                                          'online': counts['everyone'] - counts['in_person']}
         context['scoreboard_frozen'] = self.object.is_frozen_for(self.request.user)
         # The jury sees the real board; this is what tells them the public does not, and that nothing lifts the
         # freeze on its own.
@@ -999,7 +1086,9 @@ class ContestTeamParticipation(ContestRankingBase):
 
     @cached_property
     def entry(self):
-        return get_object_or_404(self.object.users, pk=self.kwargs['participation'], team__isnull=False)
+        # Not a registration made ahead that never entered (2026-10-31): who registered is for whoever organizes.
+        return get_object_or_404(self.object.users.exclude(virtual=ContestParticipation.REGISTERED),
+                                 pk=self.kwargs['participation'], team__isnull=False)
 
     def get_title(self):
         return _('%(team)s en %(contest)s') % {'team': self.entry.team_name, 'contest': self.object.name}

@@ -3931,7 +3931,7 @@ msgstr "Próximos concursos"
 #: templates/blog/list.html:145 templates/contest/contest.html:41
 #, python-format
 msgid "Starting in %(countdown)s."
-msgstr "Comenzando a partir de %(countdown)s."
+msgstr "Empieza en %(countdown)s."
 
 #: templates/blog/list.html:154
 msgid "Comment stream"
@@ -4214,7 +4214,7 @@ msgstr "Inicia sesión para participar"
 #: templates/contest/contest.html:33
 #, python-format
 msgid "Spectating, contest ends in %(countdown)s."
-msgstr "Espectador, concurso termina en %(countdown)s."
+msgstr "Espectador: el concurso termina en %(countdown)s."
 
 #: templates/contest/contest.html:35
 #, python-format
@@ -4232,17 +4232,17 @@ msgstr "El concurso ha terminado."
 #: templates/contest/contest.html:47
 #, python-format
 msgid "Your time is up! Contest ends in %(countdown)s."
-msgstr "¡Su tiempo se acabo! Concurso termina en %(countdown)s."
+msgstr "¡Se acabó tu tiempo! El concurso termina en %(countdown)s."
 
 #: templates/contest/contest.html:49
 #, python-format
 msgid "You have %(countdown)s remaining."
-msgstr "Usted tiene %(countdown)s restantes."
+msgstr "Te quedan %(countdown)s."
 
 #: templates/contest/contest.html:52
 #, python-format
 msgid "Contest ends in %(countdown)s."
-msgstr "Concurso termina en %(countdown)s."
+msgstr "El concurso termina en %(countdown)s."
 
 #: templates/contest/contest.html:58 templates/contest/contest.html:60
 msgid "F j, Y, G:i T"
@@ -4251,12 +4251,12 @@ msgstr "j \\d\\e F \\d\\e Y, G:i T"
 #: templates/contest/contest.html:62
 #, python-format
 msgid "%(time_limit)s window between %(start_time)s and %(end_time)s"
-msgstr "%(time_limit)s ventana entre %(start_time)s y %(end_time)s"
+msgstr "Ventana de %(time_limit)s entre el %(start_time)s y el %(end_time)s"
 
 #: templates/contest/contest.html:65
 #, python-format
 msgid "%(length)s long starting on %(start_time)s"
-msgstr "%(length)s larga a partir de %(start_time)s"
+msgstr "%(length)s de duración, a partir del %(start_time)s"
 
 #: templates/contest/contest.html:75
 #, python-format
@@ -4408,7 +4408,7 @@ msgstr "clasificatorio"
 #: templates/contest/list.html:102
 #, python-format
 msgid "%(time_limit)s window"
-msgstr "%(time_limit)s ventana"
+msgstr "Ventana de %(time_limit)s"
 
 #: templates/contest/list.html:105
 #, python-format
@@ -4435,7 +4435,7 @@ msgstr "Concurso"
 #: templates/contest/list.html:168
 #, python-format
 msgid "Window ends in %(countdown)s"
-msgstr "Ventana termina en %(countdown)s"
+msgstr "La ventana termina en %(countdown)s"
 
 #: templates/contest/list.html:170 templates/contest/list.html:209
 #, python-format
@@ -4445,7 +4445,7 @@ msgstr "Termina en %(countdown)s"
 #: templates/contest/list.html:243
 #, python-format
 msgid "Starting in %(countdown)s"
-msgstr "Comenzando a partir de %(countdown)s"
+msgstr "Empieza en %(countdown)s"
 
 #: templates/contest/list.html:254
 msgid "There are no scheduled contests at this time."
@@ -12782,3 +12782,498 @@ msgstr "Invitaciones de equipos pendientes"
 #: cpc 2026-10-30
 msgid "Publicar resultados descongela ambos rankings."
 msgstr "Publicar resultados descongela ambos rankings."
+
+#: cpc 2026-10-31
+msgid "Presencial o en línea"
+msgstr "Presencial o en línea"
+
+#: cpc 2026-10-31
+msgid "Sólo en línea"
+msgstr "Sólo en línea"
+
+#: cpc 2026-10-31
+msgid "Sólo presencial"
+msgstr "Sólo presencial"
+
+#: cpc 2026-10-31
+msgid "Presencial y en línea"
+msgstr "Presencial y en línea"
+
+#: cpc 2026-10-31
+msgid "Con «Presencial y en línea», el ranking se separa en Global, Presencial y En línea, y en la pestaña «Registrados» del concurso colocas a cada quien en su modalidad; todos empiezan en línea, salvo quienes ya pusiste en la lista de la sede. Con las otras dos, todos compiten juntos, como siempre. «Presencial y en línea» se puede poner en cualquier momento, pero no quitar una vez empezado el concurso."
+msgstr "Con «Presencial y en línea», el ranking se separa en Global, Presencial y En línea, y en la pestaña «Registrados» del concurso colocas a cada quien en su modalidad; todos empiezan en línea, salvo quienes ya pusiste en la lista de la sede. Con las otras dos, todos compiten juntos, como siempre. «Presencial y en línea» se puede poner en cualquier momento, pero no quitar una vez empezado el concurso."
+
+#: cpc 2026-10-31
+msgid "Con el concurso ya empezado no se puede quitar «Presencial y en línea»: el ranking se juntaría y los globos irían también a quienes compiten en línea. Si todos están en la sede, pásalos a presencial en «Registrados»."
+msgstr "Con el concurso ya empezado no se puede quitar «Presencial y en línea»: el ranking se juntaría y los globos irían también a quienes compiten en línea. Si todos están en la sede, pásalos a presencial en «Registrados»."
+
+#: cpc 2026-10-31
+msgid "Selecciona dónde se compite"
+msgstr "Selecciona dónde se compite"
+
+#: cpc 2026-10-31
+msgid "No se puede cambiar la modalidad de participación después del primer registro."
+msgstr "No se puede cambiar la modalidad de participación después del primer registro."
+
+#: cpc 2026-10-31
+msgid "Presencial"
+msgstr "Presencial"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(user)s registrado en %(contest)s"
+msgstr "%(user)s registrado en %(contest)s"
+
+#: cpc 2026-10-31
+msgid "Registrado"
+msgstr "Registrado"
+
+#: cpc 2026-10-31
+msgid "No formas parte de la lista de este registro."
+msgstr "No formas parte de la lista de este registro."
+
+#: cpc 2026-10-31
+msgid "Ese registro ya no existe."
+msgstr "Ese registro ya no existe."
+
+#: cpc 2026-10-31
+msgid "El equipo de este registro ya no está activo."
+msgstr "El equipo de este registro ya no está activo."
+
+#: cpc 2026-10-31
+msgid "Sólo quien hizo el registro puede cancelarlo; tú puedes retirarte de la lista."
+msgstr "Sólo quien hizo el registro puede cancelarlo; tú puedes retirarte de la lista."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Registraste a este equipo en «%(contest)s». Para salir, cancela antes ese registro desde la página del concurso."
+msgstr "Registraste a este equipo en «%(contest)s». Para salir, cancela antes ese registro desde la página del concurso."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Esa persona registró al equipo en «%(contest)s». Puede cancelar ese registro desde la página del concurso; después podrás expulsarla."
+msgstr "Esa persona registró al equipo en «%(contest)s». Puede cancelar ese registro desde la página del concurso; después podrás expulsarla."
+
+#: cpc 2026-10-31
+msgid "Registrarse en el concurso"
+msgstr "Registrarse en el concurso"
+
+#: cpc 2026-10-31
+msgid "Registrados"
+msgstr "Registrados"
+
+#: cpc 2026-10-31
+msgid "Ver o cancelar tu registro"
+msgstr "Ver o cancelar tu registro"
+
+#: cpc 2026-10-31
+msgid "Registrarse"
+msgstr "Registrarse"
+
+#: cpc 2026-10-31
+msgid "Inicia sesión para registrarte"
+msgstr "Inicia sesión para registrarte"
+
+#: cpc 2026-10-31
+msgid "presencial"
+msgstr "presencial"
+
+#: cpc 2026-10-31
+msgid "presencial y en línea"
+msgstr "presencial y en línea"
+
+#: cpc 2026-10-31
+msgid "observando"
+msgstr "observando"
+
+#: cpc 2026-10-31
+msgid "participación virtual"
+msgstr "participación virtual"
+
+#: cpc 2026-10-31
+msgid "tiempo restante"
+msgstr "tiempo restante"
+
+#: cpc 2026-10-31
+msgid "registrado: tu tiempo corre desde que entras"
+msgstr "registrado: tu tiempo corre desde que entras"
+
+#: cpc 2026-10-31
+msgid "registrado: al empezar, el sitio te pregunta si quieres entrar"
+msgstr "registrado: al empezar, el sitio te pregunta si quieres entrar"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya puedes empezar «%(contest)s»"
+msgstr "Ya puedes empezar «%(contest)s»"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Empezó «%(contest)s»"
+msgstr "Empezó «%(contest)s»"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Tu tiempo, %(time)s, corre desde que empieces."
+msgstr "Tu tiempo, %(time)s, corre desde que empieces."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Saldrás de «%(contest)s»."
+msgstr "Saldrás de «%(contest)s»."
+
+#: cpc 2026-10-31
+msgid "Más tarde"
+msgstr "Más tarde"
+
+#: cpc 2026-10-31
+msgid "Ahora no"
+msgstr "Ahora no"
+
+#: cpc 2026-10-31
+msgid "Empezar"
+msgstr "Empezar"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "en %(time)s"
+msgstr "en %(time)s"
+
+#: cpc 2026-10-31
+msgid "ya empezó"
+msgstr "ya empezó"
+
+#: cpc 2026-10-31
+msgid "Ya empezó."
+msgstr "Ya empezó."
+
+#: cpc 2026-10-31
+msgid "¿Cancelar el registro?"
+msgstr "¿Cancelar el registro?"
+
+#: cpc 2026-10-31
+msgid "Compites"
+msgstr "Compites"
+
+#: cpc 2026-10-31
+msgid "En línea"
+msgstr "En línea"
+
+#: cpc 2026-10-31
+msgid "El concurso ya empezó y estás registrado"
+msgstr "El concurso ya empezó y estás registrado"
+
+#: cpc 2026-10-31
+msgid "Tu tiempo corre desde que entras."
+msgstr "Tu tiempo corre desde que entras."
+
+#: cpc 2026-10-31
+msgid "Estás registrado"
+msgstr "Estás registrado"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Te registró %(user)s."
+msgstr "Te registró %(user)s."
+
+#: cpc 2026-10-31
+msgid "Modalidad"
+msgstr "Modalidad"
+
+#: cpc 2026-10-31
+msgid "Entrar"
+msgstr "Entrar"
+
+#: cpc 2026-10-31
+msgid "Cancelar registro"
+msgstr "Cancelar registro"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Registrados: %(count)s"
+msgstr "Registrados: %(count)s"
+
+#: cpc 2026-10-31
+msgid "Quien organiza o prueba entra como espectador."
+msgstr "Quien organiza o prueba entra como espectador."
+
+#: cpc 2026-10-31
+msgid "Regístrate para entrar en cuanto empiece"
+msgstr "Regístrate para entrar en cuanto empiece"
+
+#: cpc 2026-10-31
+msgid "No puedes registrarte en este concurso"
+msgstr "No puedes registrarte en este concurso"
+
+#: cpc 2026-10-31
+msgid "Sólo se pueden registrar quienes pertenecen a las organizaciones que admite."
+msgstr "Sólo se pueden registrar quienes pertenecen a las organizaciones que admite."
+
+#: cpc 2026-10-31
+msgid "Ver quiénes se registraron"
+msgstr "Ver quiénes se registraron"
+
+#: cpc 2026-10-31
+msgid "Registrar a mi equipo"
+msgstr "Registrar a mi equipo"
+
+#: cpc 2026-10-31
+msgid "Ya estás registrado"
+msgstr "Ya estás registrado"
+
+#: cpc 2026-10-31
+msgid "Elige cómo registrarte"
+msgstr "Elige cómo registrarte"
+
+#: cpc 2026-10-31
+msgid "Entrar con tu registro"
+msgstr "Entrar con tu registro"
+
+#: cpc 2026-10-31
+msgid "Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al registrarlo."
+msgstr "Todos los integrantes compartirán puntaje y tiempo. La lista del equipo queda fijada al registrarlo."
+
+#: cpc 2026-10-31
+msgid "Registrarme"
+msgstr "Registrarme"
+
+#: cpc 2026-10-31
+msgid "Lugar en el Global"
+msgstr "Lugar en el Global"
+
+#: cpc 2026-10-31
+msgid "Global"
+msgstr "Global"
+
+#: cpc 2026-10-31
+msgid "Entre paréntesis y en gris, el lugar de cada quien en el Global."
+msgstr "Entre paréntesis y en gris, el lugar de cada quien en el Global."
+
+#: cpc 2026-10-31
+msgid "Publicar resultados descongela todos los rankings del concurso."
+msgstr "Publicar resultados descongela todos los rankings del concurso."
+
+#: cpc 2026-10-31
+msgid "Este concurso es presencial y en línea: aquí sólo aparecen quienes compiten en la sede."
+msgstr "Este concurso es presencial y en línea: aquí sólo aparecen quienes compiten en la sede."
+
+#: cpc 2026-10-31
+msgid "¿Quién es presencial?"
+msgstr "¿Quién es presencial?"
+
+#: cpc 2026-10-31
+msgid "Quien pasa a presencial a medio concurso trae sus globos de lo que ya había resuelto, como pendientes."
+msgstr "Quien pasa a presencial a medio concurso trae sus globos de lo que ya había resuelto, como pendientes."
+
+#: cpc 2026-10-31
+msgid "Sin lugar asignado"
+msgstr "Sin lugar asignado"
+
+#: cpc 2026-10-31
+msgid "Ya se entregaron otros globos de este problema"
+msgstr "Ya se entregaron otros globos de este problema"
+
+#: cpc 2026-10-31
+msgid "Ya no es presencial"
+msgstr "Ya no es presencial"
+
+#: cpc 2026-10-31
+msgid "Este concurso no es presencial y en línea a la vez: no hay modalidades que asignar."
+msgstr "Este concurso no es presencial y en línea a la vez: no hay modalidades que asignar."
+
+#: cpc 2026-10-31
+msgid "Elige si pasan a presencial o a en línea."
+msgstr "Elige si pasan a presencial o a en línea."
+
+#: cpc 2026-10-31
+msgid "No elegiste a nadie."
+msgstr "No elegiste a nadie."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "No hay ninguna cuenta ni equipo con estos nombres: %(names)s."
+msgstr "No hay ninguna cuenta ni equipo con estos nombres: %(names)s."
+
+#: cpc 2026-10-31
+msgid "Todos empiezan en línea; pasa a presencial a quien compite en la sede, también durante el concurso."
+msgstr "Todos empiezan en línea; pasa a presencial a quien compite en la sede, también durante el concurso."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Sin lugar asignado en la hoja de globos: %(names)s."
+msgstr "Sin lugar asignado en la hoja de globos: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Todavía no se registran: quedan en la lista de la sede y entrarán como presenciales en cuanto se registren o se unan: %(names)s."
+msgstr "Todavía no se registran: quedan en la lista de la sede y entrarán como presenciales en cuanto se registren o se unan: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya no están en la lista de la sede: %(names)s."
+msgstr "Ya no están en la lista de la sede: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "En la lista de la sede, sin registrarse todavía: %(count)s"
+msgstr "En la lista de la sede, sin registrarse todavía: %(count)s"
+
+#: cpc 2026-10-31
+msgid "Entran como presenciales al registrarse o unirse."
+msgstr "Entran como presenciales al registrarse o unirse."
+
+#: cpc 2026-10-31
+msgid "Quitar de la lista"
+msgstr "Quitar de la lista"
+
+#: cpc 2026-10-31
+msgid "Para separar el ranking en Presencial y En línea, elige «Presencial y en línea» en Editar."
+msgstr "Para separar el ranking en Presencial y En línea, elige «Presencial y en línea» en Editar."
+
+#: cpc 2026-10-31
+msgid "En total"
+msgstr "En total"
+
+#: cpc 2026-10-31
+msgid "Ya entraron"
+msgstr "Ya entraron"
+
+#: cpc 2026-10-31
+msgid "Sin entrar"
+msgstr "Sin entrar"
+
+#: cpc 2026-10-31
+msgid "Buscar por usuario o equipo"
+msgstr "Buscar por usuario o equipo"
+
+#: cpc 2026-10-31
+msgid "Las dos"
+msgstr "Las dos"
+
+#: cpc 2026-10-31
+msgid "Todos"
+msgstr "Todos"
+
+#: cpc 2026-10-31
+msgid "Filtrar"
+msgstr "Filtrar"
+
+#: cpc 2026-10-31
+msgid "Quitar filtros"
+msgstr "Quitar filtros"
+
+#: cpc 2026-10-31
+msgid "Pasar a presencial"
+msgstr "Pasar a presencial"
+
+#: cpc 2026-10-31
+msgid "Pasar a en línea"
+msgstr "Pasar a en línea"
+
+#: cpc 2026-10-31
+msgid "Marca en la tabla a quienes quieras mover."
+msgstr "Marca en la tabla a quienes quieras mover."
+
+#: cpc 2026-10-31
+msgid "Marcar a todos los de esta página"
+msgstr "Marcar a todos los de esta página"
+
+#: cpc 2026-10-31
+msgid "Participante"
+msgstr "Participante"
+
+#: cpc 2026-10-31
+msgid "Descalificado"
+msgstr "Descalificado"
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Se registró: %(date)s"
+msgstr "Se registró: %(date)s"
+
+#: cpc 2026-10-31
+msgid "Entró"
+msgstr "Entró"
+
+#: cpc 2026-10-31
+msgid "Páginas"
+msgstr "Páginas"
+
+#: cpc 2026-10-31
+msgid "Nadie coincide con estos filtros."
+msgstr "Nadie coincide con estos filtros."
+
+#: cpc 2026-10-31
+msgid "Nadie se registró ni entró a este concurso."
+msgstr "Nadie se registró ni entró a este concurso."
+
+#: cpc 2026-10-31
+msgid "Todavía no se registra nadie. Quien se registre aparecerá aquí."
+msgstr "Todavía no se registra nadie. Quien se registre aparecerá aquí."
+
+#: cpc 2026-10-31
+msgid "Pegar una lista para pasarla a presencial"
+msgstr "Pegar una lista para pasarla a presencial"
+
+#: cpc 2026-10-31
+msgid "Un nombre por renglón o separados por comas: usuario, equipo o integrante. Quien no se ha registrado queda en la lista de la sede."
+msgstr "Un nombre por renglón o separados por comas: usuario, equipo o integrante. Quien no se ha registrado queda en la lista de la sede."
+
+#: cpc 2026-10-31
+msgid "Mucha gente entra a la vez: inténtalo de nuevo en unos segundos."
+msgstr "Mucha gente entra a la vez: inténtalo de nuevo en unos segundos."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Hay más de un registro o equipo con estos nombres: márcalos en la tabla, o pega el usuario de un integrante: %(names)s."
+msgstr "Hay más de un registro o equipo con estos nombres: márcalos en la tabla, o pega el usuario de un integrante: %(names)s."
+
+#: cpc 2026-10-31
+msgid "Vetado"
+msgstr "Vetado"
+
+#: cpc 2026-10-31
+msgid "No puede entrar al concurso."
+msgstr "No puede entrar al concurso."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d pasó a presencial: %(names)s."
+msgid_plural "%(count)d pasaron a presencial: %(names)s."
+msgstr[0] "%(count)d pasó a presencial: %(names)s."
+msgstr[1] "%(count)d pasaron a presencial: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d pasó a en línea: %(names)s."
+msgid_plural "%(count)d pasaron a en línea: %(names)s."
+msgstr[0] "%(count)d pasó a en línea: %(names)s."
+msgstr[1] "%(count)d pasaron a en línea: %(names)s."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d ya estaba en presencial."
+msgid_plural "%(count)d ya estaban en presencial."
+msgstr[0] "%(count)d ya estaba en presencial."
+msgstr[1] "%(count)d ya estaban en presencial."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "%(count)d ya estaba en línea."
+msgid_plural "%(count)d ya estaban en línea."
+msgstr[0] "%(count)d ya estaba en línea."
+msgstr[1] "%(count)d ya estaban en línea."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya tenían problemas resueltos: %(count)d globo quedó pendiente en la hoja de globos."
+msgid_plural "Ya tenían problemas resueltos: %(count)d globos quedaron pendientes en la hoja de globos."
+msgstr[0] "Ya tenían problemas resueltos: %(count)d globo quedó pendiente en la hoja de globos."
+msgstr[1] "Ya tenían problemas resueltos: %(count)d globos quedaron pendientes en la hoja de globos."
+
+#: cpc 2026-10-31
+#, python-format
+msgid "Ya no reciben globos; %(count)d que ya se les había entregado sigue en la hoja, marcado."
+msgid_plural "Ya no reciben globos; %(count)d que ya se les habían entregado siguen en la hoja, marcados."
+msgstr[0] "Ya no reciben globos; %(count)d que ya se les había entregado sigue en la hoja, marcado."
+msgstr[1] "Ya no reciben globos; %(count)d que ya se les habían entregado siguen en la hoja, marcados."

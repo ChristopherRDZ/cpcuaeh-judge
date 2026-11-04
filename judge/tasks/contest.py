@@ -13,7 +13,9 @@ __all__ = ('rescore_contest', 'run_moss')
 @shared_task(bind=True)
 def rescore_contest(self, contest_key):
     contest = Contest.objects.get(key=contest_key)
-    participations = contest.users
+    # A registration that waits for the start has nothing to score, and saving it whole could undo its entering
+    # (2026-10-31).
+    participations = contest.users.exclude(virtual=ContestParticipation.REGISTERED)
 
     rescored = 0
     with Progress(self, participations.count(), stage=_('Recalculating contest scores')) as p:

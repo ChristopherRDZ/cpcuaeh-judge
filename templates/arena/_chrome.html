@@ -1,12 +1,17 @@
 {# Full-screen arena pages (the player's page and the projector screens) keep base.html for the site's stylesheet,
-   jQuery and MathJax, and hide the rest of the site that would cover a game or a projector: footer, the floating
-   contest timer and the announcement and team pop-ups. The player's page keeps the site's navigation bar (since
+   jQuery and MathJax, and hide the rest of the site that would cover a game or a projector: footer, the contest
+   time next to «Concursos» (the floating timer until 2026-10-31) and the announcement and team pop-ups, and during a
+   battle the box that asks whether to enter a contest one registered for (the battle holds its players anyway). Its
+   #contest-info stays, for a page cached from before. The player's page keeps the site's navigation bar (since
    2026-10-19); the projector hides it as well (screen.html). With no battle, the player's page sets html.ar-site and
    keeps the frame of the site too (2026-10-26): its width, margins, title and footer, like the tournaments; called to
    a battle, it takes the whole window again. #}
 <style>
-    #contest-info, #announcement, #announcement-overlay, #team-notification, #noscript { display: none !important; }
+    #contest-info, #announcement, #announcement-overlay, #team-notification, #noscript, a.contest-pill-link {
+        display: none !important;
+    }
     html:not(.ar-site) footer, html:not(.ar-site) #page-container > br { display: none !important; }
+    html:not(.ar-site) .registration-prompt { display: none !important; }
     html:not(.ar-site), html:not(.ar-site) body { background: var(--ar-page) !important; }
     html:not(.ar-site) body { max-width: none !important; margin: 0 !important; }
     html:not(.ar-site) #page-container { min-height: 100vh; padding: 0 !important; }

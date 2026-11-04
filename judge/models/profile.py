@@ -304,7 +304,10 @@ class Profile(models.Model):
 
     def update_contest(self):
         contest = self.current_contest
-        if contest is not None and (contest.ended or not contest.contest.is_accessible_by(self.user)):
+        # A registration that waits for the start is never anybody's current contest (2026-10-31): nothing after this
+        # asks whether the contest started, so it would open the problems ahead of time.
+        if contest is not None and (contest.virtual == contest.REGISTERED or contest.ended or
+                                    not contest.contest.is_accessible_by(self.user)):
             self.remove_contest()
 
     update_contest.alters_data = True

@@ -21,7 +21,8 @@ from django.views.generic import DetailView, ListView
 
 from judge import event_poster as event
 from judge.highlight_code import highlight_code
-from judge.models import Contest, Language, Problem, ProblemTranslation, Profile, Submission
+from judge.models import (Contest, ContestParticipation, Language, Problem, ProblemTranslation, Profile,
+                          Submission)
 from judge.models.problem import SubmissionSourceAccess
 from judge.utils.infinite_paginator import InfinitePaginationMixin
 from judge.utils.lazy import memo_lazy
@@ -644,7 +645,9 @@ class UserAllContestSubmissions(ForceContestMixin, AllUserSubmissions):
 
     def access_check(self, request):
         super().access_check(request)
-        if not self.contest.users.for_profile(self.profile).exists():
+        # A registration made ahead that never entered is no participation (2026-10-31).
+        entries = self.contest.users.for_profile(self.profile).exclude(virtual=ContestParticipation.REGISTERED)
+        if not entries.exists():
             raise Http404()
         if not self.is_own and not self.contest.can_see_full_scoreboard(self.request.user):
             raise Http404()
@@ -686,7 +689,8 @@ class UserContestSubmissions(ForceContestMixin, UserProblemSubmissions):
 
     def access_check(self, request):
         super(UserContestSubmissions, self).access_check(request)
-        if not self.contest.users.for_profile(self.profile).exists():
+        entries = self.contest.users.for_profile(self.profile).exclude(virtual=ContestParticipation.REGISTERED)
+        if not entries.exists():
             raise Http404()
 
     def get_content_title(self):
@@ -718,7 +722,8 @@ class TeamContestSubmissions(ForceContestMixin, AllSubmissions):
         from judge.models import ContestParticipation
         self.team_entry = get_object_or_404(
             ContestParticipation.objects.select_related('contest').prefetch_related('team_roster'),
-            pk=kwargs['participation'], contest__key=kwargs['contest'], team__isnull=False)
+            pk=kwargs['participation'], contest__key=kwargs['contest'], team__isnull=False,
+            virtual__gt=ContestParticipation.REGISTERED)
         if not self.team_entry.contest.is_accessible_by(request.user):
             raise Http404
         return super().get(request, *args, **kwargs)

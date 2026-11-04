@@ -368,10 +368,14 @@ def first_to_solve(contest, participations):
             if participant is not None}
 
 
-def build_reveal(contest, division=None):
-    """Everything the reveal page needs, read from the database. Reads only."""
+def build_reveal(contest, division=None, modality=''):
+    """Everything the reveal page needs, read from the database. Reads only.
+
+    In a contest that is on site and online, `modality` reveals one part of it (2026-10-31): its rows, and its awards
+    and first to solve worked out among them, as its own scoreboard ranks them."""
     from judge.contest_teams import in_division
     division = division or ('team' if contest.participation_mode == Contest.TEAM else 'individual')
+    modality = modality if contest.is_hybrid else ''
     config = getattr(contest.format, 'config', None) or {}
 
     contest_problems = list(contest.contest_problems.select_related('problem').defer('problem__description')
@@ -380,9 +384,11 @@ def build_reveal(contest, division=None):
                 for i, problem in enumerate(contest_problems)]
 
     # Whoever organizes or tests the contest today is not a contestant: no row, no award (without_contest_staff).
+    official = contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
+    if modality:
+        official = official.filter(onsite=modality == 'onsite')
     participations = list(
-        in_division(contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
-                    .without_contest_staff(), division)
+        in_division(official.without_contest_staff(), division)
         .select_related('user__user').prefetch_related('user__organizations', 'team_roster__profile__user')
         .defer('user__about', 'user__organizations__about').order_by('id'),
     )
@@ -453,8 +459,10 @@ def build_reveal(contest, division=None):
         notices.append(('info', _('Nobody took part in this contest.')))
 
     data.update({
-        'contest': contest.key + (':team' if division == 'team' else ''),
+        # Each part keeps its own progress and award settings in the browser.
+        'contest': contest.key + (':team' if division == 'team' else '') + (':' + modality if modality else ''),
         'division': division,
+        'modality': modality,
         'published': bool(freeze_configured and contest.scoreboard_revealed),
         'canPublish': freeze_configured,
         'publishUrl': reverse('contest_reveal_publish', args=[contest.key]),
@@ -502,6 +510,7 @@ def reveal_context(contest, data, notices):
         'show_time': data['showTime'],
         'problem_count': len(data['problems']),
         'ranking_division': data.get('division', 'individual'),
+        'ranking_modality': data.get('modality', ''),
     }
 
 
@@ -512,8 +521,9 @@ def contest_reveal(request, contest):
     if not contest.is_editable_by(request.user):
         raise Http404()
 
-    from judge.contest_teams import ranking_division
-    data, notices, _inexact = build_reveal(contest, ranking_division(request, contest))
+    from judge.contest_teams import ranking_division, ranking_modality
+    data, notices, _inexact = build_reveal(contest, ranking_division(request, contest),
+                                           ranking_modality(request, contest))
     return render(request, 'contest/reveal.html', reveal_context(contest, data, notices))
 
 

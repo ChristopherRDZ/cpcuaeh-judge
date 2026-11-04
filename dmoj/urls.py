@@ -12,9 +12,9 @@ from django.views.generic import RedirectView
 from judge.feed import AtomBlogFeed, AtomCommentFeed, AtomProblemFeed, BlogFeed, CommentFeed, ProblemFeed
 from judge.sitemap import sitemaps
 from judge.views import TitledTemplateView, announcement, api, arena, arena_history, arena_manage, arena_ranking, \
-    blog, comment, contest_balloons, contest_reveal, contests, language, license, mailgun, organization, preview, \
-    problem, problem_manage, ranked_submission, register, stats, status, submission, tasks, team, ticket, two_factor, \
-    user, widgets
+    blog, comment, contest_balloons, contest_registrations, contest_reveal, contests, language, license, mailgun, \
+    organization, preview, problem, problem_manage, ranked_submission, register, stats, status, submission, tasks, \
+    team, ticket, two_factor, user, widgets
 from judge.views.problem_data import ProblemDataView, ProblemInteractiveExampleView, ProblemInteractiveGuideView, \
     ProblemSubmissionDiff, problem_data_file, problem_data_upload_gate, problem_init_view
 from judge.views.register import ActivationView, RegistrationView
@@ -287,6 +287,9 @@ urlpatterns = [
         path('/balloons/ajax', contest_balloons.contest_balloons_ajax, name='contest_balloons_ajax'),
         path('/balloons/mark', contest_balloons.contest_balloon_mark, name='contest_balloon_mark'),
         path('/balloons/locations', contest_balloons.contest_balloon_locations, name='contest_balloon_locations'),
+        path('/registrations', contest_registrations.contest_registrations, name='contest_registrations'),
+        path('/registrations/move', contest_registrations.contest_registrations_move,
+             name='contest_registrations_move'),
 
         path('/rank/<str:problem>/',
              paged_list_view(ranked_submission.ContestRankedSubmission, 'contest_ranked_submissions')),

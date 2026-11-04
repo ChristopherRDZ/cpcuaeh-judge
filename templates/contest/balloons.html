@@ -448,6 +448,14 @@
     {% for notice in balloon_notices %}
         <div class="balloon-note">{{ notice }}</div>
     {% endfor %}
+    {# On site and online (2026-10-31): balloons only in the room, decided by the owner. #}
+    {% if contest.is_hybrid %}
+        <div class="balloon-note">
+            {{ _('Este concurso es presencial y en línea: aquí sólo aparecen quienes compiten en la sede.') }}
+            {{ _('Quien pasa a presencial a medio concurso trae sus globos de lo que ya había resuelto, como pendientes.') }}
+            {% if can_edit %}<a href="{{ url('contest_registrations', contest.key) }}">{{ _('¿Quién es presencial?') }}</a>{% endif %}
+        </div>
+    {% endif %}
 
     {% include "contest/balloons-sheet.html" %}
 

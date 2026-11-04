@@ -1,0 +1,94 @@
+{# Registering ahead, on the page of the contest (2026-10-31): before the start, for everybody; after it, for whoever
+   registered and has not entered yet: nobody enters without saying so, in the box that asks at the start (base.html)
+   or with the button here. The styles are in contest.html. #}
+{% if not contest.ended and (not contest.started or registration) %}
+    {% if registration %}
+        {% set mine = registration.user_id == request.profile.id %}
+        <div class="contest-registration is-registered" id="registration">
+            <div class="contest-registration-main">
+                {% if contest.started %}
+                    <strong>{{ _('El concurso ya empezó y estás registrado') }}</strong>
+                {% else %}
+                    <strong><i class="fa fa-check" aria-hidden="true"></i> {{ _('Estás registrado') }}</strong>
+                {% endif %}
+                {% if contest.time_limit %}
+                    <p>{{ _('Tu tiempo corre desde que entras.') }}</p>
+                {% endif %}
+                {% if registration.team_id %}
+                    <p>{{ _('Equipo') }}: <strong>{{ registration.team_name }}</strong>
+                        <span class="contest-registration-muted">· {{ registration.team_roster.all()|map(attribute='username')|join(', ') }}</span></p>
+                    {% if not mine %}
+                        <p class="contest-registration-muted">{{ _('Te registró %(user)s.', user=registration.user.username) }}</p>
+                    {% endif %}
+                {% endif %}
+                {% if contest.is_hybrid %}
+                    <p>{{ _('Modalidad') }}: <strong>{{ _('Presencial') if registration.onsite else _('En línea') }}</strong></p>
+                {% endif %}
+            </div>
+            <div class="contest-registration-actions">
+                {% if contest.started %}
+                    <form action="{{ url('contest_join', contest.key) }}" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="enter_registration" value="{{ registration.pk }}">
+                        <input type="submit" class="button contest-join{% if contest.time_limit %} first-join{% endif %}"
+                               value="{{ _('Entrar') }}">
+                    </form>
+                {% elif mine %}
+                    <form action="{{ url('contest_join', contest.key) }}" method="post" class="contest-registration-cancel">
+                        {% csrf_token %}
+                        <input type="hidden" name="cancel_registration" value="{{ registration.pk }}">
+                        <input type="submit" class="button contest-registration-secondary" value="{{ _('Cancelar registro') }}">
+                    </form>
+                {% else %}
+                    <a href="{{ url('contest_join', contest.key) }}" class="button contest-registration-secondary">
+                        {{- _('Retirarme de la lista') -}}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% elif not contest.started %}
+        {% set count = contest.registered_count() %}
+        <div class="contest-registration" id="registration">
+            <div class="contest-registration-main">
+                {% if is_editor or is_tester %}
+                    <strong>{{ _('Registrados: %(count)s', count=count) }}</strong>
+                    <p class="contest-registration-muted">{{ _('Quien organiza o prueba entra como espectador.') }}</p>
+                {% elif not request.user.is_authenticated %}
+                    <strong>{{ _('Regístrate para entrar en cuanto empiece') }}</strong>
+                    <p class="contest-registration-muted">{{ _('Registrados: %(count)s', count=count) }}</p>
+                {% elif contest.is_registrable_by(request.user) %}
+                    <strong>{{ _('Regístrate para entrar en cuanto empiece') }}</strong>
+                    <p class="contest-registration-muted">{{ _('Registrados: %(count)s', count=count) }}</p>
+                {% else %}
+                    <strong>{{ _('No puedes registrarte en este concurso') }}</strong>
+                    {% if contest.limit_join_organizations %}
+                        <p class="contest-registration-muted">{{ _('Sólo se pueden registrar quienes pertenecen a las organizaciones que admite.') }}</p>
+                    {% endif %}
+                    <p class="contest-registration-muted">{{ _('Registrados: %(count)s', count=count) }}</p>
+                {% endif %}
+            </div>
+            <div class="contest-registration-actions">
+                {% if can_edit %}
+                    <a href="{{ url('contest_registrations', contest.key) }}" class="button contest-registration-secondary">
+                        {{- _('Ver quiénes se registraron') -}}
+                    </a>
+                {% elif not request.user.is_authenticated %}
+                    <a href="{{ url('auth_login') }}?next={{ url('contest_join', contest.key)|urlencode }}" class="button">
+                        {{- _('Inicia sesión para registrarte') -}}
+                    </a>
+                {% elif contest.is_registrable_by(request.user) %}
+                    {% if contest.participation_mode == 'individual' and (not contest.access_code or can_edit) %}
+                        <form action="{{ url('contest_join', contest.key) }}" method="post">
+                            {% csrf_token %}
+                            <input type="submit" class="button" value="{{ _('Registrarse') }}">
+                        </form>
+                    {% else %}
+                        <a href="{{ url('contest_join', contest.key) }}" class="button">
+                            {{- _('Registrar a mi equipo') if contest.participation_mode == 'team' else _('Registrarse') -}}
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% endif %}

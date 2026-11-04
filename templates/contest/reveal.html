@@ -851,7 +851,9 @@
         .rv-team-member span { overflow-wrap: anywhere; font-size: .9em; }
         .rv-team-mini { display: flex; flex-shrink: 0; max-width: 90px; overflow: hidden; }
         .rv-team-mini img { width: 24px; height: 24px; border-radius: 50%; margin-right: -7px; border: 1px solid #444; }
-        .rv-division-links { display: flex; gap: 1em; padding: .7em 1.2em; }
+        .rv-division-links { display: flex; flex-wrap: wrap; gap: 1em; padding: .7em 1.2em; }
+        .rv-division-links a[aria-current] { font-weight: bold; text-decoration: underline; }
+        .rv-division-links .rv-links-sep { opacity: .5; }
     </style>
 </head>
 <body>
@@ -869,11 +871,23 @@
         <span id="rv-chip-text"></span>
     </span>
 </header>
-{% if contest.participation_mode == 'mixed' %}
+{# The parts of the scoreboard: individuals and teams in a mixed contest, and Global, on site and online in one that is
+   both (2026-10-31). Each link keeps the other choice. #}
+{% if contest.participation_mode == 'mixed' or contest.is_hybrid %}
 <nav class="rv-division-links" aria-label="{{ _('Rankings del concurso') }}">
-    <a href="{{ url('contest_reveal', contest.key) }}?division=individual" {% if ranking_division == 'individual' %}aria-current="page"{% endif %}>{{ _('Individuales') }}</a>
-    <a href="{{ url('contest_reveal', contest.key) }}?division=team" {% if ranking_division == 'team' %}aria-current="page"{% endif %}>{{ _('Equipos') }}</a>
-    <span>{{ _('Publicar resultados descongela ambos rankings.') }}</span>
+    {% if contest.participation_mode == 'mixed' %}
+        {% set keep = '&modality=' ~ ranking_modality if ranking_modality else '' %}
+        <a href="{{ url('contest_reveal', contest.key) }}?division=individual{{ keep }}" {% if ranking_division == 'individual' %}aria-current="page"{% endif %}>{{ _('Individuales') }}</a>
+        <a href="{{ url('contest_reveal', contest.key) }}?division=team{{ keep }}" {% if ranking_division == 'team' %}aria-current="page"{% endif %}>{{ _('Equipos') }}</a>
+    {% endif %}
+    {% if contest.participation_mode == 'mixed' and contest.is_hybrid %}<span class="rv-links-sep" aria-hidden="true">|</span>{% endif %}
+    {% if contest.is_hybrid %}
+        {% set base = url('contest_reveal', contest.key) ~ '?division=' ~ ranking_division %}
+        <a href="{{ base }}" {% if not ranking_modality %}aria-current="page"{% endif %}>{{ _('Global') }}</a>
+        <a href="{{ base }}&amp;modality=onsite" {% if ranking_modality == 'onsite' %}aria-current="page"{% endif %}>{{ _('Presencial') }}</a>
+        <a href="{{ base }}&amp;modality=online" {% if ranking_modality == 'online' %}aria-current="page"{% endif %}>{{ _('En línea') }}</a>
+    {% endif %}
+    <span>{{ _('Publicar resultados descongela todos los rankings del concurso.') }}</span>
 </nav>
 {% endif %}
 

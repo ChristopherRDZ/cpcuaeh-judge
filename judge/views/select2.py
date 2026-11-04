@@ -5,7 +5,7 @@ from django.utils.encoding import smart_str
 from django.views.generic.list import BaseListView
 
 from judge.jinja2.gravatar import gravatar
-from judge.models import Class, Comment, Contest, Organization, Problem, Profile
+from judge.models import Class, Comment, Contest, ContestParticipation, Organization, Problem, Profile
 
 
 def _get_user_queryset(term):
@@ -114,8 +114,13 @@ class ContestUserSearchSelect2View(UserSearchSelect2View):
         if not contest.is_accessible_by(self.request.user) or not contest.can_see_full_scoreboard(self.request.user):
             raise Http404()
 
-        return Profile.objects.filter(Q(contest_history__contest=contest, contest_history__team__isnull=True) |
-                                      Q(team_contest_entries__participation__contest=contest),
+        # Not the registrations made ahead, that never entered (2026-10-31): who registered is for whoever
+        # organizes to see.
+        registered = ContestParticipation.REGISTERED
+        return Profile.objects.filter(Q(contest_history__contest=contest, contest_history__team__isnull=True,
+                                        contest_history__virtual__gt=registered) |
+                                      Q(team_contest_entries__participation__contest=contest,
+                                        team_contest_entries__participation__virtual__gt=registered),
                                       user__username__icontains=self.term).distinct()
 
 

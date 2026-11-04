@@ -12,36 +12,133 @@
     <script type="text/javascript">
         $(document).ready(function () {
             $('.time-remaining').each(function () {
-                count_down($(this));
+                // Registered, the countdown of the start is counted apart (contest/enter-countdown.html).
+                if (!$(this).closest('[data-registration]').length)
+                    count_down($(this));
+            });
+            // On the click, not on the submit: common.js disables every button of the page as a form is sent, also
+            // when the submit is cancelled after.
+            $('.contest-registration-cancel [type=submit]').on('click', function () {
+                return confirm({{ _('¿Cancelar el registro?')|htmltojs }});
             });
         });
     </script>
+    {% include "contest/enter-countdown.html" %}
     {% include "contest/media-js.html" %}
     {% include "comments/media-js.html" %}
 {% endblock %}
 
 {% block content_media %}
     {% include "comments/media-css.html" %}
+    {# The registration, before the start (2026-10-31). Here rather than in the stylesheets, which are compressed with
+       a manifest. #}
+    <style>
+        :root {
+            --reg-soft: #f8f8f8;
+            --reg-border: #ccc;
+            --reg-muted: #666;
+            --reg-plain: linear-gradient(to bottom, #fff 0, #e0e0e0 100%);
+            --reg-plain-hover: #e0e0e0;
+            --reg-plain-border: #ccc;
+            --reg-plain-text: #333;
+        }
+        {% macro dark_palette() %}
+        :root {
+            --reg-soft: #111;
+            --reg-border: #3b3b3b;
+            --reg-muted: #aaa;
+            --reg-plain: linear-gradient(to bottom, #444 0, #333 100%);
+            --reg-plain-hover: #333;
+            --reg-plain-border: #555;
+            --reg-plain-text: #eee;
+        }
+        {% endmacro %}
+        {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+            {{ dark_palette() }}
+        {% elif PREFERRED_STYLE_CSS is none %}
+            @media (prefers-color-scheme: dark) { {{ dark_palette() }} }
+        {% endif %}
+        .contest-registration {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6em 1.2em;
+            margin: 0 0 1em;
+            padding: 0.7em 1em;
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+        }
+
+        .contest-registration-main {
+            flex: 1;
+            min-width: 14em;
+        }
+
+        .contest-registration-main p {
+            margin: 0.25em 0 0;
+        }
+
+        .contest-registration-muted {
+            color: var(--reg-muted);
+        }
+
+        .contest-registration-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5em;
+        }
+
+        .contest-registration-actions form {
+            margin: 0;
+        }
+
+        /* The site styles every button as its blue one with white text, the colour with !important. */
+        .contest-registration .contest-registration-secondary {
+            background: var(--reg-plain);
+            border-color: var(--reg-plain-border);
+            color: var(--reg-plain-text) !important;
+        }
+
+        .contest-registration .contest-registration-secondary:hover {
+            background: var(--reg-plain-hover);
+        }
+    </style>
 {% endblock %}
 
 {% block body %}
     <p><strong>{{ _('Modalidad de participación') }}:</strong> {{ contest.get_participation_mode_display() }}
-    {% if contest.participation_mode != 'individual' %} · {{ _('Integrantes por equipo: %(minimum)s a %(maximum)s.', minimum=contest.team_min_size, maximum=contest.team_max_size) }}{% endif %}</p>
-    <div id="banner">
+    {% if contest.participation_mode != 'individual' %} · {{ _('Integrantes por equipo: %(minimum)s a %(maximum)s.', minimum=contest.team_min_size, maximum=contest.team_max_size) }}{% endif %}
+    {% if contest.attendance_mode != 'online' %} · {{ contest.get_attendance_mode_display() }}{% endif %}
+    {% if contest.is_hybrid and live_participation %} · {{ _('Compites') }}: <strong>{{ _('Presencial') if live_participation.onsite else _('En línea') }}</strong>{% endif %}</p>
+    {% include "contest/registration-box.html" %}
+    {# Registered and not started yet, the countdown of the banner opens the box that asks whether to enter
+       (contest/enter-countdown.html). The start and the end are asked to the contest, as its countdowns: the `now` of
+       the view is another instant, and right at the start the two disagreed into as_countdown(None), a 500
+       (2026-10-31). #}
+    <div id="banner"{% if registration and not contest.started %} data-registration="{{ contest.key }}"{% endif %}>
         <a href="https://www.timeanddate.com/worldclock/fixedtime.html?msg={{ contest.name|urlquote('') }}&amp;iso=
                 {{- (contest.start_time if contest.start_time >= now else contest.end_time)|utc|date('Y-m-d\TH:i:s') }}" class="date">
             {%- if contest.is_in_contest(request.user) and not request.participation.live -%}
                 {% if request.participation.spectate %}
-                    {{- _('Spectating, contest ends in %(countdown)s.', countdown=as_countdown(contest.time_before_end)) -}}
+                    {#- The middleware saw the participation going on with its own clock; right at the end the
+                        contest may say otherwise, and as_countdown(None) is a 500. -#}
+                    {%- set left = contest.time_before_end -%}
+                    {%- if left -%}
+                        {{- _('Spectating, contest ends in %(countdown)s.', countdown=as_countdown(left)) -}}
+                    {%- else -%}
+                        {{- _('Contest is over.') -}}
+                    {%- endif -%}
                 {% elif request.participation.end_time %}
                     {{- _('Participating virtually, %(countdown)s remaining.', countdown=as_countdown(request.participation.time_remaining)) -}}
                 {% else %}
                     {{- _('Participating virtually.') -}}
                 {% endif %}
             {%- else -%}
-                {% if contest.start_time > now %}
+                {% if not contest.started %}
                     {{- _('Starting in %(countdown)s.', countdown=as_countdown(contest.time_before_start)) -}}
-                {% elif contest.end_time < now %}
+                {% elif contest.ended %}
                     {{- _('Contest is over.') -}}
                 {% else %}
                     {%- if has_joined -%}

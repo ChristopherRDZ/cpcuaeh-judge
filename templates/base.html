@@ -145,56 +145,6 @@
         </script>
     {% endcompress %}
     {% block js_media %}{% endblock %}
-    {% if request.in_contest %}
-        <script>$(function () {
-            count_down($("#contest-time-remaining"));
-
-            var selected = null,
-                x_pos = 0, y_pos = 0,
-                x_elem = 0, y_elem = 0;
-
-            $('#contest-info').mousedown(function () {
-                selected = $(this);
-                x_elem = x_pos - selected.offset().left;
-                y_elem = y_pos - (selected.offset().top - $(window).scrollTop());
-                return false;
-            });
-
-            if (localStorage.getItem("contest_timer_pos")) {
-                data = localStorage.getItem("contest_timer_pos").split(":");
-                $("#contest-info").css({
-                    left: data[0],
-                    top: data[1]
-                });
-            }
-
-            $("#contest-info").show();
-
-            $(document).mousemove(function (e) {
-                x_pos = e.screenX;
-                y_pos = e.screenY;
-                x_pos = Math.max(Math.min(x_pos, window.innerWidth), 0);
-                y_pos = Math.max(Math.min(y_pos, window.innerHeight), 0);
-
-                if (selected !== null) {
-                    left_px = (x_pos - x_elem) + 'px';
-                    top_px = (y_pos - y_elem) + 'px';
-
-                    localStorage.setItem("contest_timer_pos", left_px + ":" + top_px);
-
-                    selected.css({
-                        left: left_px,
-                        top: top_px
-                    });
-                }
-            });
-
-            $(document).mouseup(function () {
-                selected = null;
-            })
-        });
-        </script>
-    {% endif %}
 
     {% if request.user.is_authenticated and not tfa_in_progress %}
         <script>
@@ -235,13 +185,52 @@
         <clipPath id="rating-clip"><circle cx="8" cy="8" r="7"/></clipPath>
     </defs>
 </svg>
+{# The time, next to «Concursos» (2026-10-31): what is left of the contest you are in, or how long until the one you
+   registered for starts, over its last hour, and that it started, over the first hour after it. It replaced the
+   floating box, which covered the page (the owner). The middleware leaves `registration_pill`
+   (judge/contest_registration.py); the script and the styles are at the end of the page. #}
+{% macro contest_pill(where) -%}
+    {%- if request.in_contest -%}
+        {%- set participation = request.participation -%}
+        {%- set left = participation.time_remaining -%}
+        {%- if participation.spectate -%}
+            {%- set state = _('observando') -%}
+        {%- elif participation.virtual > 0 -%}
+            {%- set state = _('participación virtual') -%}
+        {%- else -%}
+            {%- set state = _('tiempo restante') -%}
+        {%- endif -%}
+        {%- set label = participation.contest.name ~ (' · ' ~ participation.team_name if participation.team_id else '') ~ ' · ' ~ state -%}
+        <a href="{{ url('contest_view', participation.contest.key) }}" class="contest-pill-link contest-pill-{{ where }}"
+           title="{{ label }}" aria-label="{{ label }}">
+            {%- if participation.spectate %}<i class="fa fa-eye" aria-hidden="true"></i> {% endif -%}
+            <span class="contest-pill" data-secs="{{ left|seconds if left else 0 }}" data-ends="1"
+                  data-ending="300">{{ left|timedelta('localized') if left else '' }}</span>
+        </a>
+    {%- elif request.registration_pill -%}
+        {%- set hint = request.registration_pill -%}
+        {%- set state = _('registrado: tu tiempo corre desde que entras') if hint.windowed else _('registrado: al empezar, el sitio te pregunta si quieres entrar') -%}
+        {%- set label = hint.name ~ (' · ' ~ hint.team if hint.team else '') ~ ' · ' ~ state -%}
+        <a href="{{ url('contest_view', hint.key) }}" class="contest-pill-link contest-pill-{{ where }}"
+           title="{{ label }}" aria-label="{{ label }}">
+            <span class="contest-pill contest-pill-soon" data-secs="{{ hint.seconds }}"
+                  data-soon="{{ _('en %(time)s', time='{time}') }}" data-started="{{ _('ya empezó') }}">
+                {{- _('en %(time)s', time='%02d:%02d'|format(hint.seconds // 60, hint.seconds % 60)) if hint.seconds > 0
+                    else _('ya empezó') -}}
+            </span>
+        </a>
+    {%- endif -%}
+{%- endmacro %}
 <nav id="navigation" class="unselectable">
     <div id="nav-container">
         <a id="navicon" href="javascript:void(0)"><i class="fa fa-bars"></i></a>
+        {{ contest_pill('mobile') }}
         <ul id="nav-list">
             <li class="home-nav-element"><a href="{{ url('home') }}">{% include "site-logo-fragment.html" %}</a></li>
             <li class="home-nav-element"><span class="nav-divider"></span></li>
             <li class="home-menu-item"><a href="{{ url('home') }}" class="nav-home">{{ _('Home') }}</a></li>
+            {# Next to the tab of the contest list, wherever it is in the bar; at the end of it, if it is not. #}
+            {% set pill = namespace(list=url('contest_list').rstrip('/'), shown=not (request.in_contest or request.registration_pill)) %}
             {% for node in mptt_tree(nav_bar) recursive %}
                 <li>
                     <a href="{{ node.path }}" class="nav-{{ node.key }}{% if node.key in nav_tab %} active{% endif %}">
@@ -250,11 +239,17 @@
                             <div class="nav-expand">&gt;</div>
                         {% endif %}
                     </a>
+                    {%- if not pill.shown and node.path.rstrip('/') == pill.list -%}
+                        {% set pill.shown = true %}{{ contest_pill('bar') }}
+                    {%- endif %}
                     {% with children=node.get_children() %}
                         {% if children %}<ul>{{ loop(children) }}</ul>{% endif %}
                     {% endwith %}
                 </li>
             {% endfor %}
+            {% if not pill.shown %}
+                <li>{{ contest_pill('bar') }}</li>
+            {% endif %}
             {# Only while actually inside a contest. `update_contest()` clears the
                participation the moment it ends, live or virtual, so this
                disappears on its own and there is nothing to check for here. #}
@@ -318,23 +313,6 @@
     </div>
     <div id="nav-shadow"></div>
 </nav>
-{% if request.in_contest %}
-    <div id="contest-info">
-        <a href="{{ url('contest_view', request.participation.contest.key) }}" style="vertical-align: middle">
-            {{ request.participation.contest.name }} -
-            {% if request.participation.team_id %}{{ request.participation.team_name }} · {% endif %}
-            {% if request.participation.spectate %}
-                {{ _('spectating') }}
-            {% elif request.participation.end_time %}
-                <div id="contest-time-remaining" data-secs="{{ request.participation.time_remaining|seconds }}">
-                    {{ request.participation.time_remaining|timedelta("localized") }}
-                </div>
-            {% else %}
-                {{ _('virtual') }}
-            {% endif %}
-        </a>
-    </div>
-{% endif %}
 <div id="page-container">
     <noscript>
         <div id="noscript">{{ _('This site works best with JavaScript enabled.') }}</div>
@@ -462,6 +440,104 @@
         cursor: pointer;
     }
 
+    /* The box that asks, at the start of a contest one registered for, whether to enter now (2026-10-31): above the
+       announcements, which may come at the same moment. Opened by its script at the end of the page, one at a time.
+       Drawn as the popups of the site (featherlight), with its buttons; the one that says no is a plain one. */
+    .registration-prompt {
+        --prompt-bg: #fff;
+        --prompt-border: #ccc;
+        --prompt-muted: #666;
+        --prompt-plain: linear-gradient(to bottom, #fff 0, #e0e0e0 100%);
+        --prompt-plain-hover: #e0e0e0;
+        --prompt-plain-border: #ccc;
+        --prompt-plain-text: #333;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1001;
+        overflow-y: auto;
+        padding: 1em;
+        box-sizing: border-box;
+    }
+
+    {% macro prompt_dark_palette() %}
+    .registration-prompt {
+        --prompt-bg: #222;
+        --prompt-border: #3b3b3b;
+        --prompt-muted: #aaa;
+        --prompt-plain: linear-gradient(to bottom, #444 0, #333 100%);
+        --prompt-plain-hover: #333;
+        --prompt-plain-border: #555;
+        --prompt-plain-text: #eee;
+    }
+    {% endmacro %}
+    {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+        {{ prompt_dark_palette() }}
+    {% elif PREFERRED_STYLE_CSS is none %}
+        @media (prefers-color-scheme: dark) { {{ prompt_dark_palette() }} }
+    {% endif %}
+
+    .registration-prompt[hidden] {
+        display: none;
+    }
+
+    .registration-prompt .registration-prompt-box {
+        position: relative;
+        margin: 6em auto 2em auto;
+        max-width: 26em;
+        box-sizing: border-box;
+        background: var(--prompt-bg);
+        border: 1px solid var(--prompt-border);
+        border-radius: 4px;
+        padding: 10px 15px 12px;
+    }
+
+    .registration-prompt .registration-prompt-box:focus {
+        outline: none;
+    }
+
+    .registration-prompt .registration-prompt-title {
+        font-size: 1.3em;
+        padding-bottom: 0.3em;
+        margin-bottom: 0.6em;
+        border-bottom: 1px solid var(--prompt-border);
+        word-wrap: break-word;
+    }
+
+    .registration-prompt .registration-prompt-box p {
+        margin: 0 0 0.5em 0;
+    }
+
+    .registration-prompt .registration-prompt-box p.registration-prompt-muted {
+        color: var(--prompt-muted);
+    }
+
+    .registration-prompt .registration-prompt-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5em;
+        margin-top: 0.8em;
+    }
+
+    .registration-prompt .registration-prompt-actions form {
+        margin: 0;
+    }
+
+    /* The site styles every button as its blue one with white text, the colour with !important. */
+    .registration-prompt .registration-prompt-actions .registration-prompt-later {
+        background: var(--prompt-plain);
+        border-color: var(--prompt-plain-border);
+        color: var(--prompt-plain-text) !important;
+    }
+
+    .registration-prompt .registration-prompt-actions .registration-prompt-later:hover {
+        background: var(--prompt-plain-hover);
+    }
+
     /* Unanswered questions waiting for the jury. Hidden until there are any;
        toggled by class, because jQuery's show() would only fall back to this
        rule's `none` again. */
@@ -489,18 +565,58 @@
         max-width: 100% !important;
     }
 
-    /* The floating contest timer was sized for one line on a desktop. On a phone the contest and
-       team names wrap, the link's fixed 1.4em height pushed the clock out of the box, and the box
-       ran into the right edge. Same 20 px on both sides; the link grows with its lines and keeps
-       the old height when it fits in one, so a desktop sees the same box as before. */
-    #contest-info {
-        max-width: calc(100% - 40px);
-        box-sizing: border-box;
+    /* The time next to «Concursos» (contest_pill above). Solid colours with a thin light edge, so it reads on the
+       bar and on the blue of an active tab alike. */
+    #nav-list li a.contest-pill-link {
+        padding-left: 0;
     }
 
-    #contest-info a {
-        height: auto;
-        min-height: 1.4em;
+    #nav-list li a.contest-pill-link:hover {
+        background: transparent;
+    }
+
+    a.contest-pill-link {
+        color: #fff;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    a.contest-pill-link:hover .contest-pill, a.contest-pill-link:focus-visible .contest-pill {
+        box-shadow: 0 0 0 1px #fff;
+    }
+
+    .contest-pill {
+        display: inline-block;
+        min-width: 3.5em;
+        padding: 0 0.45em;
+        border-radius: 3px;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+        background: #222;
+        color: #fff;
+        font-size: 12px;
+        font-weight: bold;
+        line-height: 18px;
+        text-align: center;
+        text-transform: none;
+        font-variant-numeric: tabular-nums;
+        vertical-align: top;
+    }
+
+    .contest-pill.contest-pill-soon {
+        background: #2980b9;
+    }
+
+    .contest-pill.contest-pill-started {
+        background: #1e8449;
+    }
+
+    .contest-pill.contest-pill-ending {
+        background: #c0392b;
+    }
+
+    /* On a phone the bar folds behind its button: there the copy next to the button shows instead. */
+    a.contest-pill-mobile {
+        display: none;
     }
 
     /* Same breakpoint the rest of the site uses. */
@@ -513,6 +629,16 @@
         #announcement-ok {
             width: 100%;
             padding: 0.9em 0;
+        }
+
+        a.contest-pill-mobile {
+            display: block;
+            float: left;
+            margin: 9px 0 0 0.1em;
+        }
+
+        #nav-list a.contest-pill-bar {
+            display: none !important;
         }
     }
 </style>
@@ -657,6 +783,189 @@
         $(window).on('dmoj:window-visible', poll);
     });
 </script>
+{% if request.in_contest or request.registration_pill %}
+    <script type="text/javascript">
+        // The time next to «Concursos» (contest_pill above), counted from the moment the page arrived. When the contest
+        // being shown ends, the page reloads, as the floating box did; reaching the start only changes the text: the
+        // box below asks whether to enter (registration_prompts).
+        (function () {
+            var pills = document.querySelectorAll('.contest-pill[data-secs]');
+            if (!pills.length)
+                return;
+            var arrived = Date.now(), reloading = false;
+
+            function two(number) {
+                return (number < 10 ? '0' : '') + number;
+            }
+
+            function remaining(seconds) {
+                var days = Math.floor(seconds / 86400), hours = Math.floor(seconds % 86400 / 3600),
+                    minutes = Math.floor(seconds % 3600 / 60), rest = seconds % 60;
+                // The formats of the catalog, as resources/common.js and the server (judge/utils/timedelta.py).
+                var translated = typeof npgettext === 'function' && typeof pgettext === 'function';
+                var format = days > 0 ?
+                    (translated ? npgettext('time format with day', '%d day %h:%m:%s', '%d days %h:%m:%s', days) :
+                        '%d d %h:%m:%s') :
+                    (translated ? pgettext('time format without day', '%h:%m:%s') : '%h:%m:%s');
+                return format.replace('%d', days).replace('%h', two(hours)).replace('%m', two(minutes))
+                    .replace('%s', two(rest));
+            }
+
+            function paint() {
+                var elapsed = Math.floor((Date.now() - arrived) / 1000);
+                for (var i = 0; i < pills.length; i++) {
+                    var pill = pills[i], left = Math.max(0, parseInt(pill.getAttribute('data-secs'), 10) - elapsed);
+                    if (pill.hasAttribute('data-soon')) {
+                        pill.textContent = left > 0 ?
+                            pill.getAttribute('data-soon').replace('{time}', two(Math.floor(left / 60)) + ':' + two(left % 60)) :
+                            pill.getAttribute('data-started');
+                        pill.classList.toggle('contest-pill-started', left <= 0);
+                    } else {
+                        pill.textContent = remaining(left);
+                        pill.classList.toggle('contest-pill-ending', left <= parseInt(pill.getAttribute('data-ending'), 10));
+                        if (left <= 0 && pill.hasAttribute('data-ends') && !reloading) {
+                            reloading = true;
+                            setTimeout(function () {
+                                window.location.reload();
+                            }, 2000);
+                        }
+                    }
+                }
+                // On the turn of each second, from when the page arrived.
+                setTimeout(paint, 1000 - (Date.now() - arrived) % 1000);
+            }
+
+            paint();
+        })();
+    </script>
+{% endif %}
+{# At the start of a contest one registered for, wherever one is on the site (the owner, 2026-10-31): whether to enter
+   now and go to the problems, or, with a time window per participation, whether to start now. Nobody enters without
+   saying so; closed, a box stays closed for that registration in this browser, and one enters later from the page of
+   the contest or from the list. The middleware leaves `registration_prompts` (judge/contest_registration.py): the one
+   that started last, and the next one to start, which the script opens on time; one box shows at a time. #}
+{% if request.registration_prompts %}
+    {% for prompt in request.registration_prompts %}
+        <div class="registration-prompt" hidden data-participation="{{ prompt.participation }}" data-contest="{{ prompt.key }}"
+             data-opens-in="{{ prompt.seconds }}" data-ends="{{ prompt.end|int }}">
+            <div class="registration-prompt-box" role="alertdialog" aria-modal="true"
+                 aria-labelledby="registration-prompt-title-{{ prompt.participation }}"
+                 {%- if prompt.windowed %} aria-describedby="registration-prompt-text-{{ prompt.participation }}"{% endif %} tabindex="-1">
+                <div class="registration-prompt-title" id="registration-prompt-title-{{ prompt.participation }}">
+                    {{- _('Ya puedes empezar «%(contest)s»', contest=prompt.name) if prompt.windowed else _('Empezó «%(contest)s»', contest=prompt.name) -}}
+                </div>
+                {% if prompt.windowed %}
+                    <p id="registration-prompt-text-{{ prompt.participation }}">{{ _('Tu tiempo, %(time)s, corre desde que empieces.', time=prompt.window|timedelta('localized')) }}</p>
+                {% endif %}
+                {% if prompt.team %}<p class="registration-prompt-muted">{{ _('Equipo') }}: {{ prompt.team }}</p>{% endif %}
+                {% if request.in_contest %}
+                    <p class="registration-prompt-muted">{{ _('Saldrás de «%(contest)s».', contest=request.participation.contest.name) }}</p>
+                {% endif %}
+                <div class="registration-prompt-actions">
+                    <button type="button" class="registration-prompt-later">{{ _('Más tarde') if prompt.windowed else _('Ahora no') }}</button>
+                    <form method="post" action="{{ url('contest_join', prompt.key) }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="enter_registration" value="{{ prompt.participation }}">
+                        <button type="submit" class="registration-prompt-enter">{{ _('Empezar') if prompt.windowed else _('Entrar') }}</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    <script type="text/javascript">
+        // The boxes above, each opened at its start, counted from when the page arrived: a wrong clock on this computer
+        // does not move them. One shows at a time: the one that opens last takes the place of the other. Closed with
+        // its button, a box stays closed for this account in this browser until its contest ends, also in other tabs.
+        (function () {
+            var boxes = Array.prototype.slice.call(document.querySelectorAll('.registration-prompt'));
+            if (!boxes.length)
+                return;
+            var PREFIX = 'registration-prompt:', OWNER = PREFIX + '{{ request.user.id }}:';
+            var arrived = Date.now(), focusBefore = null;
+
+            function keyOf(box) {
+                return OWNER + box.getAttribute('data-participation');
+            }
+
+            function closed(box) {
+                try {
+                    return localStorage.getItem(keyOf(box)) !== null;
+                } catch (err) {
+                    return false;
+                }
+            }
+
+            // What the registrations of contests that ended left behind.
+            try {
+                var now = Date.now() / 1000;
+                for (var i = localStorage.length - 1; i >= 0; i--) {
+                    var name = localStorage.key(i);
+                    if (name && name.indexOf(PREFIX) === 0 && !(parseInt(localStorage.getItem(name), 10) > now))
+                        localStorage.removeItem(name);
+                }
+            } catch (err) {
+                // Private browsing and full quotas: nothing is remembered, and the box comes back on the next page.
+            }
+
+            function typing() {
+                var element = document.activeElement;
+                if (!element || element === document.body)
+                    return false;
+                var tag = element.tagName;
+                return element.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' &&
+                    !/^(button|checkbox|color|file|hidden|image|radio|range|reset|submit)$/i.test(element.type));
+            }
+
+            function open(box) {
+                if (closed(box) || !box.hidden)
+                    return;
+                var showing = boxes.filter(function (other) {
+                    return !other.hidden;
+                });
+                if (!showing.length)
+                    focusBefore = document.activeElement;
+                showing.forEach(function (other) {
+                    other.hidden = true;
+                });
+                box.hidden = false;
+                // Whoever is typing keeps the keyboard, so that Enter never answers for them; otherwise the box takes
+                // it, but not its buttons.
+                if (!typing())
+                    box.querySelector('.registration-prompt-box').focus();
+            }
+
+            boxes.forEach(function (box) {
+                box.querySelector('.registration-prompt-later').addEventListener('click', function () {
+                    box.hidden = true;
+                    try {
+                        localStorage.setItem(keyOf(box), box.getAttribute('data-ends'));
+                    } catch (err) {
+                        // As above.
+                    }
+                    if (focusBefore && focusBefore !== document.body && document.contains(focusBefore))
+                        focusBefore.focus();
+                });
+                var opensIn = parseInt(box.getAttribute('data-opens-in'), 10) * 1000;
+                if (opensIn <= 0) {
+                    open(box);
+                } else {
+                    var timer = setInterval(function () {
+                        if (Date.now() - arrived >= opensIn) {
+                            clearInterval(timer);
+                            open(box);
+                        }
+                    }, 1000);
+                }
+            });
+            window.addEventListener('storage', function (event) {
+                boxes.forEach(function (box) {
+                    if (event.key === keyOf(box) && event.newValue !== null)
+                        box.hidden = true;
+                });
+            });
+        })();
+    </script>
+{% endif %}
 {% include 'team/notification.html' %}
 </body>
 </html>

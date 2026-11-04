@@ -46,6 +46,10 @@
     {% if can_edit or contest.is_balloon_staff(request.user) %}
         {{ make_tab('balloons', 'fa-circle', url('contest_balloons', contest.key), _('Balloons')) }}
     {% endif %}
+    {# Who registered, and their modality in a contest on site and online (2026-10-31). #}
+    {% if can_edit %}
+        {{ make_tab('registrations', 'fa-list-alt', url('contest_registrations', contest.key), _('Registrados')) }}
+    {% endif %}
     {% if can_edit %}
         {% if perms.judge.moss_contest and has_moss_api_key %}
             {{ make_tab('moss', 'fa-gavel', url('contest_moss', contest.key), _('MOSS')) }}
@@ -113,12 +117,44 @@
                     </form>
                 {% endif %}
             {% endif %}
+        {% else %}
+            {# Before the start, registering (2026-10-31). The pages outside ContestMixin do not bring it. #}
+            {% if registration is not defined %}
+                {% set registration = contest.registration_for(request.user) %}
+            {% endif %}
+            {% if registration %}
+                <form action="{{ url('contest_join', contest.key) }}" method="get"
+                      class="contest-join-pseudotab unselectable button"
+                      title="{{ _('Ver o cancelar tu registro') }}">
+                    <input type="submit" value="{{ _('Registrado') }}">
+                </form>
+            {% elif contest.is_registrable_by(request.user) %}
+                {# One click when there is nothing to choose or type; otherwise the page to register. #}
+                {% if contest.participation_mode == 'individual' and (not contest.access_code or can_edit) %}
+                    <form action="{{ url('contest_join', contest.key) }}" method="post"
+                          class="contest-join-pseudotab unselectable button">
+                        {% csrf_token %}
+                        <input type="submit" value="{{ _('Registrarse') }}">
+                    </form>
+                {% else %}
+                    <form action="{{ url('contest_join', contest.key) }}" method="get"
+                          class="contest-join-pseudotab unselectable button">
+                        <input type="submit" value="{{ _('Registrarse') }}">
+                    </form>
+                {% endif %}
+            {% endif %}
         {% endif %}
     {% elif contest.started %}
         <form action="{{ url('auth_login') }}" method="get"
               class="contest-join-pseudotab unselectable button">
             <input type="hidden" name="next" value="{{ LOGIN_RETURN_PATH|urlencode }}">
             <input type="submit" value="{{ _('Log in to participate') }}">
+        </form>
+    {% else %}
+        <form action="{{ url('auth_login') }}" method="get"
+              class="contest-join-pseudotab unselectable button">
+            <input type="hidden" name="next" value="{{ LOGIN_RETURN_PATH|urlencode }}">
+            <input type="submit" value="{{ _('Inicia sesión para registrarte') }}">
         </form>
     {% endif %}
 {% endblock %}

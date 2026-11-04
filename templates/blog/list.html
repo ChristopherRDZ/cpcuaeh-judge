@@ -124,7 +124,13 @@
                                     <a href="{{ url('contest_view', contest.key) }}">{{ contest.name }}</a>
                                 </div>
                                 <div class="time">
-                                    {{ _('Ends in %(countdown)s.', countdown=as_countdown(contest.time_before_end)) }}
+                                    {# Listed by the view with another instant: right at the end, nothing left to count. #}
+                                    {% set left = contest.time_before_end %}
+                                    {% if left %}
+                                        {{ _('Ends in %(countdown)s.', countdown=as_countdown(left)) }}
+                                    {% else %}
+                                        {{ _('Contest is over.') }}
+                                    {% endif %}
                                 </div>
                             </div>
                         {% endfor %}
@@ -142,7 +148,14 @@
                                     <a href="{{ url('contest_view', contest.key) }}">{{ contest.name }}</a>
                                 </div>
                                 <div class="time">
-                                    {{ _('Starting in %(countdown)s.', countdown=as_countdown(contest.time_before_start)) }}
+                                    {# The list was made an instant earlier: right at the start there is no time
+                                       left, and as_countdown(None) was a 500 (2026-10-31). #}
+                                    {% set before = contest.time_before_start %}
+                                    {% if before %}
+                                        {{ _('Starting in %(countdown)s.', countdown=as_countdown(before)) }}
+                                    {% else %}
+                                        {{ _('Ya empezó.') }}
+                                    {% endif %}
                                 </div>
                             </div>
                         {% endfor %}

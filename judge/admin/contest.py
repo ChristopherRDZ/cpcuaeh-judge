@@ -19,7 +19,8 @@ from reversion.admin import VersionAdmin
 
 from judge.admin.purge import PurgeMixin, contest_plan, purge_contest
 from judge.admin_owner import is_server_owner
-from judge.models import Class, Contest, ContestProblem, ContestSubmission, Profile, Rating, Submission
+from judge.models import Class, Contest, ContestParticipation, ContestProblem, ContestSubmission, Profile, Rating, \
+    Submission
 from judge.models.contest import FREEZE_SCHEDULE, kept_freeze_minutes
 from judge.ratings import rate_contest
 from judge.utils.views import NoBatchDeleteMixin
@@ -145,6 +146,12 @@ class ContestForm(ModelForm):
             self.initial['participation_mode'] = ''
             self.fields['participation_mode'].choices = [('', _('Selecciona una modalidad'))] + list(
                 self.fields['participation_mode'].choices)
+        if not self.instance.pk and 'attendance_mode' in self.fields:
+            # The same for where it is competed (2026-10-31): existing contests stay online, new ones say it.
+            self.fields['attendance_mode'].initial = ''
+            self.initial['attendance_mode'] = ''
+            self.fields['attendance_mode'].choices = [('', _('Selecciona dónde se compite'))] + list(
+                self.fields['attendance_mode'].choices)
         if 'rate_exclude' in self.fields:
             if self.instance and self.instance.id:
                 self.fields['rate_exclude'].queryset = \
@@ -248,7 +255,7 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
         (_('Settings'), {'fields': ('is_visible', 'use_clarifications', 'hide_problem_tags', 'hide_problem_authors',
                                     'show_short_display', 'run_pretests_only', 'locked_after', 'scoreboard_visibility',
                                     'freeze_minutes', 'scoreboard_revealed', 'points_precision')}),
-        (_('Participación'), {'fields': ('participation_mode', 'team_min_size', 'team_max_size')}),
+        (_('Participación'), {'fields': ('participation_mode', 'team_min_size', 'team_max_size', 'attendance_mode')}),
         (_('Scheduling'), {'fields': ('start_time', 'end_time', 'time_limit')}),
         (_('Details'), {'fields': ('description', 'og_image', 'logo_override_image', 'tags', 'summary')}),
         (_('Format'), {'fields': ('format_name', 'format_config', 'problem_label_script')}),
@@ -586,7 +593,7 @@ class ContestParticipationForm(ModelForm):
 
 
 class ContestParticipationAdmin(admin.ModelAdmin):
-    fields = ('contest', 'user', 'team', 'team_name', 'real_start', 'virtual', 'is_disqualified')
+    fields = ('contest', 'user', 'team', 'team_name', 'real_start', 'virtual', 'is_disqualified', 'onsite')
     readonly_fields = ('team', 'team_name')
 
     def get_readonly_fields(self, request, obj=None):
@@ -604,7 +611,7 @@ class ContestParticipationAdmin(admin.ModelAdmin):
             raise PermissionDenied(_('Las participaciones de equipos se conservan como historial.'))
         super().delete_queryset(request, queryset)
 
-    list_display = ('contest', 'username', 'show_virtual', 'real_start', 'score', 'cumtime', 'tiebreaker')
+    list_display = ('contest', 'username', 'show_virtual', 'onsite', 'real_start', 'score', 'cumtime', 'tiebreaker')
     actions = ['recalculate_results']
     actions_on_bottom = actions_on_top = True
     search_fields = ('contest__key', 'contest__name', 'user__user__username', 'team_name')
@@ -617,7 +624,7 @@ class ContestParticipationAdmin(admin.ModelAdmin):
         return super(ContestParticipationAdmin, self).get_queryset(request).only(
             'contest__name', 'contest__format_name', 'contest__format_config',
             'user__user__username', 'user__username_display_override', 'team', 'team_name',
-            'real_start', 'score', 'cumtime', 'tiebreaker', 'virtual',
+            'real_start', 'score', 'cumtime', 'tiebreaker', 'virtual', 'onsite',
         )
 
     def save_model(self, request, obj, form, change):
@@ -641,4 +648,7 @@ class ContestParticipationAdmin(admin.ModelAdmin):
 
     @admin.display(description=_('virtual'), ordering='virtual')
     def show_virtual(self, obj):
+        # A registration that waits for the start (2026-10-31), not a virtual participation.
+        if obj.virtual == ContestParticipation.REGISTERED:
+            return _('Registrado')
         return obj.virtual or '-'

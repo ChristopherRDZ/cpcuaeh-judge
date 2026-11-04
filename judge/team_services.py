@@ -9,6 +9,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -87,12 +88,46 @@ def _owner(team, actor):
 
 
 def _active_entries(team, member_id=None):
+    """The participations of the team that keep its roster as it is: live or virtual ones still running, and a
+    registration made ahead once its contest has started (2026-10-31), because it becomes live on the first request of
+    its roster. Before the start a registration does not hold the team: leaving takes the person off it
+    (_leave_registrations)."""
+    from judge.models import ContestParticipation
     now = timezone.now()
-    entries = team.participations.filter(virtual__gte=0).select_related('contest')
+    entries = (team.participations.filter(Q(virtual__gte=0) | Q(virtual=ContestParticipation.REGISTERED))
+               .select_related('contest'))
     if member_id is not None:
         entries = entries.filter(team_roster__profile_id=member_id)
     return [entry for entry in entries
-            if (entry.virtual == 0 and entry.contest.end_time > now) or (entry.virtual > 0 and entry.end_time > now)]
+            if (entry.virtual == 0 and entry.contest.end_time > now) or (entry.virtual > 0 and entry.end_time > now) or
+            (entry.virtual == ContestParticipation.REGISTERED and
+             entry.contest.start_time <= now < entry.contest.end_time)]
+
+
+def _waiting_registrations(team):
+    """The registrations of the team for contests that have not started."""
+    from judge.models import ContestParticipation
+    return team.participations.filter(virtual=ContestParticipation.REGISTERED, contest__start_time__gt=timezone.now())
+
+
+def _leave_registrations(team, actor, profile_id):
+    """Leaving the team, or being removed from it, before a contest the team registered for also takes the person off
+    that roster (2026-10-31): they would otherwise compete for a team they are no longer in. Whoever made a
+    registration cancels it first, from the page of the contest: it is theirs."""
+    from judge.contest_registration import forget_hints_on_commit
+    from judge.models.team import ContestTeamMember
+    waiting = list(_waiting_registrations(team).filter(team_roster__profile_id=profile_id).select_related('contest'))
+    for entry in waiting:
+        if entry.user_id == profile_id:
+            if profile_id == actor.pk:
+                raise ValidationError(_('Registraste a este equipo en «%(contest)s». Para salir, cancela antes ese '
+                                        'registro desde la página del concurso.') % {'contest': entry.contest.name})
+            raise ValidationError(_('Esa persona registró al equipo en «%(contest)s». Puede cancelar ese registro '
+                                    'desde la página del concurso; después podrás expulsarla.')
+                                  % {'contest': entry.contest.name})
+    if waiting:
+        ContestTeamMember.objects.filter(participation__in=waiting, profile_id=profile_id).delete()
+        forget_hints_on_commit([profile_id])
 
 
 def _require_idle(team):
@@ -194,6 +229,7 @@ def remove_member(actor, team_id, profile_id):
         raise ValidationError(_('Para salir, transfiere primero la propiedad a otro integrante o elimina el equipo.'))
     if not team.memberships.filter(profile_id=profile_id).exists():
         raise ValidationError(_('Ese usuario ya no forma parte del equipo.'))
+    _leave_registrations(team, actor, profile_id)
     team.memberships.filter(profile_id=profile_id).delete()
 
 
@@ -250,6 +286,16 @@ def delete_team(actor, team_id):
     team = Team.objects.select_for_update().get(pk=team_id)
     _owner(team, actor)
     _require_idle(team)
+    # Its registrations for contests that have not started go with it (2026-10-31): nobody would compete for them.
+    from judge.contest_registration import forget_hints_on_commit
+    from judge.models.team import ContestTeamMember
+    waiting = list(_waiting_registrations(team))
+    if waiting:
+        roster = ContestTeamMember.objects.filter(participation__in=waiting)
+        forget_hints_on_commit(set(roster.values_list('profile_id', flat=True)))
+        roster.delete()
+        for entry in waiting:
+            entry.delete()
     # PROTECT on participation.team is a second line of defence against history loss.
     if team.participations.exists() or team.balloon_locations.exists():
         team.is_active = False

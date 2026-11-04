@@ -43,8 +43,12 @@ def accepted_submissions(contest):
     a pretest-only result, inside the contest window of a live participation that is not disqualified, and not of
     whoever organizes or tests the contest today (without_contest_staff, 2026-10-29).
     """
+    official = contest.users.filter(virtual=ContestParticipation.LIVE).without_contest_staff()
+    if contest.is_hybrid:
+        # On site and online at once: balloons only for whoever competes on site (the owner, 2026-10-31).
+        official = official.filter(onsite=True)
     accepted = ContestSubmission.objects.filter(
-        participation__in=contest.users.filter(virtual=ContestParticipation.LIVE).without_contest_staff(),
+        participation__in=official,
         participation__contest=contest, participation__virtual=ContestParticipation.LIVE,
         participation__is_disqualified=False, problem__contest=contest,
         submission__status='D', submission__result='AC', is_pretest=False,
@@ -76,6 +80,11 @@ class Balloon:
         self.solved_at = None
         self.contest_time = ''
         self.first_blood = False
+        # First to solve, while balloons of the same problem were delivered to others: whoever got it first was placed
+        # on site late, or a rejudge changed who it was (2026-10-31). Whoever carries balloons decides what to do.
+        self.first_after_others = False
+        # Delivered and no longer due: 'online' when its participant was moved to online, 'gone' otherwise.
+        self.not_due = ''
         self.delivered_by = None
         self.delivered_at = None
 
@@ -102,6 +111,8 @@ class BalloonSheet:
         self.log_total = 0
         self.held = 0
         self.locations = {}
+        # Whether this contest gives seats at all: then a balloon without one says so.
+        self.seats_in_use = False
 
     @property
     def freeze_on(self):
@@ -119,8 +130,10 @@ def build_balloon_sheet(contest):
     problem_by_id = {problem.id: problem for problem in problems}
 
     participations = {}
-    for participation in (contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
-                          .without_contest_staff()
+    official = contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False)
+    if contest.is_hybrid:
+        official = official.filter(onsite=True)
+    for participation in (official.without_contest_staff()
                           .select_related('user__user').prefetch_related('team_roster')
                           .only('id', 'real_start', 'virtual', 'contest_id', 'team_id', 'team_name',
                                 'user__id', 'user__username_display_override', 'user__user__username')):
@@ -165,6 +178,10 @@ def build_balloon_sheet(contest):
             participation = participations.get(action.participation_id) or action.participation
             participation.contest = contest
             balloon = Balloon(participation, problem_by_id[action.problem_id], labels[action.problem_id])
+            # Moved to online since (2026-10-31): the sheet says so instead of sending somebody to look at a rejudge.
+            balloon.not_due = 'online' if (contest.is_hybrid and not participation.onsite and
+                                           participation.virtual == ContestParticipation.LIVE and
+                                           not participation.is_disqualified) else 'gone'
         balloon.delivered_by = action.user
         balloon.delivered_at = action.time
         sheet.delivered.append(balloon)
@@ -174,6 +191,13 @@ def build_balloon_sheet(contest):
                      if balloon is not None and key not in delivered_keys]
     sheet.pending.sort(key=lambda balloon: balloon.solved_at)
     sheet.delivered.sort(key=lambda balloon: balloon.delivered_at, reverse=True)
+    # First to solve is worked out among whoever is on site now, as the reveal does (the owner, 2026-10-31): placed on
+    # site late after solving before the rest, they are the first, and their balloon says that others of the same
+    # problem were already delivered.
+    handed = {(balloon.problem.id, bool(balloon.participation.team_id)) for balloon in sheet.delivered}
+    for balloon in sheet.pending:
+        if balloon.first_blood and (balloon.problem.id, bool(balloon.participation.team_id)) in handed:
+            balloon.first_after_others = True
 
     for problem in problems:
         due = [balloon for balloon in balloons.values() if balloon is not None and balloon.problem.id == problem.id]
@@ -198,6 +222,7 @@ def build_balloon_sheet(contest):
     sheet.locations = dict(ContestLocation.objects.filter(contest=contest, user_id__in=profile_ids)
                            .values_list('user_id', 'location'))
     sheet.team_locations = dict(ContestTeamLocation.objects.filter(contest=contest).values_list('team_id', 'location'))
+    sheet.seats_in_use = bool(sheet.team_locations) or ContestLocation.objects.filter(contest=contest).exists()
     return sheet
 
 
@@ -208,6 +233,37 @@ def balloon_is_due(contest, participation, problem):
     first = (accepted_submissions(contest).filter(participation=participation, problem=problem)
              .order_by('submission__date', 'submission_id').values_list('submission__date', flat=True).first())
     return first is not None and not is_held(participation, first)
+
+
+def due_balloons(contest, participation_ids):
+    """{(participation id, problem id)} of the balloons these participations are due, as the sheet works them out: the
+    first full AC of each on each problem, not held back by the freeze. Whoever is placed on site late is due the
+    balloons of what they had already solved (2026-10-31)."""
+    participations = {participation.id: participation for participation in
+                      contest.users.filter(pk__in=participation_ids).only('id', 'contest_id', 'real_start', 'virtual')}
+    for participation in participations.values():
+        participation.contest = contest
+    seen, due = set(), set()
+    for participation_id, problem_id, date in (accepted_submissions(contest)
+                                               .filter(participation_id__in=participations)
+                                               .order_by('submission__date', 'submission_id')
+                                               .values_list('participation_id', 'problem_id', 'submission__date')):
+        if (participation_id, problem_id) in seen:
+            continue
+        seen.add((participation_id, problem_id))
+        if not is_held(participations[participation_id], date):
+            due.add((participation_id, problem_id))
+    return due
+
+
+def delivered_balloons(contest, participation_ids):
+    """{(participation id, problem id)} of the balloons delivered to these participations and not taken back."""
+    latest = {}
+    actions = (ContestBalloonAction.objects.filter(problem__contest=contest, participation_id__in=participation_ids)
+               .order_by('time', 'id').values_list('participation_id', 'problem_id', 'action'))
+    for participation_id, problem_id, action in actions:
+        latest[participation_id, problem_id] = action
+    return {key for key, action in latest.items() if action == ContestBalloonAction.DELIVERED}
 
 
 def _balloon_contest(request, key):
@@ -233,12 +289,22 @@ def contest_balloons(request, contest):
     return _render_balloons(request, contest)
 
 
+def seated_entrants(contest, teams):
+    """The official entrants who may get a seat: live, or registered ahead and waiting for the start (2026-10-31), so
+    seats can be given before it. Whoever organizes or tests the contest today is not an entrant
+    (without_contest_staff). In a contest that is on site and online, only whoever competes on site."""
+    entrants = contest.users.official().filter(team__isnull=not teams).without_contest_staff()
+    if contest.is_hybrid:
+        entrants = entrants.filter(onsite=True)
+    return entrants
+
+
 def location_profiles(contest):
-    """Official entrants, preassigned private contestants and previously saved locations. Whoever organizes or tests
-    the contest today is not an entrant (without_contest_staff)."""
-    ids = set(contest.users.filter(virtual=ContestParticipation.LIVE, team__isnull=True).without_contest_staff()
-              .values_list('user_id', flat=True))
-    ids.update(contest.private_contestants.values_list('id', flat=True))
+    """Official entrants, preassigned private contestants and previously saved locations. In a contest that is on
+    site and online, private contestants are left out: nobody has placed them on site yet."""
+    ids = set(seated_entrants(contest, teams=False).values_list('user_id', flat=True))
+    if not contest.is_hybrid:
+        ids.update(contest.private_contestants.values_list('id', flat=True))
     ids.update(ContestLocation.objects.filter(contest=contest).values_list('user_id', flat=True))
     return Profile.objects.filter(id__in=ids).select_related('user').order_by('user__username')
 
@@ -250,9 +316,9 @@ def location_entries(contest, query=''):
     locations = dict(ContestLocation.objects.filter(contest=contest).values_list('user_id', 'location'))
     rows = [{'profile': profile, 'team': None, 'key': str(profile.pk), 'name': profile.display_name,
              'location': locations.get(profile.pk, '')} for profile in profiles]
-    ids = set(contest.users.filter(virtual=0, team__isnull=False).without_contest_staff()
-              .values_list('team_id', flat=True))
-    ids.update(contest.private_teams.values_list('pk', flat=True))
+    ids = set(seated_entrants(contest, teams=True).values_list('team_id', flat=True))
+    if not contest.is_hybrid:
+        ids.update(contest.private_teams.values_list('pk', flat=True))
     ids.update(contest.team_locations.values_list('team_id', flat=True))
     team_rows = Team.objects.filter(pk__in=ids)
     if query: team_rows = team_rows.filter(name__icontains=query)
