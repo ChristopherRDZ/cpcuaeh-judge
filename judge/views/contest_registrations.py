@@ -20,17 +20,17 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import urlencode
 from django.utils.translation import gettext as _, ngettext
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from judge.models import Contest, ContestParticipation, Profile
 
-__all__ = ['contest_registrations', 'contest_registrations_move']
+__all__ = ['contest_registrations', 'contest_registrations_move', 'contest_registrations_search']
 
 logger = logging.getLogger('judge.contest_registration')
 
@@ -42,14 +42,22 @@ MAX_NAMES = 2000
 SHOWN_NAMES = 30
 NAME_CHARS = 60
 # Lines separate names; tabs (columns copied from a spreadsheet), commas and semicolons too, unless the whole line is
-# the name of a registration (a team called «Uno, dos»). A team name may carry spaces.
+# the name of a registration or, where teams compete, of an active team (a team called «Uno, dos»). A team name may
+# carry spaces.
 LINES = re.compile(r'[\r\n]+')
 SEPARATORS = re.compile(r'[\t,;]+')
+# Every place a pasted list may be split, to count its names before reading it.
+TOO_MANY = re.compile(r'[\r\n\t,;]+')
+# A chip picked from the suggestions: what it is (a registration, an account, a team), its key, and its name.
+PICKED = re.compile(r'^([rpt])(\d{1,10})(?:\t(.*))?$')
 STATES = ('registered', 'entered')
 # What a move leaves for the page it goes back to, per contest: two tabs on two contests do not mix their notices.
 NOTICES = 'registration_notices:%d'
 # How the rows of the list of who competes on site without being registered are named in the form.
 WAITING = re.compile(r'^([pt])(\d{1,10})$')
+# The suggestions of the field that adds to the list of who competes on site (2026-11-01), of each kind.
+SUGGESTIONS = 10
+MAX_TERM = 100
 
 
 def _contest(request, key):
@@ -112,39 +120,67 @@ def _short(name):
 
 
 def _listed(names):
-    names = sorted({_short(name) for name in names}, key=str.casefold)
+    # A team called «Uno, dos» goes between quotes, or «beto, Uno, dos» reads as three names (2026-11-01).
+    names = sorted({'«%s»' % _short(name) if ',' in name else _short(name) for name in names},
+                   key=lambda name: name.strip('«»').casefold())
     shown = ', '.join(names[:SHOWN_NAMES])
     return shown + ('…' if len(names) > SHOWN_NAMES else '')
 
 
 def resolve_names(contest, text):
     """The participations named in a pasted list: usernames, team names, or the username of anybody on a team's
-    roster, today's or the one it had when registering. Of the names that match no registration, the accounts and the
-    active teams they name, for the list of who competes on site. Returns (participation ids, {name: profile id} of
-    accounts not registered, {name: team id} of teams not registered, names that match nothing, names that match more
-    than one registration or team, which are not moved)."""
-    from judge.models import Team
+    roster, today's or the one it had when registering, and a team by the name it registered with or the one it has
+    today. Of the names that match no registration, the active accounts they name, without whoever runs or tests the
+    contest, and, where teams compete, the active teams, for the list of who competes on site. Returns (participation
+    ids, {name: profile id} of accounts not registered, {name: team id} of teams not registered, names that match
+    nothing, names that are not moved because they say more than one thing: more than one registration or team, a
+    registered team and somebody's username, or a person and an active team they are not on)."""
+    from judge.models import Team, TeamMembership
     from judge.team_services import team_name_key
-    rows = list(entrants(contest).select_related('user__user').prefetch_related('team_roster__profile__user'))
-    by_username, by_team = {}, {}
+    rows = list(entrants(contest).select_related('user__user', 'team')
+                .prefetch_related('team_roster__profile__user'))
+    # The username a roster kept from when it registered names the team only while no other account has it today
+    # (2026-11-01): once somebody else is called so, the name is theirs.
+    renamed = {member.username for row in rows if row.team_id for member in row.team_roster.all()
+               if member.username.casefold() != member.profile.user.username.casefold()}
+    held = {}
+    if renamed:
+        for pk, name in Profile.objects.filter(user__username__in=renamed).values_list('id', 'user__username'):
+            held.setdefault(name.casefold(), set()).add(pk)
+    # And who each username of a registration is, for the teams called as a person (below).
+    by_username, by_team, person = {}, {}, {}
     for row in rows:
         if row.team_id:
-            by_team.setdefault(team_name_key(row.team_name), set()).add(row.pk)
+            # By the name it registered with, and by the one it has today, if it was renamed since (2026-11-01).
+            for name in {row.team_name, row.team.name}:
+                by_team.setdefault(team_name_key(name), set()).add(row.pk)
             for member in row.team_roster.all():
                 for name in {member.username, member.profile.user.username}:
+                    if held.get(name.casefold(), set()) - {member.profile_id}:
+                        continue
                     by_username.setdefault(name.casefold(), set()).add(row.pk)
+                    person[name.casefold()] = member.profile_id
         else:
             by_username.setdefault(row.user.user.username.casefold(), set()).add(row.pk)
+            person[row.user.user.username.casefold()] = row.user_id
 
     def matches(name):
         return by_username.get(name.casefold(), set()) | by_team.get(team_name_key(name), set())
 
+    lines = [' '.join(line.split()) for line in LINES.split(text[:MAX_PASTE])]
+    lines = [line for line in lines if line]
+    # A whole line that names an active team stays whole too, registered or not (2026-11-01): a team called «Tres,
+    # cuatro», picked from the suggestions, is one chip and one line. Asked only when some line would be split.
+    # Where only individuals compete no team is looked up (2026-11-01): one put on the list could never register.
+    with_teams = contest.participation_mode != Contest.INDIVIDUAL
+    whole_teams = set()
+    if with_teams and any(SEPARATORS.search(line) and not matches(line) for line in lines):
+        whole_teams = {team_name_key(name) for name in
+                       Team.objects.filter(is_active=True).values_list('name', flat=True)}
+
     tokens = []
-    for line in LINES.split(text[:MAX_PASTE]):
-        line = ' '.join(line.split())
-        if not line:
-            continue
-        if matches(line):
+    for line in lines:
+        if matches(line) or (SEPARATORS.search(line) and team_name_key(line) in whole_teams):
             tokens.append(line)
         else:
             tokens.extend(token for token in (' '.join(part.split()) for part in SEPARATORS.split(line)) if token)
@@ -157,17 +193,43 @@ def resolve_names(contest, text):
             loose.add(token)
             if ' ' in token:
                 loose.update(token.split())
+    # As the suggestions (2026-11-01): active accounts, without whoever runs or tests the contest.
+    staff = set(contest.editor_ids) | set(contest.tester_ids)
+    # A registered team named as somebody's username (2026-11-01): the name says the team or that person, and the
+    # suggestions offer both, so it moves nobody and is told back as more than one.
+    by_team_name_only = {word for token in tokens for word in {token, *token.split()}
+                         if by_team.get(team_name_key(word)) and not by_username.get(word.casefold())}
+    twins = set()
+    if by_team_name_only:
+        twins = {name.casefold() for name in
+                 Profile.objects.filter(user__username__in=by_team_name_only, user__is_active=True)
+                 .exclude(pk__in=staff).values_list('user__username', flat=True)}
     accounts = {}
     if loose:
         accounts = {name.casefold(): pk for pk, name in
-                    Profile.objects.filter(user__username__in=loose).values_list('id', 'user__username')}
-    teams = {}
-    wanted = {team_name_key(name) for name in loose if name.casefold() not in accounts}
-    if wanted:
-        for pk, name in Team.objects.filter(is_active=True).values_list('id', 'name'):
+                    Profile.objects.filter(user__username__in=loose, user__is_active=True).exclude(pk__in=staff)
+                    .values_list('id', 'user__username')}
+    # The active teams not registered here that a token or a word of one names, with their members.
+    teams, members = {}, {}
+    if tokens and with_teams:
+        asked = {team_name_key(word) for token in tokens for word in {token, *token.split()}}
+        registered = {row.team_id for row in rows if row.team_id}
+        for pk, name in Team.objects.filter(is_active=True).exclude(pk__in=registered).values_list('id', 'name'):
             key = team_name_key(name)
-            if key in wanted:
+            if key in asked:
                 teams.setdefault(key, []).append(pk)
+        if teams:
+            for team, member in TeamMembership.objects.filter(
+                    team_id__in=[pk for pks in teams.values() for pk in pks]).values_list('team_id', 'profile_id'):
+                members.setdefault(team, set()).add(member)
+
+    def doubled(name):
+        # A registration or an account whose name is also that of an active team not registered here (2026-11-01):
+        # the suggestions offer both and the name cannot tell them apart, unless it is the name of a person who is
+        # on every team so called (designated_onsite puts on site the team they register in).
+        others = teams.get(team_name_key(name), ())
+        profile = person.get(name.casefold()) or accounts.get(name.casefold())
+        return bool(others) and (profile is None or any(profile not in members.get(team, ()) for team in others))
 
     def known(name):
         return bool(matches(name)) or name.casefold() in accounts or team_name_key(name) in teams
@@ -180,9 +242,11 @@ def resolve_names(contest, text):
             else [token]
         for part in parts:
             named = matches(part)
-            if len(named) == 1:
-                found |= named
+            if named and (len(named) > 1 or part.casefold() in twins or doubled(part)):
+                ambiguous.append(part)
             elif named:
+                found |= named
+            elif part.casefold() in accounts and doubled(part):
                 ambiguous.append(part)
             elif part.casefold() in accounts:
                 waiting_profiles[part] = accounts[part.casefold()]
@@ -195,14 +259,68 @@ def resolve_names(contest, text):
     return found, waiting_profiles, waiting_teams, unknown, ambiguous
 
 
+def resolve_picked(contest, picked):
+    """The chips picked from the suggestions (contest_registrations_search), by what each one is and not by its name
+    (2026-11-01): a name both a person and a team says one of them. [(kind, pk, name)], where kind is 'r' (a
+    registration), 'p' (an account) or 't' (a team), and the name only says it back. An account or a team registered
+    since the suggestion moves its registration. Returns as resolve_names."""
+    from judge.models import Team
+    from judge.models.team import ContestTeamMember
+    every = entrants(contest)
+    wanted = {kind: {pk for chip, pk, _name in picked if chip == kind} for kind in 'rpt'}
+    rows = set(every.filter(pk__in=wanted['r']).values_list('pk', flat=True)) if wanted['r'] else set()
+    staff = set(contest.editor_ids) | set(contest.tester_ids)
+    profiles, joined = {}, {}
+    if wanted['p']:
+        profiles = dict(Profile.objects.filter(pk__in=wanted['p'], user__is_active=True).exclude(pk__in=staff)
+                        .values_list('id', 'user__username'))
+        # Registered as resolve_names reads a name: on their own, or on the roster of a registered team.
+        for user, pk in every.filter(team__isnull=True, user_id__in=profiles).values_list('user_id', 'pk'):
+            joined.setdefault(user, set()).add(pk)
+        for user, pk in (ContestTeamMember.objects.filter(participation__in=every, profile_id__in=profiles)
+                         .values_list('profile_id', 'participation_id')):
+            joined.setdefault(user, set()).add(pk)
+    teams, team_rows = {}, {}
+    if wanted['t'] and contest.participation_mode != Contest.INDIVIDUAL:
+        teams = dict(Team.objects.filter(pk__in=wanted['t'], is_active=True).values_list('id', 'name'))
+        team_rows = dict(every.filter(team_id__in=teams).values_list('team_id', 'pk'))
+
+    found, waiting_profiles, waiting_teams, unknown, ambiguous = set(), {}, {}, [], []
+
+    def wait(where, name, pk):
+        # Two teams picked by the same name are two (team names repeat): the second one is told with its number.
+        where['%s #%d' % (name, pk) if where.get(name, pk) != pk else name] = pk
+
+    # Told back by their names today, not by the one the page sent, which is only said back for what is gone.
+    for kind, pk, name in picked:
+        if kind == 'r' and pk in rows:
+            found.add(pk)
+        elif kind == 'p' and len(joined.get(pk, ())) > 1:
+            ambiguous.append(profiles[pk])
+        elif kind == 'p' and pk in joined:
+            found |= joined[pk]
+        elif kind == 'p' and pk in profiles:
+            wait(waiting_profiles, profiles[pk], pk)
+        elif kind == 't' and pk in team_rows:
+            found.add(team_rows[pk])
+        elif kind == 't' and pk in teams:
+            wait(waiting_teams, teams[pk], pk)
+        else:
+            # Gone since the suggestion: cancelled, made inactive, or now organizing the contest.
+            unknown.append(name)
+    return found, waiting_profiles, waiting_teams, unknown, ambiguous
+
+
 @login_required
 def contest_registrations(request, contest):
     contest = _contest(request, contest)
     profile = request.profile
     query = request.GET.get('q', '').strip()[:150]
     from judge.contest_teams import MODALITIES
+    # Two tabs, on site and online, instead of a filter and a column (the owner, 2026-11-01); it opens online,
+    # where everybody starts and from where they are moved.
     modality = request.GET.get('modality', '') if contest.is_hybrid else ''
-    modality = modality if modality in MODALITIES else ''
+    modality = modality if modality in MODALITIES else ('online' if contest.is_hybrid else '')
     state = request.GET.get('state', '')
     state = state if state in STATES else ''
 
@@ -218,16 +336,18 @@ def contest_registrations(request, contest):
               'onsite': found['in_person'], 'online': found['everyone'] - found['in_person']}
 
     rows = every.select_related('user__user', 'team').prefetch_related('team_roster')
+    # By what the field says (2026-11-01, «Buscar por usuario»): the username, or the name the team registered with,
+    # and the usernames of its roster; not the full or display name the table shows under the username.
     if query:
-        rows = rows.filter(Q(user__user__username__icontains=query) |
-                           Q(user__username_display_override__icontains=query) |
-                           Q(team_name__icontains=query) | Q(team_roster__username__icontains=query)).distinct()
+        rows = rows.filter(Q(user__user__username__icontains=query) | Q(team_name__icontains=query) |
+                           Q(team_roster__username__icontains=query)).distinct()
     if modality:
         rows = rows.filter(onsite=modality == 'onsite')
     if state:
         rows = rows.filter(virtual=ContestParticipation.REGISTERED if state == 'registered'
                            else ContestParticipation.LIVE)
-    rows = sorted(rows, key=lambda row: (row.display_name.casefold(), row.pk))
+    rows = sorted(rows, key=lambda row: ((row.team_name if row.team_id else row.user.user.username).casefold(),
+                                         row.pk))
     page = Paginator(rows, PAGE_SIZE).get_page(request.GET.get('page'))
     # Who is banned from the contest without being disqualified: registered, they will not get in.
     banned = set(contest.banned_users.filter(pk__in=[row.user_id for row in page.object_list if not row.team_id])
@@ -253,7 +373,10 @@ def contest_registrations(request, contest):
         'query': query,
         'modality': modality,
         'state': state,
-        'filtered': bool(query or modality or state),
+        'filtered': bool(query or state),
+        'tab_queries': {name: _query(query, name, state) for name in MODALITIES},
+        # Without the search and the state, on the same tab.
+        'clear_query': _query('', modality, ''),
         # The moves come back to the same search and page; the pasted list, to the same search.
         'here_query': page_query(page.number),
         'search_query': _query(query, modality, state),
@@ -263,14 +386,94 @@ def contest_registrations(request, contest):
         'waiting': waiting_on_site(contest) if contest.is_hybrid else [],
         'registration_errors': kept.get('errors', []),
         'registration_notices': kept.get('notices', []),
-        # The pasted list stays open when what came back from it needs a look.
-        'paste_open': bool(kept.get('pasted')),
     })
 
 
-def _leave(request, contest, notices=(), errors=(), pasted=False):
-    request.session[NOTICES % contest.pk] = {'notices': list(notices), 'errors': list(errors),
-                                             'pasted': pasted and bool(errors)}
+@login_required
+@require_GET
+def contest_registrations_search(request, contest):
+    """What the field that adds to the list of who competes on site suggests (2026-11-01, as the testers of the
+    administration): first the registrations of the contest, then other accounts and, by their whole name, active
+    teams. Each one carries what it is, not only its name (resolve_picked): 'r<participation>', 'p<profile>' or
+    't<team>', so a name that is both a person and a team says the one picked (2026-11-01). What is typed without
+    picking a suggestion goes by its name (resolve_names)."""
+    from judge.models import Team
+    from judge.models.team import ContestTeamMember
+    contest = _contest(request, contest)
+    term = ' '.join(request.GET.get('term', '').split())[:MAX_TERM]
+    if not term:
+        return JsonResponse({'results': []})
+    results, taken = [], set()
+
+    # Whether what is offered now is the whole name typed, as the database compares it (accents, capitals): the page
+    # keeps such a suggestion on the list even once it is a chip (2026-11-01).
+    whole = [True]
+
+    def offer(key, name, team, registered):
+        if key not in taken:
+            taken.add(key)
+            results.append({'id': key, 'text': name, 'team': team, 'registered': registered, 'exact': whole[0]})
+
+    every = entrants(contest)
+    # Not whoever runs or tests the contest: they never compete in it (entrants leaves them out too).
+    staff = set(contest.editor_ids) | set(contest.tester_ids)
+
+    def registrations(lookup):
+        rows = (every.filter(Q(**{'user__user__username__' + lookup: term}) | Q(**{'team_name__' + lookup: term}) |
+                             Q(**{'team__name__' + lookup: term}))
+                .select_related('user__user', 'team').order_by('id')[:SUGGESTIONS])
+        for row in rows:
+            if row.team_id:
+                # As it registered, and as it is called today if it was renamed since.
+                name = row.team_name if row.team_name == row.team.name else '%s · %s' % (row.team_name,
+                                                                                         row.team.name)
+                offer('r%d' % row.pk, name, True, True)
+            else:
+                offer('r%d' % row.pk, row.user.user.username, False, True)
+
+    def accounts(lookup):
+        found = list(Profile.objects.filter(**{'user__username__' + lookup: term}, user__is_active=True)
+                     .exclude(pk__in=staff).order_by('user__username')
+                     .values_list('id', 'user__username')[:SUGGESTIONS])
+        # Registered as resolve_picked reads them: on their own, or on the roster of a registered team, which is
+        # the one they move then.
+        ids = [pk for pk, _name in found]
+        joined = {}
+        if ids:
+            for user, pk in every.filter(team__isnull=True, user_id__in=ids).values_list('user_id', 'pk'):
+                joined.setdefault(user, []).append(pk)
+            for user, pk in (ContestTeamMember.objects.filter(participation__in=every, profile_id__in=ids)
+                             .values_list('profile_id', 'participation_id')):
+                joined.setdefault(user, []).append(pk)
+        for pk, name in found:
+            if len(joined.get(pk, ())) == 1:
+                offer('r%d' % joined[pk][0], name, False, True)
+            else:
+                offer('p%d' % pk, name, False, pk in joined)
+
+    # The whole name first (2026-11-01): Enter takes the first suggestion, and «ana» is not «mariana».
+    registrations('iexact')
+    accounts('iexact')
+    # No teams where only individuals compete (the owner, 2026-11-01). Where teams compete, accounts stay: naming one
+    # puts on site the team it registers in (Contest.designated_onsite).
+    # A team is seen only by its members (team_detail): one not registered here is offered only when its whole name
+    # is typed, as a pasted name would confirm it, and never by a part of it.
+    if contest.participation_mode != Contest.INDIVIDUAL:
+        named = list(Team.objects.filter(name__iexact=term, is_active=True).order_by('name')
+                     .values_list('id', 'name')[:SUGGESTIONS])
+        registered_teams = dict(every.filter(team_id__in=[pk for pk, _name in named])
+                                .values_list('team_id', 'pk')) if named else {}
+        for pk, name in named:
+            offer('r%d' % registered_teams[pk] if pk in registered_teams else 't%d' % pk, name, True,
+                  pk in registered_teams)
+    whole[0] = False
+    registrations('icontains')
+    accounts('icontains')
+    return JsonResponse({'results': results})
+
+
+def _leave(request, contest, notices=(), errors=()):
+    request.session[NOTICES % contest.pk] = {'notices': list(notices), 'errors': list(errors)}
 
 
 def _balloon_notices(contest, onsite, changed, names):
@@ -318,37 +521,65 @@ def contest_registrations_move(request, contest):
         _leave(request, contest, errors=[_('Elige si pasan a presencial o a en línea.')])
         return back
     onsite = target == 'onsite'
-    pasted = 'names' in request.POST
-    waiting_profiles, waiting_teams, unknown, ambiguous = {}, {}, (), ()
+    pasted = 'names' in request.POST or 'picked' in request.POST
+    names, picked = '', []
     if pasted:
-        ids, waiting_profiles, waiting_teams, unknown, ambiguous = resolve_names(contest, request.POST.get('names', ''))
-    else:
-        ids = set()
+        # The page sends every chip in one value, a name per line, with scripts or without (2026-11-01); several
+        # values are taken too. The chips picked from the suggestions travel apart, by what they are ('picked': a
+        # key, a tab and the name, per line). A list longer than the bounds is refused whole rather than cut at some
+        # name.
+        # As the box counts it, a line break as one character: the browser sends it as two.
+        values = request.POST.getlist('names')
+        names = '\n'.join(values).replace('\r\n', '\n')
+        chosen = [line for value in request.POST.getlist('picked') for line in LINES.split(value) if line.strip()]
+        if len(values) > MAX_NAMES or len(names) > MAX_PASTE or len(chosen) > MAX_NAMES or \
+                sum(len(line) for line in chosen) > MAX_PASTE or \
+                sum(1 for part in TOO_MANY.split(names) if part.strip()) + len(chosen) > MAX_NAMES:
+            _leave(request, contest, errors=[_('La lista es demasiado larga: pégala en partes.')])
+            return back
+        for line in chosen:
+            match = PICKED.match(line)
+            if match:
+                name = ' '.join((match.group(3) or '').split())[:NAME_CHARS * 2]
+                picked.append((match.group(1), int(match.group(2)), name or match.group(1) + match.group(2)))
+    ids = set()
+    if not pasted:
         for value in request.POST.getlist('selected')[:PAGE_SIZE]:
             try:
                 ids.add(int(value))
             except (TypeError, ValueError):
                 continue
     # The rows of the list of who competes on site without a registration, ticked to take them off it.
-    unlisted_profiles, unlisted_teams = set(), set()
+    ticked_profiles, ticked_teams = set(), set()
     for value in request.POST.getlist('waiting')[:MAX_NAMES]:
         match = WAITING.match(value)
         if match:
-            (unlisted_profiles if match.group(1) == 'p' else unlisted_teams).add(int(match.group(2)))
-    if onsite:
-        unlisted_profiles, unlisted_teams = set(), set()
-    else:
-        # Pasted to go online (the page only offers it for the boxes): whoever is not registered leaves the list.
-        unlisted_profiles |= set(waiting_profiles.values())
-        unlisted_teams |= set(waiting_teams.values())
-        waiting_profiles, waiting_teams = {}, {}
+            (ticked_profiles if match.group(1) == 'p' else ticked_teams).add(int(match.group(2)))
 
-    # Only rows of this contest, official and not of its staff, whatever ids were sent; then only those rows are
-    # locked: MariaDB has no FOR UPDATE OF, and the joins of entrants() would lock their profiles too.
-    valid = list(entrants(contest).filter(pk__in=ids).values_list('pk', flat=True)) if ids else []
     with transaction.atomic():
-        # The contest first, as join_attempt locks it before reading the list of who competes on site.
+        # The contest first, as join_attempt locks it before reading the list of who competes on site. The names are
+        # read after it (2026-11-01): whoever registers meanwhile is moved, not listed as not registered yet.
         locked = Contest.objects.select_for_update().get(pk=contest.pk)
+        waiting_profiles, waiting_teams, unknown, ambiguous = {}, {}, [], []
+        # Only what was sent: with the contest locked, whoever joins now waits for this.
+        if names.strip():
+            ids, waiting_profiles, waiting_teams, unknown, ambiguous = resolve_names(contest, names)
+        if picked:
+            more = resolve_picked(contest, picked)
+            ids |= more[0]
+            waiting_profiles.update(more[1])
+            waiting_teams.update(more[2])
+            unknown += more[3]
+            ambiguous += more[4]
+        unlisted_profiles, unlisted_teams = set(), set()
+        if not onsite:
+            # Pasted to go online (the page only offers it for the boxes): whoever is not registered leaves the list.
+            unlisted_profiles = ticked_profiles | set(waiting_profiles.values())
+            unlisted_teams = ticked_teams | set(waiting_teams.values())
+            waiting_profiles, waiting_teams = {}, {}
+        # Only rows of this contest, official and not of its staff, whatever ids were sent; then only those rows are
+        # locked: MariaDB has no FOR UPDATE OF, and the joins of entrants() would lock their profiles too.
+        valid = list(entrants(contest).filter(pk__in=ids).values_list('pk', flat=True)) if ids else []
         rows = list(ContestParticipation.objects.filter(pk__in=valid).select_for_update()
                     .values_list('pk', 'onsite', 'user_id', 'team_id'))
         changed = [pk for pk, now_onsite, _user, _team in rows if now_onsite != onsite]
@@ -405,15 +636,16 @@ def contest_registrations_move(request, contest):
                         ngettext('%(count)d ya estaba en línea.', '%(count)d ya estaban en línea.', already))
                        % {'count': already})
     if waiting_profiles or waiting_teams:
-        notices.append(_('Todavía no se registran: quedan en la lista de la sede y entrarán como presenciales en '
-                         'cuanto se registren o se unan: %(names)s.')
+        # Short (the owner, 2026-11-01): the chips under the field say the rest.
+        notices.append(_('En la lista de la sede, sin registrarse todavía: %(names)s.')
                        % {'names': _listed(list(waiting_profiles) + list(waiting_teams))})
     if unlisted:
         notices.append(_('Ya no están en la lista de la sede: %(names)s.') % {'names': _listed(unlisted)})
     if unknown:
         errors.append(_('No hay ninguna cuenta ni equipo con estos nombres: %(names)s.') % {'names': _listed(unknown)})
     if ambiguous:
-        errors.append(_('Hay más de un registro o equipo con estos nombres: márcalos en la tabla, o pega el usuario de '
-                        'un integrante: %(names)s.') % {'names': _listed(ambiguous)})
-    _leave(request, contest, notices, errors, pasted)
+        # A picked suggestion says which one it is (2026-11-01); a typed name may say more than one.
+        errors.append(_('Estos nombres coinciden con más de un registro, cuenta o equipo: elige el correcto en las '
+                        'sugerencias, o márcalo en la tabla: %(names)s.') % {'names': _listed(ambiguous)})
+    _leave(request, contest, notices, errors)
     return back

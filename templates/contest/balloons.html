@@ -453,7 +453,8 @@
         <div class="balloon-note">
             {{ _('Este concurso es presencial y en línea: aquí sólo aparecen quienes compiten en la sede.') }}
             {{ _('Quien pasa a presencial a medio concurso trae sus globos de lo que ya había resuelto, como pendientes.') }}
-            {% if can_edit %}<a href="{{ url('contest_registrations', contest.key) }}">{{ _('¿Quién es presencial?') }}</a>{% endif %}
+            {# On the tab of who competes on site: «Registrados» opens online (2026-11-01). #}
+            {% if can_edit %}<a href="{{ url('contest_registrations', contest.key) }}?modality=onsite">{{ _('¿Quién es presencial?') }}</a>{% endif %}
         </div>
     {% endif %}
 

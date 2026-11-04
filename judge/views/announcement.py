@@ -1,3 +1,5 @@
+import hashlib
+import logging
 from datetime import timedelta
 
 from django import forms
@@ -13,14 +15,19 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 from django.views.generic import DetailView
 
+from judge import event_poster as event
 from judge.models import Announcement, ContestClarification, ContestParticipation
+from judge.models.announcement import ANNOUNCEMENT_CHANNEL
 from judge.models.clarification import MAX_PENDING_PER_USER, MAX_QUESTION, MIN_SECONDS_BETWEEN
 from judge.utils.views import TitleMixin
 from judge.views.contests import ContestMixin, _find_contest
 
-__all__ = ['active_announcements', 'ContestAnnouncements', 'ask_clarification', 'answer_clarification']
+__all__ = ['active_announcements', 'ContestAnnouncements', 'ask_clarification', 'answer_clarification',
+           'publish_announcement']
 
 MAX_ACTIVE = 20
+# What an announcement written on the tab may hold (2026-11-01): it pops up whole on every screen.
+MAX_ANNOUNCEMENT = 2000
 
 
 def _carries_a_public_answer(announcement):
@@ -53,6 +60,45 @@ def _has_something_to_say(announcement):
     if announcement.clarification_id:
         return _carries_a_public_answer(announcement)
     return bool(announcement.body.strip())
+
+
+_EVENT_SCRIPT = []
+
+
+def _event_script():
+    """The address of event.js with the hash of the copy served, or None without one (2026-11-01).
+
+    base.html loads it by itself, outside the compressed blocks, so as not to change the compression manifest; /static
+    is cached for good, and the hash in the address is what brings a changed file to every browser. Kept once found;
+    not found, it is looked for again on the next call, so that a worker started in the middle of a deploy does not
+    go without it until the next reload.
+    """
+    if not _EVENT_SCRIPT:
+        found = _find_event_script()
+        if found is None:
+            return None
+        _EVENT_SCRIPT.append(found)
+    return _EVENT_SCRIPT[0]
+
+
+def _find_event_script():
+    from django.contrib.staticfiles import finders
+    from django.contrib.staticfiles.storage import staticfiles_storage
+    from django.templatetags.static import static
+    try:
+        path = staticfiles_storage.path('event.js')
+        with open(path, 'rb') as source:
+            content = source.read()
+    except (OSError, NotImplementedError):
+        path = finders.find('event.js')
+        if not path:
+            return None
+        try:
+            with open(path, 'rb') as source:
+                content = source.read()
+        except OSError:
+            return None
+    return '%s?v=%s' % (static('event.js'), hashlib.sha256(content).hexdigest()[:12])
 
 
 def active_announcements(request):
@@ -132,7 +178,19 @@ def active_announcements(request):
     if participation is not None and participation.contest.is_editable_by(request.user):
         pending_questions = ContestClarification.objects.filter(contest_id=contest_id, answer='').count()
 
-    return JsonResponse({'announcements': items, 'pending_questions': pending_questions})
+    # Where to hear that there is something new, asked once per page by whoever is in a contest (2026-11-01). Nothing
+    # is asked of the daemon here: with a daemon down or that does not answer, this answer, the box and the poll of
+    # every minute go on as before. The page starts listening from 0, so the daemon brings back the rings of the
+    # channel it still keeps, and at most the page asks once more. Not once the contest ended, as in a virtual
+    # participation: what pops up stops with the contest, and the poll still covers the rest.
+    listen = None
+    if (request.GET.get('listen') and contest_id is not None and getattr(event, 'real', False) and
+            not profile.current_contest.contest.ended):
+        script = _event_script()
+        if script is not None:
+            listen = {'channel': ANNOUNCEMENT_CHANNEL % contest_id, 'last': 0, 'script': script}
+
+    return JsonResponse({'announcements': items, 'pending_questions': pending_questions, 'listen': listen})
 
 
 class ContestProblemChoiceField(forms.ModelChoiceField):
@@ -170,22 +228,35 @@ class ClarificationForm(forms.ModelForm):
         return question
 
 
+def _runs(contest, user):
+    """Whether `user` runs `contest`: one of its authors or curators, also without the permission to edit their own
+    contests, or whoever may edit it (is_editable_by). Who runs it writes to everybody from the tab and does not ask
+    (the owner, 2026-11-01): one rule for both, so that nobody is left able to do neither."""
+    if not user.is_authenticated:
+        return False
+    return user.profile.pk in contest.editor_ids or contest.is_editable_by(user)
+
+
 def _may_ask(contest, participation, user):
     """Whether `participation`, the caller's current one, lets them put a question to the jury of `contest`.
 
     The official participation, alone or on the roster of a team, while it lasts and is not disqualified; and, as a
-    spectator, whoever runs or tests the contest, so they can try the form (aclaraciones-anuncios-v1, 2026-10-30).
-    Anybody else spectating asks nothing, also whoever finished their participation and came back to watch: it
+    spectator, whoever tests the contest, who tries it as a contestant would. Whoever runs it does not ask (the owner,
+    2026-11-01; until then they could, to try the form): they answer, and write to everybody with «Post an
+    announcement», and a question of theirs only sat among the pending ones. Somebody who both runs and tests it runs
+    it. Anybody else spectating asks nothing, also whoever finished their participation and came back to watch: it
     skipped the cut of a team that finished, with three more questions of their own.
     """
     if contest.ended or participation is None or participation.contest_id != contest.id:
         return False
     profile_id = user.profile.pk
+    # Also with a participation of their own, from before they ran it or joined as an administrator.
+    runs_it = _runs(contest, user)
     if participation.live:
-        return (not participation.ended and not participation.is_disqualified and
+        return (not runs_it and not participation.ended and not participation.is_disqualified and
                 participation.contains_profile(profile_id))
     if participation.spectate:
-        return contest.is_editable_by(user) or profile_id in contest.editor_ids or profile_id in contest.tester_ids
+        return profile_id in contest.tester_ids and not runs_it
     return False
 
 
@@ -242,18 +313,14 @@ class ContestAnnouncements(ContestMixin, TitleMixin, DetailView):
         return (contest.ended or self.can_edit or self.is_editor or self.is_tester or
                 (self.is_spectator and contest.started) or has_joined or contest.is_in_contest(self.request.user))
 
-    def announce_url(self):
-        """Where the button to announce to this contest goes, or None for whoever may not.
+    def can_announce(self):
+        """Whether this caller may write an announcement to this contest from the tab (publish_announcement).
 
-        Free announcements are written in the administration, whose form only offers the contests you run, and the
-        whole site only with a permission of its own. The button asks what that form asks —running this contest,
-        entering the administration, adding announcements— so that it never leads to a 403.
+        Whoever runs the contest, as author, curator or with every contest at hand (the owner, 2026-11-01): until then
+        the button led to the administration and only showed with its permission to add announcements, so an author
+        without it had no way to write to the contestants. Not once the contest ended: nobody is left to read it.
         """
-        user = self.request.user
-        if not (self.can_edit and user.is_staff and user.has_perm('judge.add_announcement')):
-            return None
-        from judge.admin.announcement import add_for_contest_url
-        return add_for_contest_url(self.object)
+        return _runs(self.object, self.request.user) and not self.object.ended
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -283,7 +350,8 @@ class ContestAnnouncements(ContestMixin, TitleMixin, DetailView):
         context['clarifications'] = clarifications
         context['can_ask'] = self.can_ask()
         context['ask_form'] = ClarificationForm(contest=self.object) if context['can_ask'] else None
-        context['announce_url'] = self.announce_url()
+        context['can_announce'] = self.can_announce()
+        context['max_announcement'] = MAX_ANNOUNCEMENT
         context['max_question'] = MAX_QUESTION
         context['clarification_errors'] = self.request.session.pop('clarification_errors', [])
         return context
@@ -396,4 +464,29 @@ def answer_clarification(request, contest, pk):
     # it, or the new text keeps going out to everybody.
     clarification.sync_announcement(author=request.profile, published_question=published)
 
+    return HttpResponseRedirect(reverse('contest_announcements', args=[contest.key]))
+
+
+@login_required
+@require_POST
+def publish_announcement(request, contest):
+    """An announcement to everybody in the contest, written on its clarifications tab by whoever runs it (2026-11-01).
+
+    As the form of the administration writes one to a contest: plain text, signed by whoever wrote it, popping up
+    until the contest ends. It is withdrawn or changed in the administration, by whoever may.
+    """
+    from judge.models.clarification import plain_text
+    contest = _contest_or_404(request, contest)
+    if not _runs(contest, request.user):
+        raise PermissionDenied()
+    body = plain_text(request.POST.get('body'))[:MAX_ANNOUNCEMENT]
+    if contest.ended:
+        request.session['clarification_errors'] = [str(_('El concurso ya terminó.'))]
+    elif not body:
+        request.session['clarification_errors'] = [str(_('An announcement written here needs some text.'))]
+    else:
+        announcement = Announcement.objects.create(contest=contest, body=body, author=request.profile,
+                                                   expires=contest.end_time)
+        logging.getLogger('judge.announcement').info('Contest %s: %s published announcement %d', contest.key,
+                                                     request.user.username, announcement.pk)
     return HttpResponseRedirect(reverse('contest_announcements', args=[contest.key]))

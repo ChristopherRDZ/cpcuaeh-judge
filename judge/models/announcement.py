@@ -1,4 +1,6 @@
-from django.db import models
+import logging
+
+from django.db import models, transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
@@ -6,7 +8,12 @@ from django.utils.translation import gettext_lazy as _
 from judge.models.contest import Contest
 from judge.models.profile import Profile
 
-__all__ = ['Announcement']
+__all__ = ['Announcement', 'ANNOUNCEMENT_CHANNEL']
+
+# The channel of the event daemon on which a contest hears that it has something new to show: an announcement, or the
+# answer to a question (2026-11-01). The ring carries no text and no id; whoever is in the contest asks the server
+# (views.announcement.active_announcements), as every minute anyway. Before, a phone waited up to that minute.
+ANNOUNCEMENT_CHANNEL = 'announcements_%d'
 
 # On the announcement of a public answer, `body` is not text of its own: it is the question as everybody reads it
 # above the answer (aclaraciones-anuncios-3, 2026-10-30). The jury can rewrite it when publishing, so that what one
@@ -68,6 +75,35 @@ class Announcement(models.Model):
         )
         verbose_name = _('announcement')
         verbose_name_plural = _('announcements')
+
+
+def ring(contest_id):
+    """Rings the channel of the contest once what was saved is committed. A daemon that is down only costs the ring:
+    the pages still ask every minute, and the save that rang is never undone nor turned into an error. The ring goes
+    within the same request, as every post to the daemon does (judge/event_poster_ws.py, without a timeout of its
+    own): a daemon that takes the connection and does not answer keeps whoever saved waiting."""
+    def post():
+        from judge import event_poster as event
+        try:
+            event.post(ANNOUNCEMENT_CHANNEL % contest_id, {'type': 'announcement'})
+        except Exception:
+            logging.getLogger('judge.announcement').warning('Could not ring the announcements of contest %d',
+                                                            contest_id, exc_info=True)
+    transaction.on_commit(post)
+
+
+@receiver(post_save, sender=Announcement, dispatch_uid='announcements_ring_on_announcement')
+def ring_on_announcement(sender, instance, raw=False, **kwargs):
+    if not raw and instance.contest_id is not None and instance.is_visible:
+        ring(instance.contest_id)
+
+
+@receiver(post_save, sender='judge.ContestClarification', dispatch_uid='announcements_ring_on_answer')
+def ring_on_answer(sender, instance, raw=False, **kwargs):
+    """A private answer pops up for whoever asked; a public one also saves its announcement, and the second ring of
+    the same moment is folded by the pages into one question."""
+    if not raw and instance.answer:
+        ring(instance.contest_id)
 
 
 @receiver(pre_save, sender=Contest, dispatch_uid='announcements_note_contest_end')

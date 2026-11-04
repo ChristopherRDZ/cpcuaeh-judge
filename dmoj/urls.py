@@ -270,6 +270,7 @@ urlpatterns = [
         path('/ranking/ajax', contests.contest_ranking_ajax, name='contest_ranking_ajax'),
         path('/announcements', announcement.ContestAnnouncements.as_view(), name='contest_announcements'),
         path('/clarifications/ask', announcement.ask_clarification, name='contest_clarification_ask'),
+        path('/clarifications/announce', announcement.publish_announcement, name='contest_announcement_publish'),
         path('/clarifications/<int:pk>/answer', announcement.answer_clarification,
              name='contest_clarification_answer'),
         path('/team/<int:participation>/submissions/',
@@ -290,6 +291,8 @@ urlpatterns = [
         path('/registrations', contest_registrations.contest_registrations, name='contest_registrations'),
         path('/registrations/move', contest_registrations.contest_registrations_move,
              name='contest_registrations_move'),
+        path('/registrations/search', contest_registrations.contest_registrations_search,
+             name='contest_registrations_search'),
 
         path('/rank/<str:problem>/',
              paged_list_view(ranked_submission.ContestRankedSubmission, 'contest_ranked_submissions')),

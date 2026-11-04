@@ -13277,3 +13277,78 @@ msgid "Ya no reciben globos; %(count)d que ya se les había entregado sigue en l
 msgid_plural "Ya no reciben globos; %(count)d que ya se les habían entregado siguen en la hoja, marcados."
 msgstr[0] "Ya no reciben globos; %(count)d que ya se les había entregado sigue en la hoja, marcado."
 msgstr[1] "Ya no reciben globos; %(count)d que ya se les habían entregado siguen en la hoja, marcados."
+
+#: cpc 2026-11-01
+msgid "Anuncio"
+msgstr "Anuncio"
+
+#: cpc 2026-11-01
+msgid "Agregar a presencial"
+msgstr "Agregar a presencial"
+
+#: cpc 2026-11-01
+msgid "Usuario o equipo"
+msgstr "Usuario o equipo"
+
+#: cpc 2026-11-01
+msgid "Sin registrarse todavía:"
+msgstr "Sin registrarse todavía:"
+
+#: cpc 2026-11-01
+msgid "sin registrarse"
+msgstr "sin registrarse"
+
+#: cpc 2026-11-01
+msgid "Todavía no se registra nadie."
+msgstr "Todavía no se registra nadie."
+
+#: cpc 2026-11-01
+#, python-format
+msgid "En la lista de la sede, sin registrarse todavía: %(names)s."
+msgstr "En la lista de la sede, sin registrarse todavía: %(names)s."
+
+#: cpc 2026-11-01
+msgid "Usuario"
+msgstr "Usuario"
+
+#: cpc 2026-11-01
+msgid "Buscar por usuario"
+msgstr "Buscar por usuario"
+
+#: cpc 2026-11-01
+msgid "Nadie en esta modalidad."
+msgstr "Nadie en esta modalidad."
+
+#: cpc 2026-11-01
+msgid "¿Pasar a presencial?"
+msgstr "¿Pasar a presencial?"
+
+#: cpc 2026-11-01
+msgid "¿Pasar a en línea?"
+msgstr "¿Pasar a en línea?"
+
+#: cpc 2026-11-01
+msgid "Reciben los globos de lo que ya resolvieron."
+msgstr "Reciben los globos de lo que ya resolvieron."
+
+#: cpc 2026-11-01
+msgid "Dejan de recibir globos."
+msgstr "Dejan de recibir globos."
+
+#: cpc 2026-11-01
+#, python-format
+msgid "Seleccionados: %(count)s"
+msgstr "Seleccionados: %(count)s"
+
+#: cpc 2026-11-01
+msgid "La lista es demasiado larga: pégala en partes."
+msgstr "La lista es demasiado larga: pégala en partes."
+
+#: cpc 2026-11-01
+#, python-format
+msgid "Estos nombres coinciden con más de un registro, cuenta o equipo: elige el correcto en las sugerencias, o márcalo en la tabla: %(names)s."
+msgstr "Estos nombres coinciden con más de un registro, cuenta o equipo: elige el correcto en las sugerencias, o márcalo en la tabla: %(names)s."
+
+#: cpc 2026-11-01
+msgid "El concurso ya terminó."
+msgstr "El concurso ya terminó."

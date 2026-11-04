@@ -109,6 +109,46 @@
             margin: 0.4em 0 0 0;
         }
 
+        /* The button and its form take turns (2026-11-01); `display` of the site's buttons would beat `hidden`. */
+        .clarification-announce [hidden] {
+            display: none !important;
+        }
+
+        .clarification-announce-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5em;
+            align-items: center;
+        }
+
+        /* The plain button of Bootstrap 3 next to the blue one of the site, as elsewhere; the site paints every button
+           blue with white text, the colour with !important. */
+        .clarification-announce .clarification-plain {
+            background: linear-gradient(to bottom, #fff 0, #e0e0e0 100%);
+            border-color: #ccc;
+            color: #333 !important;
+        }
+
+        .clarification-announce .clarification-plain:hover {
+            background: #e0e0e0;
+        }
+        {% macro plain_dark() %}
+        .clarification-announce .clarification-plain {
+            background: linear-gradient(to bottom, #444 0, #333 100%);
+            border-color: #555;
+            color: #eee !important;
+        }
+
+        .clarification-announce .clarification-plain:hover {
+            background: #333;
+        }
+        {% endmacro %}
+        {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+            {{ plain_dark() }}
+        {% elif PREFERRED_STYLE_CSS is none %}
+            @media (prefers-color-scheme: dark) { {{ plain_dark() }} }
+        {% endif %}
+
         @media (max-width: 760px) {
             .clarification-form input[type="submit"] {
                 width: 100%;
@@ -117,6 +157,12 @@
 
             .clarification-announce .button {
                 display: block;
+                padding: 0.8em 0;
+            }
+
+            /* «Cancel» under «Post», as wide. */
+            .clarification-announce-actions .clarification-plain {
+                width: 100%;
                 padding: 0.8em 0;
             }
         }
@@ -128,13 +174,25 @@
     {% if not can_read %}
     <p class="clarification-closed">{{ _('Clarifications are published when the contest ends.') }}</p>
     {% else %}
-    {# Only for whoever runs this contest and may write announcements (ContestAnnouncements.announce_url). #}
-    {% if announce_url %}
+    {# For whoever runs this contest, written right here (ContestAnnouncements.can_announce, 2026-11-01): the button
+       opens the form; without scripts the form shows as it is. #}
+    {% if can_announce %}
         <div class="clarification-announce">
-            <a class="unselectable button" href="{{ announce_url }}">
+            <button type="button" class="unselectable button" id="announce-open" hidden>
                 <i class="fa fa-bullhorn"></i> {{ _('Post an announcement') }}
-            </a>
-            <div class="clarification-meta">{{ _('It pops up on the screen of everyone in the contest and stays on this tab.') }}</div>
+            </button>
+            <form class="clarification-form" id="announce-form" method="post"
+                  action="{{ url('contest_announcement_publish', contest.key) }}">
+                {% csrf_token %}
+                <div class="row">
+                    <textarea name="body" id="announce-body" rows="3" maxlength="{{ max_announcement }}" required
+                              aria-label="{{ _('Post an announcement') }}"></textarea>
+                </div>
+                <div class="row clarification-announce-actions">
+                    <input type="submit" class="button" value="{{ _('Post an announcement') }}">
+                    <button type="button" class="clarification-plain" id="announce-cancel" hidden>{{ _('Cancelar') }}</button>
+                </div>
+            </form>
         </div>
     {% endif %}
 
@@ -268,6 +326,31 @@
     </div>
 
     <script type="text/javascript">
+        // The announcement to everybody: the button opens its form, and «Cancel» closes it again empty.
+        $(function () {
+            var $open = $('#announce-open'), $form = $('#announce-form');
+            if (!$open.length)
+                return;
+            function opened(open) {
+                $open.prop('hidden', open);
+                $form.prop('hidden', !open);
+                $('#announce-cancel').prop('hidden', !open);
+                if (open)
+                    $('#announce-body').focus();
+                else
+                    $('#announce-body').val('');
+            }
+            $open.on('click', function () {
+                opened(true);
+            });
+            $('#announce-cancel').on('click', function () {
+                opened(false);
+                // The keyboard goes back to the button that opened it, not to the top of the page.
+                $open.focus();
+            });
+            opened(false);
+        });
+
         $(function () {
             var POLL_INTERVAL = 30000;
             var $sections = $('#clarification-sections');

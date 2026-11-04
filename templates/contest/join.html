@@ -1,6 +1,13 @@
 {% extends 'base.html' %}
 {% block body %}
 {% include 'team/style.html' %}
+{# Without the radios and the note above it (2026-11-01), the button sat right against the field of the code; and with
+   a single choice, whatever comes first (the code, the line of the choice, or the button alone) starts the box. With a
+   heading, the first choice keeps its margin. #}
+<style>
+    #contest-join-form > .team-actions { margin-top: 1em; }
+    #contest-join-form > input[type=hidden] + :is(label, p, .team-actions) { margin-top: 0; }
+</style>
 <div class="teams-layout">
     <p><a href="{{ contest.get_absolute_url() }}">{{ contest.name }}</a> · {{ contest.get_participation_mode_display() }}</p>
     {% if error %}<div class="team-error" role="alert">{{ error }}</div>{% endif %}
@@ -28,15 +35,31 @@
         {# Marca el formulario que sí trae casillas de integrantes: los botones «Entrar al
            concurso» de otras páginas no las traen, y para ellos sigue valiendo el equipo entero. #}
         <input type="hidden" name="roster" value="1">
-        <h3>{{ _('Elige cómo participar') if contest.started or spectator else _('Elige cómo registrarte') }}</h3>
+        {# With a single choice there is nothing to choose (the owner, 2026-11-01): no heading and no lone radio. A
+           contest that is only individual already says so next to its name, above. Teams always show, for their
+           rosters. #}
+        {% set offers_teams = not resumable and not spectator and contest.participation_mode != 'individual' %}
+        {% set offers_individual = not resumable and not spectator and contest.participation_mode != 'team' %}
+        {% set single = not offers_teams and (resumable|length + (1 if spectator else 0) + (1 if offers_individual else 0)) == 1 %}
+        {% if not single %}
+            <h3>{{ _('Elige cómo participar') if contest.started or spectator else _('Elige cómo registrarte') }}</h3>
+        {% endif %}
         {% for entry in resumable %}
-            <label><input type="radio" name="selection" value="entry:{{ entry.pk }}" required {% if loop.first %}checked{% endif %}>
-                {{ _('Entrar con tu registro') if entry.registered else _('Continuar participación') }}: {{ entry.display_name }}{% if entry.virtual > 0 %} · {{ _('Virtual') }} #{{ entry.virtual }}{% endif %}
-            </label>
+            {% set entry_label %}{{ _('Entrar con tu registro') if entry.registered else _('Continuar participación') }}: {{ entry.display_name }}{% if entry.virtual > 0 %} · {{ _('Virtual') }} #{{ entry.virtual }}{% endif %}{% endset %}
+            {% if single %}
+                <input type="hidden" name="selection" value="entry:{{ entry.pk }}">
+                <p>{{ entry_label }}</p>
+            {% else %}
+                <label><input type="radio" name="selection" value="entry:{{ entry.pk }}" required {% if loop.first %}checked{% endif %}>
+                    {{ entry_label }}
+                </label>
+            {% endif %}
         {% endfor %}
         {% if resumable and not resumable[0].registered %}<p>{{ _('Ya tienes una participación activa. Continuar conserva el equipo, los integrantes y el tiempo original.') }}</p>{% endif %}
         {% if not resumable and not spectator %}
-        {% if contest.participation_mode != 'team' %}
+        {% if offers_individual and single %}
+            <input type="hidden" name="selection" value="individual">
+        {% elif offers_individual %}
             <label><input type="radio" name="selection" value="individual" required {% if selection == 'individual' %}checked{% endif %}>
                 {{ _('Individual') }} · {{ request.profile.username }}
             </label>
@@ -85,14 +108,22 @@
             {% if contest.is_rated %}<p>{{ _('Sólo las participaciones individuales cuentan para la calificación del sitio.') }}</p>{% endif %}
         {% endif %}
         {% endif %}
-        {% if spectator %}
+        {% if spectator and single %}
+            <input type="hidden" name="selection" value="spectate">
+            <p>{{ _('Spectate') }}</p>
+        {% elif spectator %}
             <label><input type="radio" name="selection" value="spectate" checked>{{ _('Spectate') }}</label>
         {% endif %}
-        {# Whoever has a registration enters with it, without the code again (2026-10-31). #}
+        {# Whoever has a registration enters with it, without the code again (2026-10-31). A plain text field, as in
+           DMOJ (the owner, 2026-11-01): as a password field, Chrome offered the password of the account in it, and
+           ignores autocomplete="off" there. The note is about teams only. #}
         {% if contest.access_code and not can_edit and not registrations %}
             <label for="contest-access-code">{{ _('Access code') }}</label>
-            <input type="password" id="contest-access-code" name="access_code" maxlength="255" autocomplete="off">
-            <p class="team-note">{{ _('Basta con que lo escriba quien inscribe. Los demás integrantes entran con esa misma inscripción.') }}</p>
+            <input type="text" id="contest-access-code" name="access_code" maxlength="255" autocomplete="off"
+                   autocapitalize="off" autocorrect="off" spellcheck="false">
+            {% if contest.participation_mode != 'individual' %}
+                <p class="team-note">{{ _('Basta con que lo escriba quien inscribe. Los demás integrantes entran con esa misma inscripción.') }}</p>
+            {% endif %}
         {% endif %}
         {% set registering = not contest.started and not spectator %}
         <div class="team-actions"><button type="submit">{{ _('Registrarme') if registering else _('Continuar') }}</button></div>

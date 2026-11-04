@@ -9,7 +9,9 @@
 
 {% block content_media %}
     {# Who registered, and placing them on site or online (2026-10-31). The palette and the shapes of the balloon
-       sheet; here rather than in the stylesheets, which are compressed with a manifest. #}
+       sheet; here rather than in the stylesheets, which are compressed with a manifest. Since 2026-11-01 (the owner:
+       less text, and a field like the testers of the administration instead of the pasted list): titles and the
+       field, without paragraphs that explain. #}
     <style>
         :root {
             --reg-bg: #fff;
@@ -59,24 +61,18 @@
             color: var(--reg-warning);
         }
 
-        .reg-help, .reg-muted {
+        .reg-muted {
             color: var(--reg-muted);
         }
 
-        .reg-help {
-            margin: 0 0 0.8em;
-        }
-
+        /* One line under the tabs: 12 Registrados · 5 Presencial · 7 En línea. */
         .reg-counts {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.3em 1.6em;
+            gap: 0.3em 1.4em;
             list-style: none;
             margin: 0 0 1em;
-            padding: 0.5em 0.9em;
-            border: 1px solid var(--reg-border);
-            border-radius: 4px;
-            background: var(--reg-soft);
+            padding: 0;
         }
 
         .reg-counts li {
@@ -89,6 +85,37 @@
 
         .reg-count-label {
             color: var(--reg-muted);
+        }
+
+        /* Adding to the list of who competes on site: a box like the <details> of the site, its title, the field and
+           the button on one line. */
+        .reg-box {
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+            padding: 0.6em 0.9em 0.8em;
+            margin-bottom: 1.2em;
+        }
+
+        .reg-box-title {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.4em;
+        }
+
+        .reg-add-row {
+            display: flex;
+            gap: 0.6em;
+            align-items: flex-start;
+        }
+
+        .reg-add-row > :first-child {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .reg-add-row .button {
+            flex: none;
         }
 
         .reg-filters {
@@ -112,7 +139,7 @@
             min-width: 12em;
         }
 
-        .reg-filters input, .reg-filters select, .reg-paste textarea {
+        .reg-filters input, .reg-filters select, .reg-add-row textarea {
             box-sizing: border-box;
             min-width: 0;
             padding: 4px 8px;
@@ -123,8 +150,12 @@
             font: inherit;
         }
 
-        .reg-filters input {
+        .reg-filters input, .reg-add-row textarea {
             width: 100%;
+        }
+
+        .reg-add-row textarea {
+            resize: vertical;
         }
 
         .reg-actions {
@@ -136,28 +167,116 @@
         }
 
         /* The site styles every button as its blue one with white text, the colour with !important. */
-        #reg-move .reg-secondary, #waiting .reg-secondary {
+        #reg-confirm .reg-secondary {
             background: var(--reg-plain);
             border-color: var(--reg-plain-border);
             color: var(--reg-plain-text) !important;
         }
 
-        #reg-move .reg-secondary:hover, #reg-move .reg-secondary:active,
-        #waiting .reg-secondary:hover, #waiting .reg-secondary:active {
+        #reg-confirm .reg-secondary:hover, #reg-confirm .reg-secondary:active {
             background: var(--reg-plain-hover);
         }
 
-        .reg-waiting {
-            columns: 14em;
-            list-style: none;
-            margin: 0 0 0.8em;
-            padding: 0;
+        /* The tabs of the site, right over the table. */
+        .reg-tabs {
+            margin-bottom: 0.8em;
         }
 
-        .reg-waiting li {
-            break-inside: avoid;
+        /* The second look before moving: as the popups of the site (featherlight, and the box that asks at the start
+           of a contest), a thin edge on the colour of the page, the title of its boxes, and its buttons. */
+        .reg-confirm {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1002;
+            overflow-y: auto;
+            padding: 1em;
+            box-sizing: border-box;
+        }
+
+        .reg-confirm[hidden] {
+            display: none;
+        }
+
+        .reg-confirm-box {
+            position: relative;
+            margin: 6em auto 2em auto;
+            max-width: 26em;
+            box-sizing: border-box;
+            background: var(--reg-bg);
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            padding: 10px 15px 12px;
+        }
+
+        .reg-confirm-box:focus {
+            outline: none;
+        }
+
+        .reg-confirm-title {
+            font-size: 1.3em;
+            padding-bottom: 0.3em;
+            margin-bottom: 0.6em;
+            border-bottom: 1px solid var(--reg-border);
+        }
+
+        .reg-confirm-box p {
+            margin: 0 0 0.5em;
+        }
+
+        .reg-confirm-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.5em;
+            margin-top: 0.8em;
+        }
+
+        /* Who is on that list without registering yet: chips as the ones of the field, each with its ×. */
+        .reg-waiting {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4em;
+            align-items: center;
+            margin: 0.7em 0 0;
+        }
+
+        .reg-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2em;
+            max-width: 100%;
+            padding: 0 0 0 0.45em;
+            border: 1px solid var(--reg-border);
+            border-radius: 3px;
+            background: var(--reg-bg);
+            line-height: 1.7em;
             overflow-wrap: anywhere;
-            padding: 0.15em 0;
+        }
+
+        /* At least 24 px to touch on a phone. */
+        #waiting .reg-chip-remove {
+            min-width: 24px;
+            min-height: 24px;
+            margin: 0;
+            padding: 0 0.45em;
+            border: 0;
+            border-radius: 0 3px 3px 0;
+            background: transparent;
+            color: var(--reg-muted) !important;
+            font-weight: bold;
+            line-height: inherit;
+            text-shadow: none;
+            box-shadow: none;
+            cursor: pointer;
+        }
+
+        #waiting .reg-chip-remove:hover, #waiting .reg-chip-remove:focus-visible {
+            background: var(--reg-hover);
+            color: var(--reg-warning) !important;
         }
 
         .reg-table-wrap {
@@ -205,26 +324,6 @@
             overflow-wrap: anywhere;
         }
 
-        /* As the tags of the list of contests (.contest-tag). */
-        .reg-tag {
-            display: inline-block;
-            padding: 0.15em 0.3em;
-            border-radius: 0.15em;
-            box-shadow: inset 0 -0.1em 0 rgba(0, 0, 0, 0.12);
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .reg-tag.reg-onsite {
-            background: var(--reg-onsite);
-            color: #fff;
-        }
-
-        .reg-tag.reg-online {
-            border: 1px solid var(--reg-border);
-            background: var(--reg-soft);
-        }
-
         .reg-state {
             white-space: nowrap;
         }
@@ -244,26 +343,17 @@
             margin: 0.8em 0;
         }
 
-        .reg-paste {
-            margin-top: 1.5em;
-        }
-
-        .reg-paste summary {
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .reg-paste textarea {
-            display: block;
-            width: 100%;
-            margin: 0.4em 0 0.6em;
-            resize: vertical;
-        }
-
-        .reg-filters input:focus-visible, .reg-filters select:focus-visible, .reg-paste textarea:focus-visible,
+        .reg-filters input:focus-visible, .reg-filters select:focus-visible, .reg-add-row textarea:focus-visible,
         .reg-table input:focus-visible {
             outline: 2px solid var(--reg-accent);
             outline-offset: 2px;
+        }
+
+        @media (max-width: 760px) {
+            .reg-add-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
     </style>
 {% endblock %}
@@ -271,9 +361,11 @@
 {% block content_js_media %}
     <script type="text/javascript">
         $(function () {
-            // Without this script every box is ticked one by one; the page works the same.
+            // Without this script every box is ticked one by one, and names are written one per line; the page works
+            // the same.
             var $boxes = $('#reg-move input[name="selected"]');
             var $all = $('#reg-all');
+            var $moves = $('#reg-move button[name="target"]');
 
             function paint() {
                 $boxes.each(function () {
@@ -282,6 +374,9 @@
                 var ticked = $boxes.filter(':checked').length;
                 $all.prop('checked', ticked > 0 && ticked === $boxes.length)
                     .prop('indeterminate', ticked > 0 && ticked < $boxes.length);
+                // Nothing to move until something is ticked: the buttons say so without a sentence, greyed as the
+                // site greys a button (.button.disabled).
+                $moves.prop('disabled', ticked === 0).toggleClass('disabled', ticked === 0);
             }
 
             $all.prop('hidden', false).on('change', function () {
@@ -291,10 +386,283 @@
             $boxes.on('change', paint);
             paint();
 
-            // common.js disables every submit button as a form is sent, and a disabled button does not send its
-            // value: the hidden field carries it. Without scripts the button sends it, and the field stays disabled.
-            $('#reg-move button[name="target"]').on('click', function () {
-                $('#reg-target').val(this.value).prop('disabled', false);
+            // A second look before moving anybody (the owner, 2026-11-01): a click by mistake changes the scoreboard
+            // and the balloons. Asked on the click, not on the submit: common.js disables every button of the page as a
+            // form is sent, even if the sending is then cancelled. Without scripts, the move goes at once.
+            var $confirm = $('#reg-confirm'), proceed = null, focusBefore = null;
+            var TEXTS = {
+                onsite: {
+                    title: {{ _('¿Pasar a presencial?')|htmltojs }},
+                    action: {{ _('Pasar a presencial')|htmltojs }},
+                    note: {{ _('Reciben los globos de lo que ya resolvieron.')|htmltojs }}
+                },
+                online: {
+                    title: {{ _('¿Pasar a en línea?')|htmltojs }},
+                    action: {{ _('Pasar a en línea')|htmltojs }},
+                    note: {{ _('Dejan de recibir globos.')|htmltojs }}
+                }
+            };
+            var COUNT = {{ _('Seleccionados: %(count)s', count='{count}')|htmltojs }};
+
+            function ask(target, count, then) {
+                var text = TEXTS[target];
+                $('#reg-confirm-title').text(text.title);
+                $('#reg-confirm-count').text(COUNT.replace('{count}', count));
+                $('#reg-confirm-note').text(text.note);
+                $('#reg-confirm-yes').text(text.action);
+                proceed = then;
+                focusBefore = document.activeElement;
+                $confirm.prop('hidden', false);
+                // On «Cancel»: Enter pressed without looking does not move anybody.
+                $('#reg-confirm-no').focus();
+            }
+
+            function close() {
+                $confirm.prop('hidden', true);
+                proceed = null;
+                // An announcement that arrived meanwhile waits underneath (base.html): it takes the keyboard now, and
+                // Enter does not open this box again behind it.
+                var $announcement = $('#announcement-overlay'), $over = $('[aria-modal="true"]:visible').first();
+                if ($announcement.is(':visible')) {
+                    // And, once it closes, back to the button that opened this one. Not while another box is still
+                    // over it (the one at the start of a contest, a popup): it takes it when that one goes.
+                    $announcement.data('return-to', focusBefore);
+                    $announcement.trigger('announcement:uncover');
+                }
+                // The box still over the page keeps the keyboard, not the page behind it: the box itself where it can
+                // take it, not its button, where an Enter pressed without looking would close it.
+                if ($over.length)
+                    ($over.is('[tabindex]') ? $over : $over.find('button, [href]').first()).focus();
+                else if (!$announcement.is(':visible') && focusBefore && document.contains(focusBefore))
+                    focusBefore.focus();
+            }
+
+            $('#reg-confirm-no').on('click', close);
+            $('#reg-confirm-yes').on('click', function () {
+                var then = proceed;
+                $confirm.prop('hidden', true);
+                proceed = null;
+                if (then)
+                    then();
+            });
+            // A click outside the box closes it, only when it also began outside: the second click of a double click
+            // on the button that opened it lands on the backdrop, and closed it the moment it opened.
+            var downOutside = false;
+            $confirm.on('mousedown', function (event) {
+                downOutside = event.target === this;
+            }).on('click', function (event) {
+                if (event.target === this && downOutside && event.detail < 2)
+                    close();
+                downOutside = false;
+            });
+            $(document).on('keydown', function (event) {
+                if ($confirm.prop('hidden'))
+                    return;
+                if (event.which === 27)
+                    close();
+                // The keyboard stays on its two buttons while it is open (aria-modal).
+                else if (event.which === 9) {
+                    var $buttons = $confirm.find('button'), at = $buttons.index(document.activeElement);
+                    event.preventDefault();
+                    $buttons.eq(((at < 0 ? 0 : at + (event.shiftKey ? -1 : 1)) + $buttons.length) %
+                                $buttons.length).focus();
+                }
+            });
+
+            // A disabled button does not send its value, and common.js disables them all as a form is sent: the
+            // hidden field carries it. Without scripts the button sends it, and the field stays disabled.
+            $moves.on('click', function (event) {
+                var target = this.value, form = this.form;
+                event.preventDefault();
+                ask(target, $boxes.filter(':checked').length, function () {
+                    $('#reg-target').val(target).prop('disabled', false);
+                    form.submit();
+                });
+            });
+            $('#waiting .reg-chip-remove').on('click', function () {
+                $('#reg-waiting-key').val(this.value).prop('disabled', false);
+            });
+
+            // The field that adds to the list of who competes on site, as the testers of the administration: it
+            // suggests registrations, accounts and teams, and each name is a chip. A list pasted from a spreadsheet,
+            // one per line, becomes one chip per name.
+            var $names = $('#reg-names');
+            if (!$names.length || !$.fn.select2)
+                return;
+            var placeholder = $names.attr('placeholder');
+            var $select = $('<select>', {id: 'reg-names', name: 'names', multiple: 'multiple'});
+            $names.replaceWith($select);
+            var TEAM = {{ _('equipo')|htmltojs }}, UNREGISTERED = {{ _('sin registrarse')|htmltojs }};
+            // The term the suggestions on the list answer, and that term when it is the whole name of a chip already.
+            var answered = null, named = null;
+            $select.select2({
+                theme: '{{ DMOJ_SELECT2_THEME }}',
+                placeholder: placeholder,
+                width: '100%',
+                minimumInputLength: 1,
+                tags: true,
+                // What is typed goes last, so Enter takes the first suggestion and not the letters typed so far.
+                insertTag: function (data, tag) {
+                    data.push(tag);
+                },
+                // What is typed goes by its name, 'n:' and the name; a suggestion, by what it is (r12, p34, t56).
+                createTag: function (params) {
+                    var term = $.trim(params.term);
+                    return term ? {id: 'n:' + term, text: term} : null;
+                },
+                ajax: {
+                    url: {{ url('contest_registrations_search', contest.key)|tojson }},
+                    delay: 200,
+                    data: function (params) {
+                        return {term: params.term};
+                    },
+                    // Without what is already a chip: Enter on it only closes the list, and the exact name under it
+                    // would not be added (2026-11-01). Unless it is the whole name typed, as the server compares it
+                    // (`exact`: accents and capitals as the database): without it, Enter would take the next one,
+                    // «mariana» for «ana» typed again, «josefina» for «jose» once «josé» is a chip.
+                    processResults: function (data, params) {
+                        answered = $.trim(params.term || '');
+                        var chosen = $select.val() || [];
+                        named = null;
+                        return {results: (data.results || []).filter(function (item) {
+                            var picked = chosen.indexOf(String(item.id)) !== -1;
+                            if (picked && item.exact)
+                                named = answered;
+                            return !picked || item.exact;
+                        })};
+                    }
+                },
+                templateResult: function (data) {
+                    if (data.loading || data.team === undefined)
+                        return data.text;
+                    var notes = [];
+                    if (data.team)
+                        notes.push(TEAM);
+                    if (!data.registered)
+                        notes.push(UNREGISTERED);
+                    var $row = $('<span>').text(data.text);
+                    if (notes.length)
+                        $row.append(' ', $('<span>', {'class': 'reg-muted'}).text('(' + notes.join(', ') + ')'));
+                    return $row;
+                }
+            });
+            // The field where one types is select2's, and it takes the name of the title over it. select2 draws the
+            // chips again on every change and takes the handlers of the field off as it does (2026-11-01): it is
+            // looked up each time, and its handlers hang from the box around it, as the one of pasting.
+            var $box = $select.next('.select2'), title = $('label[for="reg-names"]').text();
+
+            function search() {
+                return $box.find('.select2-search__field').attr('aria-label', title);
+            }
+
+            search();
+            // What is typed and not yet a chip. select2 empties its field as it closes, on the mousedown of the button,
+            // before its click: the term is kept as it is typed, and forgotten once the chips change.
+            var pending = '';
+            $box.on('input', '.select2-search__field', function () {
+                pending = this.value;
+            });
+            // Escape throws away what was typed. Heard on the way down (capture): select2 stops the key on its way
+            // up, before it reaches the box.
+            $box[0].addEventListener('keydown', function (event) {
+                if (event.which === 27 && $(event.target).is('.select2-search__field'))
+                    pending = '';
+            }, true);
+            $select.on('change', function () {
+                pending = '';
+                // A chip taken off no longer names what is typed after it.
+                named = null;
+                search();
+            });
+            // What Backspace gives back to the field as it takes a chip off is not typed: it does not travel unless
+            // typed on (2026-11-01). Whoever takes a chip off means it off.
+            // select2 keeps the list of the term before until the answer for the one typed now arrives: an Enter
+            // quicker than that does not take «mariana» for «ana» (2026-11-01). It takes the right one once it arrives.
+            $select.on('select2:selecting', function (event) {
+                if (answered !== null && answered !== $.trim(search().val() || ''))
+                    event.preventDefault();
+            });
+            // A chip kept on the list as the name typed: a click on it (or Ctrl+Space) only closes the list, as Enter
+            // does, instead of taking the chip off. Its × and Backspace still do.
+            $select.on('select2:unselecting', function (event) {
+                var original = event.params && event.params.args && event.params.args.originalEvent;
+                if (original && $(original.target).closest('.select2-results').length) {
+                    event.preventDefault();
+                    $select.select2('close');
+                }
+            });
+
+            function add(name) {
+                name = $.trim(name.replace(/\s+/g, ' '));
+                if (!name)
+                    return;
+                var present = $select.find('option').filter(function () {
+                    return this.value === 'n:' + name;
+                });
+                if (present.length)
+                    present.prop('selected', true);
+                else
+                    $select.append(new Option(name, 'n:' + name, true, true));
+            }
+
+            // The search field is one line, and a browser drops the line breaks of what is pasted into it. Lines and
+            // tabs (spreadsheet columns) make chips here; commas and semicolons stay in the chip for the server, which
+            // splits them unless the whole chip names a team (one called «Uno, dos»).
+            $box.on('paste', '.select2-search__field', function (event) {
+                var clipboard = event.originalEvent.clipboardData || window.clipboardData;
+                var text = clipboard ? clipboard.getData('text') : '';
+                if (!/[\r\n\t]/.test(text))
+                    return;
+                event.preventDefault();
+                var names = text.split(/[\r\n\t]+/);
+                for (var i = 0; i < names.length; i++)
+                    add(names[i]);
+                $select.trigger('change');
+                $(this).val('');
+                $select.select2('close');
+            });
+
+            // The chips travel in one field, a name per line, as the list did: one field each would hit the bound of
+            // Django on the fields of a request (DATA_UPLOAD_MAX_NUMBER_FIELDS) with a long list. The ones picked from
+            // the suggestions go in another, by what they are: a key, a tab and the name, said back in the result.
+            // After the second look, as the buttons of the table.
+            $('#paste [type="submit"]').on('click', function (event) {
+                // A name typed without Enter is one more chip, not lost.
+                var typed = $.trim(search().val() || '') || $.trim(pending);
+                // Unless it is the whole name of a chip already (an Enter on it only closed the list): not twice.
+                if (typed && typed === named)
+                    typed = '';
+                if (typed) {
+                    add(typed);
+                    search().val('');
+                    $select.trigger('change');
+                }
+                var form = this.form, chips = $select.select2('data') || [], names = [], picked = [];
+                for (var i = 0; i < chips.length; i++) {
+                    var id = String(chips[i].id);
+                    if (id.indexOf('n:') === 0)
+                        names.push(id.slice(2));
+                    else
+                        picked.push(id + '\t' + chips[i].text);
+                }
+
+                function send() {
+                    $select.removeAttr('name');
+                    // Not the ones of a send before: a page brought back by the Back button keeps them.
+                    $(form).find('textarea.reg-sent').remove();
+                    $('<textarea>', {name: 'names', hidden: true, 'class': 'reg-sent'}).val(names.join('\n'))
+                        .appendTo(form);
+                    if (picked.length)
+                        $('<textarea>', {name: 'picked', hidden: true, 'class': 'reg-sent'}).val(picked.join('\n'))
+                            .appendTo(form);
+                    form.submit();
+                }
+
+                event.preventDefault();
+                if (chips.length)
+                    ask('onsite', chips.length, send);
+                else
+                    send();
             });
         });
     </script>
@@ -308,12 +676,7 @@
         <div class="reg-note" role="status">{{ notice }}</div>
     {% endfor %}
 
-    {% if contest.is_hybrid %}
-        <p class="reg-help">{{ _('Todos empiezan en línea; pasa a presencial a quien compite en la sede, también durante el concurso.') }}</p>
-    {% else %}
-        <p class="reg-help">{{ _('Para separar el ranking en Presencial y En línea, elige «Presencial y en línea» en Editar.') }}</p>
-    {% endif %}
-
+    {# The number of each modality goes on its tab (2026-11-01). #}
     <ul class="reg-counts">
         <li><span class="reg-count-number">{{ counts.total }}</span>
             <span class="reg-count-label">{{ _('En total') if contest.started else _('Registrados') }}</span></li>
@@ -323,27 +686,46 @@
             <li><span class="reg-count-number">{{ counts.registered }}</span>
                 <span class="reg-count-label">{{ _('Sin entrar') }}</span></li>
         {% endif %}
-        {% if contest.is_hybrid %}
-            <li><span class="reg-count-number">{{ counts.onsite }}</span>
-                <span class="reg-count-label">{{ _('Presencial') }}</span></li>
-            <li><span class="reg-count-number">{{ counts.online }}</span>
-                <span class="reg-count-label">{{ _('En línea') }}</span></li>
-        {% endif %}
     </ul>
 
+    {% if contest.is_hybrid %}
+        {# Whoever is named and has not registered yet stays on the list of who competes on site, and enters on site
+           when they register or join (2026-10-31): the chips under the field. #}
+        <div class="reg-box">
+            <form method="post" id="paste" action="{{ url('contest_registrations_move', contest.key) }}{{ search_query }}">
+                {% csrf_token %}
+                <input type="hidden" name="target" value="onsite">
+                <label for="reg-names" class="reg-box-title">{{ _('Agregar a presencial') }}</label>
+                <div class="reg-add-row">
+                    <textarea id="reg-names" name="names" rows="3" maxlength="{{ max_paste }}" autocomplete="off"
+                              spellcheck="false"
+                              placeholder="{{ _('Usuario o equipo') if contest.participation_mode != 'individual' else _('Usuario') }}"></textarea>
+                    <button type="submit" class="button">{{ _('Pasar a presencial') }}</button>
+                </div>
+            </form>
+            {% if waiting %}
+                <form method="post" id="waiting" class="reg-waiting"
+                      action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="target" value="online">
+                    <input type="hidden" name="waiting" id="reg-waiting-key" disabled>
+                    <span class="reg-muted">{{ _('Sin registrarse todavía:') }}</span>
+                    {% for row in waiting %}
+                        <span class="reg-chip">{{ row.name }}{% if row.team %} <span class="reg-muted">({{ _('equipo') }})</span>{% endif %}
+                            <button type="submit" name="waiting" value="{{ row.key }}" class="reg-chip-remove"
+                                    title="{{ _('Quitar de la lista') }}"
+                                    aria-label="{{ _('Quitar de la lista') }}: {{ row.name }}">&times;</button></span>
+                    {% endfor %}
+                </form>
+            {% endif %}
+        </div>
+    {% endif %}
+
     <form method="get" action="{{ url('contest_registrations', contest.key) }}" class="reg-filters" role="search">
-        <label class="reg-search" for="reg-q">{{ _('Buscar por usuario o equipo') }}
+        {% if modality %}<input type="hidden" name="modality" value="{{ modality }}">{% endif %}
+        <label class="reg-search" for="reg-q">{{ _('Buscar por usuario o equipo') if contest.participation_mode != 'individual' else _('Buscar por usuario') }}
             <input id="reg-q" type="search" name="q" value="{{ query }}" maxlength="150">
         </label>
-        {% if contest.is_hybrid %}
-            <label for="reg-modality">{{ _('Modalidad') }}
-                <select id="reg-modality" name="modality">
-                    <option value="">{{ _('Las dos') }}</option>
-                    <option value="onsite" {% if modality == 'onsite' %}selected{% endif %}>{{ _('Presencial') }}</option>
-                    <option value="online" {% if modality == 'online' %}selected{% endif %}>{{ _('En línea') }}</option>
-                </select>
-            </label>
-        {% endif %}
         {% if contest.started %}
             <label for="reg-state">{{ _('Estado') }}
                 <select id="reg-state" name="state">
@@ -355,19 +737,37 @@
         {% endif %}
         <button type="submit" class="button">{{ _('Filtrar') }}</button>
         {% if filtered %}
-            <a href="{{ url('contest_registrations', contest.key) }}">{{ _('Quitar filtros') }}</a>
+            <a href="{{ url('contest_registrations', contest.key) }}{{ clear_query }}">{{ _('Quitar filtros') }}</a>
         {% endif %}
     </form>
 
+    {# One tab per modality, with the tabs of the site (2026-11-01): each lists only its own, and its button moves the
+       ticked ones to the other. #}
+    {% if contest.is_hybrid %}
+        <div class="tabs reg-tabs">
+            <ul>
+                <li class="tab{% if modality == 'onsite' %} active{% endif %}">
+                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.onsite }}"{% if modality == 'onsite' %} aria-current="page"{% endif %}>
+                        <i class="tab-icon fa fa-map-marker"></i> {{ _('Presencial') }} ({{ counts.onsite }})</a>
+                </li>
+                <li class="tab{% if modality == 'online' %} active{% endif %}">
+                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.online }}"{% if modality == 'online' %} aria-current="page"{% endif %}>
+                        <i class="tab-icon fa fa-globe"></i> {{ _('En línea') }} ({{ counts.online }})</a>
+                </li>
+            </ul>
+        </div>
+    {% endif %}
+
     {% if page.object_list %}
         {% if contest.is_hybrid %}
+            {% set target = 'online' if modality == 'onsite' else 'onsite' %}
             <form method="post" id="reg-move" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
             {% csrf_token %}
             <input type="hidden" name="target" id="reg-target" disabled>
             <div class="reg-actions">
-                <button type="submit" name="target" value="onsite" class="button">{{ _('Pasar a presencial') }}</button>
-                <button type="submit" name="target" value="online" class="button reg-secondary">{{ _('Pasar a en línea') }}</button>
-                <span class="reg-muted">{{ _('Marca en la tabla a quienes quieras mover.') }}</span>
+                <button type="submit" name="target" value="{{ target }}" class="button">
+                    {{- _('Pasar a en línea') if target == 'online' else _('Pasar a presencial') -}}
+                </button>
             </div>
         {% endif %}
         <div class="reg-table-wrap">
@@ -380,7 +780,6 @@
                         </th>
                     {% endif %}
                     <th scope="col">{{ _('Participante') }}</th>
-                    {% if contest.is_hybrid %}<th scope="col">{{ _('Modalidad') }}</th>{% endif %}
                     <th scope="col">{{ _('Estado') }}</th>
                 </tr>
                 </thead>
@@ -393,25 +792,18 @@
                             </td>
                         {% endif %}
                         <th scope="row">
-                            {# The name ticks the box, where there are boxes. #}
+                            {# The name ticks the box, where there are boxes. The username, and under it the full name
+                               of the account, which only whoever runs the contest reads here (2026-11-01). #}
                             {% if contest.is_hybrid %}<label for="reg-row-{{ row.pk }}" class="reg-name">{% else %}<span class="reg-name">{% endif %}
-                                {{- row.team_name if row.team_id else row.user.display_name -}}
+                                {{- row.team_name if row.team_id else row.user.username -}}
                             {% if contest.is_hybrid %}</label>{% else %}</span>{% endif %}
                             {% if row.team_id %}
                                 <span class="reg-sub">{{ row.team_roster.all()|map(attribute='username')|join(', ') }}</span>
-                            {% elif row.user.display_name != row.user.username %}
-                                <span class="reg-sub">{{ row.user.username }}</span>
+                            {% else %}
+                                {% set full_name = row.user.user.get_full_name() or (row.user.display_name if row.user.display_name != row.user.username else '') %}
+                                {% if full_name %}<span class="reg-sub">{{ full_name }}</span>{% endif %}
                             {% endif %}
                         </th>
-                        {% if contest.is_hybrid %}
-                            <td>
-                                {% if row.onsite %}
-                                    <span class="reg-tag reg-onsite">{{ _('Presencial') }}</span>
-                                {% else %}
-                                    <span class="reg-tag reg-online">{{ _('En línea') }}</span>
-                                {% endif %}
-                            </td>
-                        {% endif %}
                         <td>
                             {% if row.is_disqualified %}
                                 <span class="reg-state reg-disqualified">{{ _('Descalificado') }}</span>
@@ -421,7 +813,7 @@
                                 <span class="reg-sub">{{ _('No puede entrar al concurso.') }}</span>
                             {% elif row.registered %}
                                 <span class="reg-state">{{ _('Sin entrar') if contest.started else _('Registrado') }}</span>
-                                <span class="reg-sub">{{ _('Se registró: %(date)s', date=row.real_start|date(_("M j, Y, G:i"))) }}</span>
+                                <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}</span>
                             {% else %}
                                 <span class="reg-state">{{ _('Entró') }}</span>
                                 <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}</span>
@@ -444,41 +836,28 @@
         {% endif %}
     {% elif filtered %}
         <p class="reg-empty">{{ _('Nadie coincide con estos filtros.') }}</p>
+    {% elif counts.total %}
+        <p class="reg-empty">{{ _('Nadie en esta modalidad.') }}</p>
     {% elif contest.started %}
         <p class="reg-empty">{{ _('Nadie se registró ni entró a este concurso.') }}</p>
     {% else %}
-        <p class="reg-empty">{{ _('Todavía no se registra nadie. Quien se registre aparecerá aquí.') }}</p>
-    {% endif %}
-
-    {% if contest.is_hybrid and waiting %}
-        {# Named on the list of who competes on site before registering (2026-10-31). #}
-        <details class="reg-paste" id="waiting" open>
-            <summary>{{ _('En la lista de la sede, sin registrarse todavía: %(count)s', count=waiting|length) }}</summary>
-            <p class="reg-help">{{ _('Entran como presenciales al registrarse o unirse.') }}</p>
-            <form method="post" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
-                {% csrf_token %}
-                <input type="hidden" name="target" value="online">
-                <ul class="reg-waiting">
-                    {% for row in waiting %}
-                        <li><label><input type="checkbox" name="waiting" value="{{ row.key }}"> {{ row.name }}
-                            {%- if row.team %} <span class="reg-muted">({{ _('equipo') }})</span>{% endif %}</label></li>
-                    {% endfor %}
-                </ul>
-                <button type="submit" class="button reg-secondary">{{ _('Quitar de la lista') }}</button>
-            </form>
-        </details>
+        <p class="reg-empty">{{ _('Todavía no se registra nadie.') }}</p>
     {% endif %}
 
     {% if contest.is_hybrid %}
-        <details class="reg-paste" id="paste" {% if paste_open %}open{% endif %}>
-            <summary>{{ _('Pegar una lista para pasarla a presencial') }}</summary>
-            <form method="post" action="{{ url('contest_registrations_move', contest.key) }}{{ search_query }}">
-                {% csrf_token %}
-                <input type="hidden" name="target" value="onsite">
-                <label for="reg-names" class="reg-help">{{ _('Un nombre por renglón o separados por comas: usuario, equipo o integrante. Quien no se ha registrado queda en la lista de la sede.') }}</label>
-                <textarea id="reg-names" name="names" rows="8" maxlength="{{ max_paste }}" autocomplete="off" spellcheck="false"></textarea>
-                <button type="submit" class="button">{{ _('Pasar a presencial') }}</button>
-            </form>
-        </details>
+        {# A second look before moving anybody (the owner, 2026-11-01): a click by mistake changes the scoreboard
+           and the balloons. Drawn as the popups of the site; opened by the script above, which knows how many. #}
+        <div class="reg-confirm" id="reg-confirm" hidden>
+            <div class="reg-confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="reg-confirm-title"
+                 aria-describedby="reg-confirm-count" tabindex="-1">
+                <div class="reg-confirm-title" id="reg-confirm-title"></div>
+                <p id="reg-confirm-count"></p>
+                {% if contest.started %}<p class="reg-muted" id="reg-confirm-note"></p>{% endif %}
+                <div class="reg-confirm-actions">
+                    <button type="button" class="reg-secondary" id="reg-confirm-no">{{ _('Cancelar') }}</button>
+                    <button type="button" class="button" id="reg-confirm-yes"></button>
+                </div>
+            </div>
+        </div>
     {% endif %}
 {% endblock %}

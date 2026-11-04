@@ -371,6 +371,9 @@
    so no collectstatic, no hashed copy and no compression manifest to rebuild.
    It also sits outside every {% compress %} block in this template. #}
 <style>
+    /* Drawn as the box that asks at the start of a contest (.registration-prompt below), the popups of the site
+       (featherlight): its palette, light or dark as the page, a thin edge, the title of the site's boxes and the blue
+       button of the site (the owner, 2026-11-01: it was white on the dark theme, with «CPC» on top). */
     #announcement-overlay {
         display: none;
         position: fixed;
@@ -378,7 +381,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.45);
+        background: rgba(0, 0, 0, 0.6);
         z-index: 1000;
         /* A long clarification on a short screen has to scroll, and the padding
            keeps the box off the edges of a phone. */
@@ -392,12 +395,10 @@
         margin: 6em auto 2em auto;
         max-width: 32em;
         box-sizing: border-box;
-        background: #fff;
-        color: #202124;
-        border-radius: 8px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
-        padding: 1.2em 1.4em 1em 1.4em;
-        font-family: Arial, sans-serif;
+        background: var(--prompt-bg);
+        border: 1px solid var(--prompt-border);
+        border-radius: 4px;
+        padding: 10px 15px 12px;
     }
 
     /* It takes the keyboard when nobody is typing, without a ring around the whole box. */
@@ -406,44 +407,43 @@
     }
 
     #announcement-box-title {
-        font-size: 1.1em;
-        margin-bottom: 0.8em;
+        font-size: 1.3em;
+        padding-bottom: 0.3em;
+        margin-bottom: 0.6em;
+        border-bottom: 1px solid var(--prompt-border);
+        word-wrap: break-word;
     }
 
     .announcement-item {
         white-space: pre-wrap;
         word-wrap: break-word;
-        color: #5f6368;
-        margin-bottom: 0.9em;
     }
 
+    /* Several at once: one under the other, apart by the line of the title. */
+    .announcement-item + .announcement-item {
+        margin-top: 0.6em;
+        padding-top: 0.6em;
+        border-top: 1px solid var(--prompt-border);
+    }
+
+    /* Only when the box gathers announcements of more than one contest. */
     .announcement-item-contest {
         display: block;
         font-size: 0.85em;
-        color: #9aa0a6;
+        color: var(--prompt-muted);
         margin-bottom: 0.2em;
     }
 
     #announcement-box-actions {
-        text-align: right;
-        margin-top: 1.2em;
-    }
-
-    #announcement-ok {
-        background: #4285f4;
-        color: #fff;
-        border: none;
-        border-radius: 4px;
-        padding: 0.7em 2.2em;
-        font-size: 1em;
-        font-weight: bold;
-        cursor: pointer;
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 0.8em;
     }
 
     /* The box that asks, at the start of a contest one registered for, whether to enter now (2026-10-31): above the
        announcements, which may come at the same moment. Opened by its script at the end of the page, one at a time.
        Drawn as the popups of the site (featherlight), with its buttons; the one that says no is a plain one. */
-    .registration-prompt {
+    .registration-prompt, #announcement-overlay {
         --prompt-bg: #fff;
         --prompt-border: #ccc;
         --prompt-muted: #666;
@@ -451,6 +451,9 @@
         --prompt-plain-hover: #e0e0e0;
         --prompt-plain-border: #ccc;
         --prompt-plain-text: #333;
+    }
+
+    .registration-prompt {
         position: fixed;
         top: 0;
         left: 0;
@@ -464,7 +467,7 @@
     }
 
     {% macro prompt_dark_palette() %}
-    .registration-prompt {
+    .registration-prompt, #announcement-overlay {
         --prompt-bg: #222;
         --prompt-border: #3b3b3b;
         --prompt-muted: #aaa;
@@ -628,7 +631,6 @@
         /* Full width so the button is a comfortable target on a phone. */
         #announcement-ok {
             width: 100%;
-            padding: 0.9em 0;
         }
 
         a.contest-pill-mobile {
@@ -645,7 +647,7 @@
 
 <div id="announcement-overlay">
     <div id="announcement-box" role="alertdialog" aria-labelledby="announcement-box-title" tabindex="-1">
-        <div id="announcement-box-title">{{ SITE_NAME }}</div>
+        <div id="announcement-box-title"></div>
         <div id="announcement-box-items"></div>
         <div id="announcement-box-actions">
             <button type="button" id="announcement-ok">{{ _('OK') }}</button>
@@ -669,12 +671,19 @@
         // (aclaraciones-anuncios-4): Enter no longer closes it, and Escape only once it has been on screen this long.
         var KEY_DELAY = 1500;
         var url = '{{ url('announcements_active') }}';
+        // The title is the name of the contest (the owner, 2026-11-01); of the whole site, «Anuncio».
+        var SITE_TITLE = {{ _('Anuncio')|htmltojs }}, SEVERAL_TITLE = {{ _('Announcements')|htmltojs }};
+        // Inside a contest, a ring on its channel makes the page ask at once (2026-11-01: on a phone the second of two
+        // announcements took up to a minute). The ring carries no text; the first poll asks where to listen.
+        var LISTEN = {{ 'true' if request.in_contest else 'false' }};
+        var EVENTS = {websocket: {{ EVENT_DAEMON_LOCATION|tojson }}, poll: {{ EVENT_DAEMON_POLL_LOCATION|tojson }}};
 
         var $overlay = $('#announcement-overlay');
         var $items = $('#announcement-box-items');
         var showing = [];
         var opened_at = 0;
         var focus_before = null;
+        var asked_where = false, ring_timer = null;
 
         function seen_ids() {
             try {
@@ -705,35 +714,98 @@
             }
         }
 
+        function paint() {
+            var contests = [];
+            for (var i = 0; i < showing.length; i++)
+                if (contests.indexOf(showing[i].contest || '') === -1)
+                    contests.push(showing[i].contest || '');
+            var several = contests.length > 1;
+            $('#announcement-box-title').text(several ? SEVERAL_TITLE : contests[0] || SITE_TITLE);
+            $items.empty();
+            for (var j = 0; j < showing.length; j++) {
+                var item = $('<div>', {'class': 'announcement-item'});
+                if (several && showing[j].contest)
+                    item.append($('<span>', {'class': 'announcement-item-contest'}).text(showing[j].contest));
+                // .text(), never .html(): the body is plain text by design.
+                item.append(document.createTextNode(showing[j].body));
+                $items.append(item);
+            }
+        }
+
+        // What arrives while the box is open joins it, below, instead of waiting for it to close.
         function show(announcements) {
-            var already = seen_ids();
+            var already = seen_ids(), open = $overlay.is(':visible');
+            var shown = showing.map(function (entry) {
+                return entry.key;
+            });
             var pending = [];
             for (var i = 0; i < announcements.length; i++)
-                if (already.indexOf(announcements[i].key) === -1)
+                if (already.indexOf(announcements[i].key) === -1 && shown.indexOf(announcements[i].key) === -1)
                     pending.push(announcements[i]);
             if (!pending.length)
                 return;
 
-            $items.empty();
-            showing = [];
             // Oldest first, so a sequence of clarifications reads in order.
             pending.reverse();
-            for (var j = 0; j < pending.length; j++) {
-                var item = $('<div>', {'class': 'announcement-item'});
-                if (pending[j].contest)
-                    item.append($('<span>', {'class': 'announcement-item-contest'}).text(pending[j].contest));
-                // .text(), never .html(): the body is plain text by design.
-                item.append(document.createTextNode(pending[j].body));
-                $items.append(item);
-                showing.push(pending[j].key);
-            }
+            showing = showing.concat(pending);
+            paint();
+            // A key pressed for the box as it was does not close what just joined it.
+            opened_at = Date.now();
+            if (open)
+                return;
             focus_before = document.activeElement;
             $overlay.show();
-            opened_at = Date.now();
             // Whoever is typing keeps the keyboard. Otherwise the box takes it, but not its button, where Enter or the
-            // space bar would close it.
-            if (!typing())
+            // space bar would close it. Nor from a box drawn over this one, which asks for an answer now (the one at
+            // the start of a contest, the second look before moving people in «Registrados»): this one waits under
+            // it, without the keyboard (both boxes hand it over as they close).
+            if (covered())
+                uncovered();
+            else if (!typing())
                 $('#announcement-box').focus();
+        }
+
+        // Once nothing is over it, the box takes the keyboard (2026-11-01), unless one types where it is then, and
+        // gives it back there as it closes. A popup of the site (featherlight 1.2.1) leaves the keyboard where it was
+        // as it goes, often in a field of its own about to be gone; the boxes that hand it over themselves leave it
+        // inside already.
+        var watching = null;
+        function uncovered() {
+            if (watching)
+                return;
+            watching = setInterval(function () {
+                if (covered())
+                    return;
+                clearInterval(watching);
+                watching = null;
+                if (!$overlay.is(':visible') || $.contains($overlay[0], document.activeElement))
+                    return;
+                focus_before = document.activeElement;
+                // A popup leaves the keyboard on the page itself as it goes: back, then, to what opened it.
+                if ((!focus_before || focus_before === document.body) && last_clicked &&
+                    document.contains(last_clicked) && $(last_clicked).is(':visible'))
+                    focus_before = last_clicked;
+                if (!typing())
+                    $('#announcement-box').focus();
+            }, 250);
+        }
+
+        // What was clicked last on the page, outside this box and any popup: the one that opened a popup. Not in the
+        // boxes that say so (aria-modal): they hand the keyboard over themselves, and their buttons go with them.
+        var last_clicked = null;
+        document.addEventListener('click', function (e) {
+            var target = $(e.target).closest('a[href], button, input, select, textarea, [tabindex]')[0];
+            if (target && !$.contains($overlay[0], target) &&
+                !$(target).closest('.featherlight, [aria-modal="true"]').length)
+                last_clicked = target;
+        }, true);
+
+        // Another box over the page: the ones that say so (aria-modal), and the popups of the site (featherlight: the
+        // tags of a contest, a vote, a comment being edited), which close on Escape too. One that is closing is no
+        // longer current but still drawn, fading out, with the keyboard maybe in it: over the page until it is gone.
+        function covered() {
+            return $('[aria-modal="true"]:visible').length > 0 || $('.featherlight:visible').length > 0 ||
+                !!($.featherlight && $.featherlight.current && $.featherlight.current());
         }
 
         function typing() {
@@ -746,27 +818,118 @@
         }
 
         function dismiss() {
-            remember(showing);
+            remember(showing.map(function (entry) {
+                return entry.key;
+            }));
             showing = [];
             $overlay.hide();
-            // Back to where the keyboard was, the editor of a submission for instance.
-            if (focus_before && focus_before !== document.body && document.contains(focus_before))
-                focus_before.focus();
+            // Back to where the keyboard was, the editor of a submission for instance; or where a box that was over
+            // this one says (`return-to`), as the one of «Registrados», whose buttons are gone by now.
+            var back = $overlay.data('return-to') || focus_before;
+            // Gone with the popup it was in: back to what opened that popup. Not for what the page itself took away
+            // (a table drawn again): the last click may be old by then.
+            if (back && !document.contains(back) && $(back).closest('.featherlight').length)
+                back = last_clicked;
+            $overlay.removeData('return-to');
+            if (back && back !== document.body && document.contains(back) && $(back).is(':visible'))
+                back.focus();
             focus_before = null;
         }
 
         $('#announcement-ok').click(dismiss);
-        $(document).on('keydown.announcement', function (e) {
-            if ($overlay.is(':visible') && e.which === 27 && Date.now() - opened_at >= KEY_DELAY)
-                dismiss();
+        // While it has the keyboard and nothing is over it, Tab stays in the box (2026-11-01), as in the second look
+        // of «Registrados»: between the box and its button.
+        document.addEventListener('keydown', function (e) {
+            var box = document.getElementById('announcement-box'), ok = document.getElementById('announcement-ok');
+            if (e.which !== 9 || !$overlay.is(':visible') || covered() ||
+                (document.activeElement !== box && !$.contains(box, document.activeElement)))
+                return;
+            e.preventDefault();
+            (document.activeElement === ok ? box : ok).focus();
         });
+        // A box over this one hands the keyboard over as it closes («Registrados», the one at the start of a
+        // contest): this one takes it now, or once nothing else is over it (2026-11-01).
+        $overlay.on('announcement:uncover', function () {
+            if (covered())
+                uncovered();
+            else
+                $('#announcement-box').focus();
+        });
+        // An Escape meant for a box drawn over this one does not throw away an announcement nobody read. Heard while
+        // the key goes down to the page (capture), before the handlers of that box close it: a page registers its
+        // own before this script runs.
+        document.addEventListener('keydown', function (e) {
+            // Nor an Escape meant for the open list of a select2, which closes it: heard first here, it threw away the
+            // announcement too. With the list closed select2 does nothing with it, and it closes the announcement.
+            if ($('.select2-container--open').length)
+                return;
+            if ($overlay.is(':visible') && e.which === 27 && Date.now() - opened_at >= KEY_DELAY &&
+                (!covered() || $.contains($overlay[0], document.activeElement)))
+                dismiss();
+        }, true);
+
+        // event.js, loaded only here and only once the server says where to listen; its address carries its hash, as
+        // /static is cached for good. The receiver brings back what rang while the connection was down.
+        function listen(where) {
+            var script = document.createElement('script');
+            script.src = where.script;
+            script.onload = function () {
+                if (typeof EventReceiver !== 'function')
+                    return;
+                var receiver = new EventReceiver(EVENTS.websocket, EVENTS.poll, [where.channel], where.last, ring);
+                var answered = false;
+                receiver.onwsopen = function () {
+                    answered = true;
+                };
+                // With the daemon down, event.js would ask its long poll every two seconds for as long as the page
+                // stays open. This page stops listening instead, and keeps the poll of every minute, as before: when
+                // a connection that worked fails six times in a row (event.js retries for some 15 to 30 s, so a
+                // restart of the daemon or a phone changing networks is weathered; at the sixth it would go to the
+                // long poll), and when nothing answered at the start. Without a WebSocket at all (a network that
+                // blocks it, or one that hangs: event.js gives it 5 s) the long poll answers within its own timeout of
+                // 29 s from when it starts, so that one waits until 45 s.
+                receiver.onwsclose = function () {
+                    if (receiver.failures >= 6)
+                        receiver.stop();
+                };
+                function check(again) {
+                    var socket = receiver.websocket;
+                    if (answered || receiver.ever_opened || (socket && socket.readyState === 1))
+                        return;
+                    if (receiver.polling && again)
+                        setTimeout(check, 30000);
+                    else
+                        receiver.stop();
+                }
+                setTimeout(function () {
+                    check(true);
+                }, 15000);
+            };
+            document.head.appendChild(script);
+        }
+
+        // Everybody in the contest hears the same ring: each asks within the next two seconds, not all at once.
+        function ring() {
+            if (ring_timer !== null)
+                return;
+            ring_timer = setTimeout(function () {
+                ring_timer = null;
+                poll();
+            }, Math.random() * 2000);
+        }
 
         function poll() {
-            if ($('body').hasClass('window-hidden') || $overlay.is(':visible'))
+            if ($('body').hasClass('window-hidden'))
                 return;
-            $.ajax({url: url, dataType: 'json'}).done(function (data) {
+            var ask = LISTEN && !asked_where;
+            $.ajax({url: url, data: ask ? {listen: 1} : {}, dataType: 'json'}).done(function (data) {
                 if (!data)
                     return;
+                if (ask && !asked_where) {
+                    asked_where = true;
+                    if (data.listen)
+                        listen(data.listen);
+                }
                 if (data.announcements)
                     show(data.announcements);
                 // Non-zero only for someone who can edit the contest they are in.
@@ -942,7 +1105,23 @@
                     } catch (err) {
                         // As above.
                     }
-                    if (focusBefore && focusBefore !== document.body && document.contains(focusBefore))
+                    // An announcement that arrived meanwhile waits underneath: it takes the keyboard now, and gives it
+                    // back where it was when it closes (2026-11-01).
+                    var $announcement = $('#announcement-overlay');
+                    if ($announcement.is(':visible')) {
+                        // Unless it had the keyboard already: then it gives it back where it took it from. Nor over
+                        // where another box said already.
+                        if (focusBefore && !$.contains($announcement[0], focusBefore) &&
+                            focusBefore !== $announcement[0] && !$announcement.data('return-to'))
+                            $announcement.data('return-to', focusBefore);
+                        // Not while another box is still over it, a popup too: the announcement takes it when that
+                        // one goes.
+                        $announcement.trigger('announcement:uncover');
+                        // Meanwhile, back into the popup it was taken from.
+                        if (!$.contains($announcement[0], document.activeElement) && focusBefore &&
+                            $(focusBefore).closest('.featherlight').length && $(focusBefore).is(':visible'))
+                            focusBefore.focus();
+                    } else if (focusBefore && focusBefore !== document.body && document.contains(focusBefore))
                         focusBefore.focus();
                 });
                 var opensIn = parseInt(box.getAttribute('data-opens-in'), 10) * 1000;
