@@ -16,6 +16,10 @@ presents them, with the date each one was added.
 | Contest cloning | A clone keeps the freeze settings but starts unrevealed. 2026-09-21 |
 | Removing contest problems | Contest authors can remove a problem from a contest they edit; the problem and its submissions stay. The only exemption from the owner-only deletion lock. 2026-10-07 |
 | Contest PDF | Every statement of a contest in one PDF, for participants once it started and for organizers at any time; cached by content, rendered once at a time. 2026-10-19 |
+| Registration before the start | Register from the contest list or page; the access code is asked once. At the start a prompt on any page asks whoever registered whether to enter; nobody enters alone, and joining without registering still works. Migration `0162`. 2026-10-31 |
+| On site and online | Global, on-site and online standings; a Registered tab to assign people, with an on-site list for those not registered yet; balloons only on site and the reveal per view. Migration `0162`. 2026-10-31 |
+| Contest clock in the navigation bar | A pill on Contests counts down to a contest you registered for and shows the time left inside one; the floating timer box is gone. 2026-10-31 |
+| Announcements right away | Inside a contest, announcements and answers pop up at once through a text-free ring of the event daemon, titled with the contest's name. Authors and curators post them from the Clarifications tab and no longer ask questions. 2026-11-01 |
 
 ## Duels
 
@@ -95,7 +99,6 @@ presents them, with the date each one was added.
 | Visitor address behind a tunnel | Nginx takes the edge's header, from loopback only, so per-IP limits count each visitor. 2026-10-14 |
 | Error report cap | Error emails to `ADMINS` are capped per day and never use the reserve that existing accounts need. 2026-10-14 |
 | Event daemon input checks | Malformed messages, frames or long-polling URLs get an error instead of ending the daemon; message size caps. 2026-10-17 |
-
 ## Operations
 
 | Change | Notes |

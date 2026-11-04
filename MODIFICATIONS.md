@@ -1,6 +1,8 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-10-24, this source includes emails to many users sent through
+As of 2026-11-01, this source includes registration before a contest starts,
+contests on site and online with separate standings, contest announcements that
+pop up right away, emails to many users sent through
 Resend, permissions for one's own and for all duels and emails with duel
 co-organizers, a footer line in every email about the club, a Back button in
 read-only admin forms, 1v1 duels and knockout tournaments,
@@ -38,6 +40,52 @@ GNU Affero General Public License version 3.
 - Authentication using either a username or an email address.
 - A signed-in custom code testing workflow and its judge bridge support.
 - Minor registration and presentation adjustments.
+
+## Contest announcements and the Registered tab — 2026-11-01
+
+- Inside a contest, an announcement or an answer pops up right away: saving it
+  rings the contest's channel in the event daemon, with no text, and the page asks
+  the site for what is new. The pop-up takes the contest's name as its title.
+- Only participants and testers ask clarifications. Authors, curators and whoever
+  can edit every contest post announcements from the Clarifications tab, without
+  the admin or its permission.
+- The Registered tab has On site and Online tabs, a token search to add people on
+  site that also takes a pasted list, and a confirmation before moving anyone.
+- The join page shows no choice when there is only one way to take part, and the
+  access code is a plain text field.
+- No migration. Details in the [contest guide](docs/contest-tools.md).
+
+## Registration, on site and online contests — 2026-10-31
+
+- Every contest takes registrations before it starts. At the start, a prompt on
+  any page asks whoever registered whether to enter; nobody enters by themselves,
+  and whoever did not register joins as before. A registration is a
+  participation with `virtual = -2` and stays out of rankings, the API, the
+  reveal, balloons and rating until it enters.
+- Contests are online only, on site only, or on site and online. The last one
+  has Global, On site and Online standings, a Registered tab to assign people,
+  an on-site list for people who have not registered yet, balloons only on site
+  and the reveal per view.
+- A pill on Contests in the navigation bar replaces the floating timer box.
+- Migration `0162` (three columns, no table). Details in the
+  [contest guide](docs/contest-tools.md).
+
+## Fixes from a review of the fork — 2026-10-28 to 2026-10-30
+
+- Administration: reverting to an old version is for the owner accounts; rating,
+  rejudging and test data take the right permissions, and the freeze covers the
+  pages it missed.
+- Content: previews need an account, MathJax runs with its safe extension, and
+  pictures in statements go through the site.
+- Duels: players do not manage their own games; safer holds and screens.
+- Emails to users: scheduled sends, retries without duplicates, and each
+  recipient checked again right before sending.
+- Contests: freezes keep their cutoff, authors, curators and testers stay off the
+  scoreboard, and teams are safer to edit.
+- Clarifications only for those inside a running contest, bounded PDF rendering,
+  stricter problem data forms, password reset limits that Unicode variants no
+  longer dodge, and stale signups that give way to new ones.
+- No migration. The commit messages describe each change.
 
 ## Email footer and the admin bottom bar — 2026-10-24
 

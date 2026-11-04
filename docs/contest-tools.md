@@ -1,7 +1,84 @@
-# Contest tools: freeze, reveal, balloons and clarifications
+# Contest tools: registration, freeze, reveal, balloons and clarifications
 
 Configure these tools on the contest's administration page. The contest tabs link
 to the tools the signed-in user is allowed to use.
+
+## Registration before the start
+
+Every contest takes registrations before it starts. The upcoming contests list
+shows **Register** or **Registered** and how many people registered. In an
+individual contest without an access code, registering takes one click;
+otherwise the button opens the registration page, where the team, its roster and
+the access code are chosen. The access code is asked once, when registering, and
+not again at the start.
+
+Before the start, the contest page tells you whether you are registered and lets
+you **Cancel registration**. Whoever registers a team sets its name and roster; to
+change them, cancel and register again. The others on the roster can **Withdraw
+from the roster**. Whoever registered the team cannot leave it, or be removed
+from it, without cancelling first.
+
+Nobody enters by themselves. When the contest starts, whoever registered gets a
+short prompt on any page of the site asking whether to enter now, with **Enter**
+and **Not now**. In a contest with a per-participant window it says how long
+their time is and offers **Start** and **Later**; the time runs from then. Not
+now is remembered in that browser, and they enter later from the contest page or
+the contest list. Inside another contest, the prompt says they would leave it,
+and only shows within an hour of the start. The prompt opens at second zero
+without reloading and never takes the keyboard from someone who is typing. It
+does not show on the duels pages.
+
+Whoever did not register joins as always, also after the start.
+
+A registration is a participation with `virtual = -2`. Until it enters, it stays
+out of the rankings, the API, the reveal, balloons, rating, statistics and the
+contest's user count. The access code, the private participants and the
+organizations allowed to join are checked when registering and not again at the
+start, so set them up before people register.
+
+In the navigation bar, a pill on **Contests** counts down the last hour before a
+contest you registered for, and then shows the time left while you are in a
+contest, in red in the last five minutes. It replaces the floating timer box.
+
+## On site and online
+
+A contest is **Online only**, **On site only** or **On site and online**; every
+contest created before this option is online only. Only **On site and online**
+changes anything: it splits the standings and the balloons. In the other two,
+everybody competes together.
+
+The **Registered** tab (`/contest/<key>/registrations`) is open to whoever can
+edit the contest, also before the start. It shows how many registered, how many
+already entered and how many are on site and online, with **Online** and **On
+site** tabs (it opens on Online), a search, filters and pages of 100. Tick rows
+and move them to the other tab, after a confirmation. **Add on site** searches
+usernames and teams like the testers field of the admin, and also takes a pasted
+list of usernames, team names or members; the notice says who was moved, who does
+not exist and which name is ambiguous. Individual contests offer no teams, and
+the search only shows usernames.
+
+Someone added on site who has not registered yet stays on the contest's **on-site
+list** and enters on site as soon as they register or join, also after the start.
+Moving them online takes them off it. Every move is written to the site's log.
+
+The ranking shows **Global**, **On site** and **Online** above the table. Each
+view numbers its rows from 1 and shows the global place in grey, frozen or not.
+The reveal ceremony picks a view and computes first to solve and medals within
+it; **Publish** unfreezes every view.
+
+Balloons go only to those on site. If someone is moved on site in the middle of
+the contest:
+
+- the balloons for what they had already solved show as pending, and the
+  Registered tab says how many;
+- first to solve is whoever was really first among those on site; when other
+  balloons of that problem were already delivered, the desk says so;
+- a contest with seats shows **No seat assigned** until they get one.
+
+Someone moved online by mistake stops getting balloons; the ones already
+delivered stay on the desk marked **No longer on site**, to undo or keep. Once a
+contest has started with people inside, it can no longer drop **On site and
+online**; it can still be turned on.
 
 ## Frozen scoreboard
 
@@ -58,8 +135,9 @@ position changes, and supports manual control, reduced motion and a speed slider
 from 0.25× to 4×.
 
 It works for individual and team contests. In a mixed contest, choose the
-individual or team division. Individual award cards show the contestant; team
-cards show the registered members and their profile pictures.
+individual or team division; in an on site and online contest, choose the global,
+on-site or online view. Individual award cards show the contestant; team cards
+show the registered members and their profile pictures.
 
 Awards can use finishing places or medal ranges, respecting ties. First-to-solve
 awards are independent of medals. Award cards pause the presentation. Settings are
@@ -92,7 +170,9 @@ official participation on a problem, within its contest window. Accepted
 submissions made during the frozen part of a participation **never** earn a
 balloon, not even after the reveal, so balloons cannot give away the frozen
 results. A delivered balloon that later loses its AC stays on the list with a
-warning. Select a problem to filter, or **All balloons** to see everything.
+warning. Select a problem to filter, or **All balloons** to see everything. In an
+on site and online contest, only those on site get balloons (see
+[On site and online](#on-site-and-online)).
 
 ### Participant locations
 
@@ -108,24 +188,36 @@ keeps your input. Forms expire after 24 hours.
 ## Announcements and clarifications
 
 **Announcements** are created in the admin, for the whole site (this needs the
-*announce to the whole site* permission) or for one contest. They are plain text,
-appear as a pop-up until their expiry time, and stay listed on the contest's
-**Clarifications** tab. A contest announcement stops popping up when the contest
-ends unless you set another time. To withdraw one without deleting it, untick
-*is visible*.
+*announce to the whole site* permission) or for one contest. Authors, curators
+and whoever can edit every contest also write to a contest from its
+**Clarifications** tab with **Post an announcement**, until it ends, without the
+admin or its permission; announcements are withdrawn or corrected in the admin.
+They are plain text, appear as a pop-up until their expiry time, and stay listed
+on the contest's **Clarifications** tab. A contest announcement stops popping up
+when the contest ends unless you set another time. To withdraw one without
+deleting it, untick *is visible*.
 
-**Clarifications:** participants ask about the contest or a specific problem from
-the **Clarifications** tab. Questions are plain text, limited in length, and
+The pop-up takes the name of the contest as its title. Inside a contest, a new
+announcement or an answer pops up right away: saving it rings the contest's
+channel in the event daemon, which carries no text, and the page asks the site
+what is new. Without the event daemon, pages ask every minute.
+
+**Clarifications:** participants and testers ask about the contest or a specific
+problem from the **Clarifications** tab. Authors and curators do not ask: they
+answer and post announcements. Questions are plain text, limited in length, and
 limited per participant (three waiting for an answer, one every 30 seconds).
-Team members share their team's questions and limits.
+Team members share their team's questions and limits. While the contest runs,
+the tab is only for those inside it; everybody else reads that clarifications
+are published when the contest ends.
 
 The jury answers from the same tab or from the admin:
 
 - A **private** answer goes back only to whoever asked (their whole team, for a
   team).
 - A **public** answer is sent to every participant of that contest as an
-  announcement. Correcting it updates the same announcement; making it private
-  withdraws it.
+  announcement. The form shows the question as it will be published, to reword
+  it or leave it out. Correcting the answer updates the same announcement;
+  making it private withdraws it.
 - To move a question to another contest, change the contest **on the
   clarification**; its announcement moves with it. Jury members can only use
   contests they can edit.
@@ -136,9 +228,10 @@ bar while they are in the contest.
 
 ## Applying the migrations
 
-The tools need migrations `0150` to `0155`. Back up the database before running
-them, compile the translation catalogs, and rebuild the offline compression
-manifest if you use it. See the [setup guide](setup-guide.md).
+The tools need migrations `0150` to `0155`, and registration and on site and
+online contests need `0162`, which only adds three columns. Back up the database
+before running them, compile the translation catalogs, and rebuild the offline
+compression manifest if you use it. See the [setup guide](setup-guide.md).
 
 Regression tests for the freeze, reveal and balloon code are in
 [tests/contest_features](../tests/contest_features/README.md).

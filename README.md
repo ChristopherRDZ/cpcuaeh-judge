@@ -16,7 +16,8 @@
   <a href="MODIFICATIONS.md">Changelog</a>
 </p>
 
-Run individual or team contests with frozen scoreboards, an interactive reveal
+Run individual or team contests, on site and online at once, with registration
+before the start, frozen scoreboards, an interactive reveal
 ceremony, balloon delivery tools and a Spanish interface, and 1v1 duels and
 knockout tournaments on a projector. This fork is maintained by **CPC-UAEH**, the
 Club de Programación Competitiva UAEH, and runs at [cpcjudge.com](https://cpcjudge.com).
@@ -133,6 +134,20 @@ Participants download all the statements of a contest in one PDF once it starts,
 to keep reading if the connection drops; organizers can prepare it beforehand.
 Problem PDFs no longer get stuck as empty files after a failed render. Both need
 [pdfoid](docs/pdf.md).
+
+### Registration before the start
+
+Register for a contest before it starts, from the contest list or its page; the
+access code is asked once. At the start, a short prompt on any page asks whoever
+registered whether to enter now, and a pill in the navigation bar counts down
+and then shows the time left. Whoever did not register joins as always.
+
+### On site and online
+
+Run one contest on site and online at once, with Global, On site and Online
+standings. Organizers assign people from the Registered tab, even before they
+register; balloons go to those on site, and the reveal ceremony presents each
+view.
 
 ## Duels
 
@@ -279,7 +294,7 @@ own branding.
 | [Setup guide](docs/setup-guide.md) | Installation, configuration and verification |
 | [Fork overview](docs/fork-overview.md) | Features and changes relative to upstream |
 | [Django 5.2 upgrade](docs/django52/README.md) | Compatibility changes, tested dependencies and upgrade guidance |
-| [Contest tools](docs/contest-tools.md) | Freeze, reveal, balloons, announcements and clarifications |
+| [Contest tools](docs/contest-tools.md) | Registration, on site and online, freeze, reveal, balloons, announcements and clarifications |
 | [Interactive problems](docs/interactive-problems.md) | Interactors from the data page, judge requirements and verdicts |
 | [Duels](docs/duels.md) | Battles, tournaments, projectors, who organizes what, settings and limitations |
 | [Emails to users](docs/mass-email.md) | Announcements to many accounts through Resend: audiences, sending, unsubscribes, permissions |
