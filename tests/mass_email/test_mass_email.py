@@ -1,6 +1,7 @@
 """Emails to users: who receives them, how they look, the Resend client, the task that delivers them and the
 "Emails to users" section of the admin. Resend is mass_email_fake.FakeResend: nothing goes to the network."""
 import json
+import re
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
@@ -474,6 +475,7 @@ class AdminTests(TestCase):
         cls.root = make_user('root', is_staff=True, is_superuser=True)
         cls.writer = make_user('writer', is_staff=True)
         cls.writer.user_permissions.add(Permission.objects.get(codename='send_mass_email'))
+        cls.writer.user_permissions.add(Permission.objects.get(codename='approve_mass_email'))
         cls.plain = make_user('plainstaff', is_staff=True)
         cls.people = [make_user('lector%d' % index) for index in range(3)]
 
@@ -612,7 +614,15 @@ class AdminTests(TestCase):
 
     # --- sending ---
 
+    def version(self, mail):
+        with fake_resend():
+            page = self.client.get(reverse('admin:judge_massemail_send', args=[mail.pk]))
+        found = re.search(r'name="version" value="([0-9a-f]+)"', page.content.decode())
+        # Without the form (an email no longer a draft): no version, and the send is refused as before.
+        return found.group(1) if found else ''
+
     def send(self, mail, **data):
+        data.setdefault('version', self.version(mail))
         with mock.patch('judge.tasks.send_mass_email.apply_async') as queued:
             response = self.client.post(reverse('admin:judge_massemail_send', args=[mail.pk]), data)
         return response, queued
@@ -692,7 +702,7 @@ class AdminTests(TestCase):
             with mock.patch('judge.tasks.send_mass_email.apply_async',
                             side_effect=lambda args, task_id: send_mass_email.apply(args=args, task_id=task_id)):
                 response = self.client.post(reverse('admin:judge_massemail_send', args=[mail.pk]),
-                                            {'confirm': str(total), 'when': 'now'})
+                                            {'confirm': str(total), 'when': 'now', 'version': self.version(mail)})
             self.assertEqual(response.status_code, 302)
             mail.refresh_from_db()
             self.assertEqual(mail.status, MassEmail.SENT)
@@ -742,9 +752,10 @@ class AdminTests(TestCase):
         mail.include_users.set([self.people[0].profile])
         mail.min_problems = 50
         mail.save()
+        version = self.version(mail)
         with fake_resend(), mock.patch('judge.tasks.send_mass_email.apply_async', side_effect=OSError('redis')):
             response = self.client.post(reverse('admin:judge_massemail_send', args=[mail.pk]),
-                                        {'confirm': '1', 'when': 'now'})
+                                        {'confirm': '1', 'when': 'now', 'version': version})
         self.assertEqual(response.status_code, 302)
         mail.refresh_from_db()
         self.assertEqual(mail.status, MassEmail.FAILED)

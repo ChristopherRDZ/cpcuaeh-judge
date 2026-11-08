@@ -2,7 +2,8 @@
 {% load i18n admin_urls %}
 {% comment %}
     Confirmación del envío de un correo a usuarios: a quién va ahora mismo, desde qué dirección, ahora o a una
-    hora, y el número de personas escrito a mano. Ver judge/admin/mass_email.py, send_view.
+    hora, y el número de personas escrito a mano. Ver judge/admin/mass_email.py, send_view. Sólo para quien
+    aprueba (2026-11-05); `version` es la huella de lo que se ve aquí, y el envío se niega si el correo cambió.
 {% endcomment %}
 
 {% block extrastyle %}{{ block.super }}
@@ -44,12 +45,14 @@
     {% if error %}
         <p class="errornote">{% translate "Could not read the list of unsubscribed people from Resend, so it is not sent now:" %} {{ error }}</p>
     {% endif %}
+    {% if room and not form_errors %}<p class="errornote">{{ room }}</p>{% endif %}
     {% for message in form_errors %}<p class="errornote">{{ message }}</p>{% endfor %}
 
     <table class="mass-email-summary">
         <tr><th>{% translate "From" %}</th><td>{{ sender }}</td></tr>
         {% if reply_to %}<tr><th>{% translate "Replies go to" %}</th><td>{{ reply_to }}</td></tr>{% endif %}
         <tr><th>{% translate "Subject" %}</th><td>{{ mail.subject }}</td></tr>
+        {% if author %}<tr><th>{% translate "Lo escribió" %}</th><td>{{ author }}{% if editors %} &middot; {% translate "Lo cambió al revisarlo:" %} {{ editors|join:", " }}{% endif %}</td></tr>{% endif %}
         <tr><th>{% translate "Will receive it" %}</th><td>
             <span class="mass-email-number">{{ receive }}</span>
             <ul class="mass-email-who">
@@ -65,6 +68,7 @@
     {% if configured and not error %}
         <form method="post" class="mass-email-confirm">
             {% csrf_token %}
+            <input type="hidden" name="version" value="{{ version }}">
             <div class="mass-email-box">
                 <label><input type="radio" name="when" value="now" {% if when != 'later' %}checked{% endif %}>
                     {% translate "Send now" %}</label><br>

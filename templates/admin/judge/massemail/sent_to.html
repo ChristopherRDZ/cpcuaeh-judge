@@ -16,7 +16,7 @@
 {% block content_title %}{% endblock %}
 
 {% block content %}
-    <h1>{{ title }}: {{ recipients|length }}</h1>
+    <h1>{{ title }}: {{ total }}</h1>
     <p>
         {% translate "Handed to Resend" %}: <strong>{{ counts.added }}</strong>
         &middot; {% translate "Had unsubscribed" %}: <strong>{{ counts.unsubscribed }}</strong>
@@ -27,9 +27,14 @@
         <thead><tr><th>#</th><th>{% translate "User" %}</th>{% if show_email %}<th>{% translate "Email" %}</th>{% endif %}<th>{% translate "State" %}</th></tr></thead>
         <tbody>
         {% for recipient in recipients %}
-            <tr><td>{{ forloop.counter }}</td><td>{{ recipient.username }}</td>{% if show_email %}<td>{{ recipient.email }}</td>{% endif %}
+            <tr><td>{{ forloop.counter }}</td><td>{% if recipient.external %}{{ recipient.shown }} <span class="help">({% translate "correo pegado" %})</span>{% else %}{{ recipient.username }}{% endif %}</td>{% if show_email %}<td>{{ recipient.email }}</td>{% endif %}
                 <td>{{ recipient.get_state_display }}{% if recipient.error %}: {{ recipient.error }}{% endif %}</td></tr>
+        {% endfor %}
+        {% for address in pasted %}
+            <tr><td>{{ recipients|length|add:forloop.counter }}</td><td>{{ address }} <span class="help">({% translate "correo pegado" %})</span></td>
+                <td>-</td></tr>
         {% endfor %}
         </tbody>
     </table>
+    {% if pasted %}<p class="help">{% translate "El estado de los correos pegados sólo lo ve quien aprueba." %}</p>{% endif %}
 {% endblock %}

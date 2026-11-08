@@ -14,11 +14,18 @@ class MassEmail(models.Model):
     Only accounts that confirmed their email can receive it. `audience` says who among them: all, only who meets the
     filters (each filter narrows the list, and within a filter with several choices one is enough), or only the
     people chosen by name. Emails saved before 2026-10-23 have it empty and keep their meaning: with filters, the
-    filters; without them, all (judge/mass_email.py, effective_audience).
+    filters; without them, all (judge/mass_email.py, effective_audience). Since 2026-11-05 it can also go to
+    addresses without an account, pasted from a form (`external_emails`), on top of any of those.
+
+    Who writes it is not who sends it (2026-11-05): `send_mass_email` writes and asks for approval (REVIEW), and only
+    `approve_mass_email` (or a superuser) sends, an email waiting for approval or one of their own. While it waits,
+    only whoever approves can change it.
     """
-    DRAFT, SENDING, SCHEDULED, SENT, FAILED, CANCELLED = 'draft', 'sending', 'scheduled', 'sent', 'failed', 'cancelled'
+    DRAFT, REVIEW, SENDING, SCHEDULED, SENT, FAILED, CANCELLED = ('draft', 'review', 'sending', 'scheduled', 'sent',
+                                                                 'failed', 'cancelled')
     STATUS = (
         (DRAFT, _('Draft')),
+        (REVIEW, _('Por aprobar')),
         (SENDING, _('Sending')),
         (SCHEDULED, _('Scheduled')),
         (SENT, _('Sent')),
@@ -81,6 +88,9 @@ class MassEmail(models.Model):
                                            help_text=_('They receive it even if the filters leave them out, as long '
                                                        'as their email is confirmed.'))
     exclude_users = models.ManyToManyField(Profile, verbose_name=_('never include'), blank=True, related_name='+')
+    # NULL in the rows the code before 2026-11-05 inserts: it does not know the column (judge/mass_email.py,
+    # external_addresses, reads None as none).
+    external_emails = models.TextField(verbose_name=_('Más correos'), null=True, blank=True)
 
     status = models.CharField(verbose_name=_('status'), max_length=10, choices=STATUS, default=DRAFT, db_index=True)
     created_by = models.ForeignKey(Profile, verbose_name=_('written by'), null=True, blank=True,
@@ -91,7 +101,11 @@ class MassEmail(models.Model):
                                 on_delete=models.SET_NULL, related_name='+')
     sent_at = models.DateTimeField(verbose_name=_('sent at'), null=True, blank=True)
     scheduled_at = models.DateTimeField(verbose_name=_('scheduled for'), null=True, blank=True)
+    # Chosen in the form since 2026-11-05 (judge/mass_email.py, senders); empty means the first of the list.
     from_email = models.CharField(verbose_name=_('sender'), max_length=254, blank=True)
+    review_requested_at = models.DateTimeField(verbose_name=_('Enviado a aprobar'), null=True, blank=True)
+    # What whoever approves wrote when sending it back to its author.
+    review_note = models.TextField(verbose_name=_('Nota de quien aprueba'), null=True, blank=True)
     recipient_count = models.PositiveIntegerField(verbose_name=_('recipients'), null=True, blank=True)
     task_id = models.CharField(max_length=64, blank=True)
     resend_segment_id = models.CharField(max_length=64, blank=True)
@@ -108,8 +122,9 @@ class MassEmail(models.Model):
         ordering = ('-id',)
         # As with problems and contests: one's own emails, or all of them (the second works by itself too).
         permissions = (
-            ('send_mass_email', _('Write and send own emails to users')),
-            ('edit_all_mass_email', _('Edit and send all emails to users')),
+            ('send_mass_email', _('Escribir correos a usuarios propios y pedir su aprobación')),
+            ('edit_all_mass_email', _('Editar todos los correos a usuarios')),
+            ('approve_mass_email', _('Aprobar y enviar correos a usuarios')),
         )
         verbose_name = _('email to users')
         verbose_name_plural = _('emails to users')
@@ -119,7 +134,8 @@ class MassEmail(models.Model):
 
     @property
     def is_editable(self):
-        return self.status == self.DRAFT
+        """A draft, or an email waiting for approval: who may change which is judge/admin/mass_email.py."""
+        return self.status in (self.DRAFT, self.REVIEW)
 
     @property
     def broadcast_name(self):
@@ -141,6 +157,9 @@ class MassEmailRecipient(models.Model):
     profile = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     username = models.CharField(max_length=150)
     email = models.CharField(max_length=254)
+    # An address pasted in the email (MassEmail.external_emails), handed over as it is, without a name: it may also be
+    # the address of an account that is not on the list (judge/mass_email.py, recipient_rows).
+    external = models.BooleanField(default=False, db_default=False)
     state = models.CharField(max_length=12, choices=STATES, default=PENDING)
     error = models.CharField(max_length=255, blank=True)
 

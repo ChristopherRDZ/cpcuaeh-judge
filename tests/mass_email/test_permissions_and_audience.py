@@ -2,6 +2,7 @@
 edit_all_mass_email does. Who receives an email (all, filters or chosen people), the rating filter and the page that
 follows a task. Resend is mass_email_fake.FakeResend: nothing goes to the network."""
 import json
+import re
 from datetime import date
 
 from django.contrib.auth.models import Permission
@@ -172,7 +173,7 @@ class MailOwnershipTests(TestCase):
         self.client.force_login(self.chief)
         self.assertIn('fa-envelope', self.client.get(reverse('admin:index')).content.decode())
         self.assertEqual(self.client.get(reverse('admin:judge_massemail_change', args=[theirs.pk])).status_code, 200)
-        self.assertEqual(self.client.get(reverse('admin:judge_massemail_send', args=[theirs.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('admin:judge_massemail_send', args=[theirs.pk])).status_code, 302)
         response = self.client.post(reverse('admin:judge_massemail_duplicate', args=[theirs.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertEqual(MassEmail.objects.latest('id').created_by, self.chief.profile)
@@ -212,8 +213,10 @@ class MailOwnershipTests(TestCase):
         mail = MassEmail.objects.get(subject='Solo a dos')
         self.assertEqual(mail.audience, 'users')
         self.assertEqual(names(recipient_rows(filters_of(mail))), ['maillector0', 'maillector1'])
-        page = self.client.get(reverse('admin:judge_massemail_send', args=[mail.pk]),
-                               HTTP_ACCEPT_LANGUAGE='es').content.decode()
+        self.client.force_login(self.root)
+        with fake_resend():
+            page = self.client.get(reverse('admin:judge_massemail_send', args=[mail.pk]),
+                                   HTTP_ACCEPT_LANGUAGE='es').content.decode()
         self.assertIn('Sólo 2 personas elegidas.', page)
 
     def test_a_draft_saved_before_shows_what_it_meant(self):
@@ -247,10 +250,13 @@ class MailOwnershipTests(TestCase):
     def test_progress_page_comes_back_to_the_email(self):
         mail = self.mail_of(self.ana, audience='users')
         mail.include_users.set([self.people[0].profile])
-        self.client.force_login(self.ana)
+        self.client.force_login(self.root)
         with fake_resend():
+            page = self.client.get(reverse('admin:judge_massemail_send', args=[mail.pk])).content.decode()
+            version = re.search(r'name="version" value="([0-9a-f]+)"', page).group(1)
             response = self.client.post(reverse('admin:judge_massemail_send', args=[mail.pk]), {'confirm': '1',
-                                                                                              'when': 'now'})
+                                                                                              'when': 'now',
+                                                                                              'version': version})
         self.assertEqual(response.status_code, 302)
         self.assertIn('back=' + reverse('admin:judge_massemail_change', args=[mail.pk]).replace('/', '%2F'),
                       response['Location'])

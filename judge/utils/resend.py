@@ -126,7 +126,10 @@ class ResendClient:
     def create_contact(self, email, first_name, segment_id=None):
         # `unsubscribed` is never sent: a new contact starts subscribed, and an existing one keeps its choice.
         # Each segment goes as an object with its id: a bare id is refused with «expected object, received string».
-        data = {'email': email, 'first_name': first_name}
+        # A pasted address (2026-11-05) has no name: the field is left out instead of sent empty.
+        data = {'email': email}
+        if first_name:
+            data['first_name'] = first_name
         if segment_id:
             data['segments'] = [{'id': segment_id}]
         return self.request('POST', '/contacts', json=data)['id']
@@ -136,6 +139,9 @@ class ResendClient:
 
     def resubscribe(self, contact_id):
         self.request('PATCH', '/contacts/%s' % quote(contact_id, safe=''), json={'unsubscribed': False})
+
+    def rename(self, contact_id, first_name):
+        self.request('PATCH', '/contacts/%s' % quote(contact_id, safe=''), json={'first_name': first_name})
 
     def unsubscribe(self, contact_id):
         self.request('PATCH', '/contacts/%s' % quote(contact_id, safe=''), json={'unsubscribed': True})

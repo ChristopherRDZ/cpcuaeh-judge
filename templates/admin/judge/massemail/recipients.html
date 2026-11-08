@@ -2,7 +2,7 @@
 {% load i18n admin_urls %}
 {% comment %}
     Quién recibiría un correo con los filtros del formulario, guardado o no (se abre en otra pestaña).
-    Las direcciones sólo las ve un superusuario.
+    Las direcciones sólo las ve un superusuario; las de los correos pegados, tapadas, para los demás.
 {% endcomment %}
 
 {% block breadcrumbs %}
@@ -22,8 +22,10 @@
     <table>
         <thead><tr><th>#</th><th>{% translate "User" %}</th>{% if show_email %}<th>{% translate "Email" %}</th>{% endif %}</tr></thead>
         <tbody>
-        {% for profile_id, username, email in rows %}
-            <tr><td>{{ forloop.counter }}</td><td><a href="{% url 'user_page' username %}" target="_blank" rel="noopener">{{ username }}</a></td>{% if show_email %}<td>{{ email }}</td>{% endif %}</tr>
+        {% for row in rows %}
+            <tr><td>{{ forloop.counter }}</td>
+                <td>{% if row.external %}{{ row.shown }} <span class="help">({% translate "correo pegado" %})</span>{% else %}<a href="{% url 'user_page' row.username %}" target="_blank" rel="noopener">{{ row.username }}</a>{% endif %}</td>
+                {% if show_email %}<td>{{ row.email }}</td>{% endif %}</tr>
         {% empty %}
             <tr><td colspan="3">{% translate "Nobody." %}</td></tr>
         {% endfor %}

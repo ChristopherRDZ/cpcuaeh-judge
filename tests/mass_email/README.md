@@ -30,9 +30,10 @@ The tests cover:
   out, scheduled emails, retries that never send twice, and the first error
   reported when nobody could be added;
 - the admin: who sees which emails (`send_mass_email` for one's own,
-  `edit_all_mass_email` for all), the live counter, the send page that asks to
-  type the number of recipients, delivery figures, the unsubscribed list with
-  masked addresses, and the page that follows a task;
+  `edit_all_mass_email` for all), the live counter, the send page that only
+  `approve_mass_email` reaches and that asks to type the number of recipients
+  and carries the version of what was reviewed, delivery figures, the
+  unsubscribed list with masked addresses, and the page that follows a task;
 - the footer of every email the site sends: the line saying the club is
   independent, and the privacy notice link in emails to users;
 - migration 0158 and the `send_mass_email` permission.

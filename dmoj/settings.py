@@ -136,9 +136,14 @@ DMOJ_EMAIL_ERROR_DAILY_LIMIT = 10
 DMOJ_RESEND_API_KEY = None
 # Resend allows 10 requests per second per account, shared with any other application using it.
 DMOJ_RESEND_REQUESTS_PER_SECOND = 4
-# Sender and reply-to address; None means DEFAULT_FROM_EMAIL and SITE_ADMIN_EMAIL.
+# Sender and reply-to address; None means DEFAULT_FROM_EMAIL and SITE_ADMIN_EMAIL. Since 2026-11-05 the sender is
+# only the first of the list until «Remitentes y redes» in the admin saves one, and every other sender there has to
+# be of its domain (judge/mass_email.py, senders).
 DMOJ_MASS_EMAIL_FROM = None
 DMOJ_MASS_EMAIL_REPLY_TO = None
+# Contacts the Resend account keeps (accounts and pasted addresses); the free plan, 1000. Sending refuses what would
+# go past it (judge/admin/mass_email.py, audience).
+DMOJ_RESEND_CONTACT_LIMIT = 1000
 # Base of the links and images in those emails; None means https:// and the domain of the current Site.
 DMOJ_MASS_EMAIL_SITE_URL = None
 
@@ -293,8 +298,11 @@ else:
                     'icon': 'fa-envelope',
                     'children': [
                         'judge.MassEmail',
+                        {'title': _('Por aprobar'), 'url': '/admin/judge/massemail/?status__exact=review'},
                         # People who used the unsubscribe link, read from Resend.
                         {'title': _('Unsubscribed people'), 'url': '/admin/judge/massemail/unsubscribed/'},
+                        # The senders the form offers and the social networks at the foot of every email.
+                        {'title': _('Remitentes y redes'), 'url': '/admin/judge/massemail/settings/'},
                     ],
                 },
                 {

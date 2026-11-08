@@ -8286,3 +8286,247 @@ msgid "Y %(count)d más."
 msgid_plural "Y %(count)d más."
 msgstr[0] "And %(count)d more."
 msgstr[1] "And %(count)d more."
+
+#: cpc 2026-11-05
+msgid "Escribir correos a usuarios propios y pedir su aprobación"
+msgstr "Write own emails to users and ask for approval"
+
+#: cpc 2026-11-05
+msgid "Editar todos los correos a usuarios"
+msgstr "Edit all emails to users"
+
+#: cpc 2026-11-05
+msgid "Aprobar y enviar correos a usuarios"
+msgstr "Approve and send emails to users"
+
+#: cpc 2026-11-05
+msgid "Por aprobar"
+msgstr "Waiting for approval"
+
+#: cpc 2026-11-05
+msgid "Enviado a aprobar"
+msgstr "Sent for approval"
+
+#: cpc 2026-11-05
+msgid "Nota de quien aprueba"
+msgstr "Note from the approver"
+
+#: cpc 2026-11-05
+msgid "Correos por aprobar"
+msgstr "Emails waiting for approval"
+
+#: cpc 2026-11-05
+msgid "Más correos"
+msgstr "More addresses"
+
+#: cpc 2026-11-05
+msgid "Pega los correos de un formulario. Si alguno ya está en la lista, le llega una sola vez."
+msgstr "Paste the addresses of a form. If one is already on the list, it gets a single email."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Corrige o quita estos correos: %(emails)s"
+msgstr "Fix or remove these addresses: %(emails)s"
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Caben hasta %(count)d correos pegados."
+msgstr "Up to %(count)d pasted addresses fit."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Las respuestas llegan a %(email)s."
+msgstr "Replies go to %(email)s."
+
+#: cpc 2026-11-05
+msgid "Elige un remitente de la lista."
+msgstr "Choose a sender from the list."
+
+#: cpc 2026-11-05
+msgid "Pega aquí la columna de correos"
+msgstr "Paste the column of addresses here"
+
+#: cpc 2026-11-05
+msgid "Quitar los mal escritos"
+msgstr "Remove the badly written ones"
+
+#: cpc 2026-11-05
+msgid "Quitar todos"
+msgstr "Remove all"
+
+#: cpc 2026-11-05
+msgid "correo"
+msgstr "address"
+
+#: cpc 2026-11-05
+msgid "correos"
+msgstr "addresses"
+
+#: cpc 2026-11-05
+msgid "mal escrito"
+msgstr "badly written"
+
+#: cpc 2026-11-05
+msgid "mal escritos"
+msgstr "badly written"
+
+#: cpc 2026-11-05
+msgid "correo pegado"
+msgstr "pasted address"
+
+#: cpc 2026-11-05
+msgid "Los correos pegados no tienen usuario: ahí el saludo queda sin nombre."
+msgstr "Pasted addresses have no username: the greeting goes without a name there."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Recibes este correo porque tienes una cuenta en %(site_name)s o dejaste tu correo en un formulario del club."
+msgstr "You receive this email because you have an account on %(site_name)s or left your address in a form of the club."
+
+#: cpc 2026-11-05
+msgid "Guardar cambios"
+msgstr "Save changes"
+
+#: cpc 2026-11-05
+msgid "Guardar y pedir aprobación"
+msgstr "Save and ask for approval"
+
+#: cpc 2026-11-05
+msgid "Enviado a aprobar."
+msgstr "Sent for approval."
+
+#: cpc 2026-11-05
+msgid "Retirar la solicitud"
+msgstr "Take back the request"
+
+#: cpc 2026-11-05
+msgid "Solicitud retirada."
+msgstr "Request taken back."
+
+#: cpc 2026-11-05
+msgid "Solicitud retirada: vuelve a ser un borrador."
+msgstr "Request taken back: it is a draft again."
+
+#: cpc 2026-11-05
+msgid "Ya no espera aprobación."
+msgstr "It is no longer waiting for approval."
+
+#: cpc 2026-11-05
+msgid "Devolverlo con una nota"
+msgstr "Send it back with a note"
+
+#: cpc 2026-11-05
+msgid "Devolver"
+msgstr "Send back"
+
+#: cpc 2026-11-05
+msgid "Devuelto a quien lo escribió."
+msgstr "Sent back to whoever wrote it."
+
+#: cpc 2026-11-05
+msgid "Lo devolvió quien aprueba:"
+msgstr "Sent back by the approver:"
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Por aprobar desde el %(when)s. Lo escribió %(user)s."
+msgstr "Waiting for approval since %(when)s. Written by %(user)s."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Lo envió %(user)s."
+msgstr "Sent by %(user)s."
+
+#: cpc 2026-11-05
+msgid "Lo escribió"
+msgstr "Written by"
+
+#: cpc 2026-11-05
+msgid "Lo cambió al revisarlo:"
+msgstr "Changed while reviewing it:"
+
+#: cpc 2026-11-05
+msgid "Revisar y enviar"
+msgstr "Review and send"
+
+#: cpc 2026-11-05
+msgid "Sólo quien aprueba lo envía: pide su aprobación."
+msgstr "Only an approver sends it: ask for its approval."
+
+#: cpc 2026-11-05
+msgid "Espera su aprobación: lo envía quien aprueba."
+msgstr "It is waiting for approval: an approver sends it."
+
+#: cpc 2026-11-05
+msgid "El correo cambió mientras lo revisabas: revísalo otra vez."
+msgstr "The email changed while you were reviewing it: review it again."
+
+#: cpc 2026-11-05
+msgid "Su remitente ya no está en la lista: elige otro en el correo."
+msgstr "Its sender is no longer on the list: choose another one in the email."
+
+#: cpc 2026-11-05
+msgid "Remitentes y redes"
+msgstr "Senders and networks"
+
+#: cpc 2026-11-05
+msgid "Remitentes"
+msgstr "Senders"
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Uno por línea, como los de arriba, todos de %(domain)s. El primero es el que se elige si no se cambia."
+msgstr "One per line, like the ones above, all of %(domain)s. The first one is chosen unless changed."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Estas líneas no son un correo de %(domain)s: %(lines)s"
+msgstr "These lines are not an address of %(domain)s: %(lines)s"
+
+#: cpc 2026-11-05
+msgid "Deja al menos un remitente."
+msgstr "Leave at least one sender."
+
+#: cpc 2026-11-05
+msgid "Redes sociales"
+msgstr "Social networks"
+
+#: cpc 2026-11-05
+msgid "Salen con su icono al pie de cada correo; las vacías no salen."
+msgstr "They show with their icon at the foot of every email; empty ones do not."
+
+#: cpc 2026-11-05
+msgid "Guardar"
+msgstr "Save"
+
+#: cpc 2026-11-05
+msgid "Guardado."
+msgstr "Saved."
+
+#: cpc 2026-11-05
+msgid "Remitentes y redes guardados."
+msgstr "Senders and networks saved."
+
+#: cpc 2026-11-05
+msgid "El correo cambió mientras lo editabas: vuelve a abrirlo."
+msgstr "The email changed while you were editing it: open it again."
+
+#: cpc 2026-11-05
+msgid "Alguien más lo cambió mientras lo editabas. Ábrelo de nuevo para ver lo suyo; si guardas otra vez, lo tuyo lo reemplaza."
+msgstr "Somebody else changed it while you were editing it. Open it again to see their changes; if you save again, yours replace them."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Resend guarda hasta %(limit)d contactos y ya tiene %(have)d: este correo necesita %(new)d más. Quita correos pegados o borra contactos viejos en Resend."
+msgstr "Resend keeps up to %(limit)d contacts and already has %(have)d: this email needs %(new)d more. Remove pasted addresses or delete old contacts in Resend."
+
+#: cpc 2026-11-05
+msgid "El estado de los correos pegados sólo lo ve quien aprueba."
+msgstr "Only whoever approves sees the state of the pasted addresses."
+
+#: cpc 2026-11-05
+#, python-format
+msgid "Además, %(count)d correo pegado."
+msgid_plural "Además, %(count)d correos pegados."
+msgstr[0] "Also %(count)d pasted address."
+msgstr[1] "Also %(count)d pasted addresses."

@@ -252,7 +252,9 @@ def _hand_over(client, mail, contacts, pk):
         if row is None or scrub_cancelled(MassEmailRecipient.objects.filter(pk=pk)):
             return
         state, error = MassEmailRecipient.UNSUBSCRIBED, ''
-        if _reachable(row, _account(row)):
+        # A pasted address (2026-11-05) has no account to look at: it goes as it was pasted, unless Resend has it as
+        # unsubscribed, as everybody.
+        if ('@' in row.email) if row.external else _reachable(row, _account(row)):
             contact = contacts.get(row.email.strip().lower())
             try:
                 if contact is not None and contact.get('unsubscribed'):
@@ -260,6 +262,14 @@ def _hand_over(client, mail, contacts, pk):
                 elif contact is not None:
                     client.add_to_segment(contact['id'], mail.resend_segment_id)
                     state = MassEmailRecipient.ADDED
+                    # A contact made for a pasted address has no name (2026-11-05): once it is the address of an
+                    # account, it takes its username, or «Hola, {{usuario}}» would greet nobody for good. Only a
+                    # nicety: whatever Resend answers, the person is in the list already.
+                    if not row.external and row.username and not contact.get('first_name'):
+                        try:
+                            client.rename(contact['id'], row.username)
+                        except Exception:
+                            logger.warning('The contact of %s kept no name', row.username, exc_info=True)
                 else:
                     client.create_contact(row.email, row.username, mail.resend_segment_id)
                     state = MassEmailRecipient.ADDED

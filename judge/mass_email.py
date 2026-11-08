@@ -12,20 +12,34 @@ confirmed it, or that an administrator deactivated, never do. Among them, the em
 there was no `audience`: an email without filters went to everybody even if it named people to include, which
 looked like "only these people" and was not. Those emails keep that meaning (effective_audience).
 
+Since 2026-11-05 an email can also go to addresses pasted from a form (`external_emails`), on top of whoever the
+audience says. A pasted address goes as it is, without a name, also when an account has it, and also when that
+account never confirmed its address or was deactivated (the person gave it in the form): whoever only writes the
+email does not learn whose it is, neither from the count nor after sending; whoever approves, trusted, sees the list
+as it goes (only a superuser sees addresses). When it is sent, it is left out if it is already in the
+list, or if it is the address of an account in "never include" (recipient_rows, `reveal`).
+
 Content. Markdown, as in news posts, with HTML allowed and then cleaned. Email programs ignore most of a page's
 CSS, so every element gets its style inline, links and images become absolute, and the text goes inside the same
 frame as the site's other emails (registration/email_base.html). MathJax does not exist in email: formulas with
 ~...~ arrive as plain text.
 """
+import hashlib
+import json
 import re
 from datetime import datetime, time, timedelta
+from email.utils import parseaddr
 from functools import reduce
 from operator import and_
 from urllib.parse import urljoin, urlsplit
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator, validate_email
+from django.db import transaction
 from django.contrib.sites.models import Site
+from django.core.cache import cache
 from django.contrib.auth.models import Group
 from django.db.models import Q
 from django.template import loader
@@ -35,12 +49,12 @@ from django.utils.translation import gettext, ngettext
 from markupsafe import Markup
 
 from judge.jinja2.markdown import fragment_tree_to_str, fragments_to_tree, markdown
-from judge.models import Contest, ContestParticipation, MassEmail, Organization, Profile
+from judge.models import Contest, ContestParticipation, MassEmail, MiscConfig, Organization, Profile
 from judge.models.team import ContestTeamMember
 
 FILTER_FIELDS = ('audience', 'contests', 'include_virtual', 'organizations', 'groups', 'active_within_days',
                  'joined_after', 'joined_before', 'min_problems', 'min_rating', 'max_rating', 'include_users',
-                 'exclude_users')
+                 'exclude_users', 'external_emails')
 MANY_FIELDS = ('contests', 'organizations', 'groups', 'include_users', 'exclude_users')
 # The filters that narrow the list, used only when the email goes to who meets the filters.
 NARROWING_FIELDS = ('contests', 'organizations', 'groups', 'active_within_days', 'joined_after', 'joined_before',
@@ -55,12 +69,48 @@ RESEND_UNSUBSCRIBE_URL = '{{{RESEND_UNSUBSCRIBE_URL}}}'
 
 EMAIL_SHAPE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
+# Addresses without an account: whatever is pasted (a column of a spreadsheet, a list with names, commas...) is cut
+# here, and every piece with an @ is an address, good or badly written. The rest (names, dates) is ignored.
+PASTE_SEPARATORS = re.compile(r'[\s,;<>()\[\]"\'|]+')
+# The free plan of Resend keeps 1000 contacts, accounts included.
+MAX_EXTERNAL = 1000
+
+
+# --- addresses without an account ------------------------------------------------------------------------------
+
+def parse_addresses(text):
+    """(good, bad) in the order they were pasted, without repeating an address (in any case)."""
+    good, bad, seen = [], [], set()
+    for piece in PASTE_SEPARATORS.split(text or ''):
+        piece = piece.strip('.:')
+        if piece.lower().startswith('mailto:'):
+            piece = piece[len('mailto:'):]
+        if '@' not in piece or piece.lower() in seen:
+            continue
+        seen.add(piece.lower())
+        try:
+            validate_email(piece)
+        except ValidationError:
+            bad.append(piece)
+            continue
+        if not EMAIL_SHAPE.match(piece) or len(piece) > 254:
+            bad.append(piece)
+        else:
+            good.append(piece)
+    return good, bad
+
+
+def external_addresses(value):
+    """The good addresses of what is saved (one per line, as the form leaves it)."""
+    return parse_addresses(value)[0]
+
 
 # --- recipients ------------------------------------------------------------------------------------------------
 
 def empty_filters():
     filters = {name: ([] if name in MANY_FIELDS else None) for name in FILTER_FIELDS}
     filters['audience'] = ''
+    filters['external_emails'] = ''
     return filters
 
 
@@ -111,6 +161,7 @@ def confirmed_profiles():
 
 
 def recipient_profiles(filters):
+    """The accounts the email goes to; recipient_rows adds the addresses without an account."""
     audience = effective_audience(filters)
     profiles = confirmed_profiles()
     if audience == MassEmail.USERS:
@@ -208,14 +259,23 @@ def describe(filters):
         if people:
             lines.append(ngettext('Also %(count)d person chosen by name.', 'Also %(count)d people chosen by name.',
                                   people) % {'count': people})
+    external = len(external_addresses(filters.get('external_emails')))
+    if external:
+        lines.append(ngettext('Además, %(count)d correo pegado.', 'Además, %(count)d correos pegados.',
+                              external) % {'count': external})
     excluded = len(filters['exclude_users'] or [])
     if excluded:
         lines.append(ngettext('Never: %(count)d person.', 'Never: %(count)d people.', excluded) % {'count': excluded})
     return lines
 
 
-def recipient_rows(filters):
-    """[(profile id, username, email)], one per address, in account order."""
+def recipient_rows(filters, reveal=True):
+    """[(profile id, username, email, external)], one per address: the accounts in account order, and then the
+    pasted addresses in the order they were pasted, as (None, '', address, True). See the docstring of the module.
+
+    Without `reveal` (the count and the list for whoever does not approve, round 1 of the review, 2026-11-05) the
+    pasted addresses are all there, even one already on the list or of an account in «never include»: leaving one
+    out told whose it was. The send page, for whoever approves, and the delivery leave them out."""
     rows, seen = [], set()
     for profile_id, username, email in recipient_profiles(filters).order_by('id') \
             .values_list('id', 'user__username', 'user__email'):
@@ -224,7 +284,18 @@ def recipient_rows(filters):
         if not EMAIL_SHAPE.match(email) or key in seen:
             continue
         seen.add(key)
-        rows.append((profile_id, username, email))
+        rows.append((profile_id, username, email, False))
+    if not reveal:
+        seen = set()
+    pasted = [address for address in external_addresses(filters.get('external_emails'))
+              if address.lower() not in seen]
+    if reveal and pasted and filters['exclude_users']:
+        seen.update((email or '').strip().lower() for email in User.objects.filter(
+            profile__in=filters['exclude_users']).values_list('email', flat=True))
+    for address in pasted:
+        if address.lower() not in seen:
+            seen.add(address.lower())
+            rows.append((None, '', address, True))
     return rows
 
 
@@ -383,16 +454,22 @@ def render_email(mail, username='', for_resend=False):
     body = render_body(mail.content, base_url)
     site_name = Site.objects.get_current().name
     unsubscribe_url = RESEND_UNSUBSCRIBE_URL if for_resend else base_url + '/'
+    # One page for everybody: with addresses without an account, the first line of the foot says both reasons.
+    external = bool(external_addresses(mail.external_emails))
+    networks = socials()
     with translation.override(mail.language or 'es'):
         page = loader.render_to_string('mass_email/email.html', {
             'protocol': parts.scheme, 'domain': parts.netloc, 'site_name': site_name,
             'site_admin_email': getattr(settings, 'SITE_ADMIN_EMAIL', ''),
             'preheader': mail.preheader, 'heading': mail.heading, 'body': Markup(body),
-            'unsubscribe_url': unsubscribe_url,
+            'unsubscribe_url': unsubscribe_url, 'external': external, 'socials': networks,
         })
-        footer = [gettext('You receive this email because you have an account on %(site_name)s.') %
-                  {'site_name': site_name},
-                  gettext('CPC-UAEH is an independent student club; it is not an official UAEH service.'),
+        reason = (gettext('Recibes este correo porque tienes una cuenta en %(site_name)s o dejaste tu correo en un '
+                          'formulario del club.') if external else
+                  gettext('You receive this email because you have an account on %(site_name)s.'))
+        footer = ['%s: %s' % (network['label'], network['url']) for network in networks]
+        footer += [reason % {'site_name': site_name},
+                   gettext('CPC-UAEH is an independent student club; it is not an official UAEH service.'),
                   gettext('To stop receiving these emails: %(url)s') % {'url': unsubscribe_url},
                   gettext('Privacy notice: %(url)s') % {'url': base_url + '/privacidad/'},
                   base_url]
@@ -409,9 +486,151 @@ def preview_fragment(content):
                   (FONT, render_body(content)))
 
 
-def sender():
+# --- waiting for approval --------------------------------------------------------------------------------------
+
+REVIEW_COUNT_KEY = 'mass_email_review_count'
+
+
+def review_count():
+    """How many emails wait for approval: the number of the envelope in the bar of the site, for whoever approves
+    (judge/jinja2/__init__.py). Kept a minute; every change of status that matters forgets it (review_changed)."""
+    count = cache.get(REVIEW_COUNT_KEY)
+    if count is None:
+        count = MassEmail.objects.filter(status=MassEmail.REVIEW).count()
+        cache.set(REVIEW_COUNT_KEY, count, 60)
+    return count
+
+
+def review_changed():
+    cache.delete(REVIEW_COUNT_KEY)
+
+
+def fingerprint(mail):
+    """A digest of everything of a saved email that decides what is sent and to whom. The page that sends it carries
+    it, and it is checked again under the lock that starts the delivery: what goes out is what was looked at, also
+    if somebody changed it or sent it back meanwhile. With its status (round 1 of the review, 2026-11-05): an email
+    taken back or sent back unchanged is a draft again, and a superuser, who may send any draft, sent it anyway."""
+    values = [mail.status, str(mail.review_requested_at), mail.subject, mail.preheader, mail.heading, mail.content,
+              mail.language, mail.from_email or '', mail.external_emails or '', mail.audience, mail.include_virtual,
+              mail.active_within_days, mail.joined_after, mail.joined_before, mail.min_problems, mail.min_rating,
+              mail.max_rating]
+    values += [sorted(getattr(mail, name).values_list('pk', flat=True)) for name in MANY_FIELDS]
+    return hashlib.sha256(json.dumps(values, default=str).encode()).hexdigest()[:40]
+
+
+# --- senders and social networks -------------------------------------------------------------------------------
+# Both are saved in the miscellaneous configuration (MiscConfig), one key each, from the page «Remitentes y redes»
+# (judge/admin/mass_email.py, settings_view). Read here directly, not through request.misc_config: emails are also
+# rendered by Celery, without a request.
+
+SENDERS_KEY = 'mass_email_senders'
+SOCIAL_KEY = 'mass_email_social_%s'
+# In the order they show, in the form and at the foot of the email. The icons are static/icons/redes/<key>.png.
+SOCIAL_NETWORKS = (('facebook', 'Facebook'), ('instagram', 'Instagram'), ('tiktok', 'TikTok'), ('x', 'X'),
+                   ('youtube', 'YouTube'), ('discord', 'Discord'), ('whatsapp', 'WhatsApp'),
+                   ('linkedin', 'LinkedIn'), ('github', 'GitHub'))
+# After the address of the site, until whoever approves saves another list (2026-11-05).
+DEFAULT_SENDERS = (('CPC-UAEH Eventos', 'eventos'), ('CPC-UAEH Concursos', 'concursos'),
+                   ('CPC-UAEH Entrenamientos', 'entrenamientos'), ('CPC-UAEH Avisos', 'avisos'))
+# A name with one of these would have to go between quotes, and some programs show it wrong.
+NAME_SPECIALS = set(',;:"<>@()[]\\')
+check_url = URLValidator(schemes=['https', 'http'])
+
+
+def read_config(key):
+    """The value saved under a key, or None if there is none."""
+    return MiscConfig.objects.filter(key=key).order_by('pk').values_list('value', flat=True).first()
+
+
+def write_config(key, value):
+    """Saves one value under a key: the first row with it, and no other."""
+    with transaction.atomic():
+        rows = list(MiscConfig.objects.select_for_update().filter(key=key).order_by('pk').values_list('pk', flat=True))
+        if rows:
+            MiscConfig.objects.filter(pk__in=rows[1:]).delete()
+            MiscConfig.objects.filter(pk=rows[0]).update(value=value)
+        else:
+            MiscConfig.objects.create(key=key, value=value)
+
+
+def site_sender():
+    """The address the site sent every email from before 2026-11-05."""
     return getattr(settings, 'DMOJ_MASS_EMAIL_FROM', None) or settings.DEFAULT_FROM_EMAIL
+
+
+def sender_domain():
+    return parseaddr(site_sender())[1].rpartition('@')[2].lower()
+
+
+def address_of(sender):
+    return parseaddr(sender or '')[1].strip().lower()
+
+
+def parse_senders(text):
+    """(good, bad): each line «Name <address>» or only the address, of the domain of the site. Good ones come back
+    written always the same way; a repeated address counts once."""
+    good, bad, seen = [], [], set()
+    domain = sender_domain()
+    for line in (text or '').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        name, address = parseaddr(line)
+        name = ' '.join(name.split())
+        valid = '@' in address and address.rpartition('@')[2].lower() == domain and \
+            not NAME_SPECIALS.intersection(name) and EMAIL_SHAPE.match(address)
+        if valid:
+            try:
+                validate_email(address)
+            except ValidationError:
+                valid = False
+        if not valid:
+            bad.append(line)
+        elif address.lower() not in seen:
+            seen.add(address.lower())
+            good.append('%s <%s>' % (name, address) if name else address)
+    return good, bad
+
+
+def default_senders():
+    domain = sender_domain()
+    return [site_sender()] + ['%s <%s@%s>' % (name, local, domain) for name, local in DEFAULT_SENDERS]
+
+
+def senders():
+    """The addresses an email can go from, the first one being the one of an email that chose none."""
+    saved = read_config(SENDERS_KEY)
+    if saved is None:
+        return default_senders()
+    return parse_senders(saved)[0] or [site_sender()]
+
+
+def sender(chosen=''):
+    """The sender of the list with the address chosen (as the list writes it now), the first one if none was chosen,
+    or None if the list no longer has it."""
+    available = senders()
+    if not address_of(chosen):
+        return available[0]
+    for item in available:
+        if address_of(item) == address_of(chosen):
+            return item
+    return None
 
 
 def reply_to():
     return getattr(settings, 'DMOJ_MASS_EMAIL_REPLY_TO', None) or getattr(settings, 'SITE_ADMIN_EMAIL', '') or None
+
+
+def socials():
+    """[{key, label, url}] of the networks with a link, in the order of SOCIAL_NETWORKS."""
+    saved = dict(MiscConfig.objects.filter(key__in=[SOCIAL_KEY % key for key, label in SOCIAL_NETWORKS])
+                 .order_by('-pk').values_list('key', 'value'))
+    found = []
+    for key, label in SOCIAL_NETWORKS:
+        url = (saved.get(SOCIAL_KEY % key) or '').strip()
+        try:
+            check_url(url)
+        except ValidationError:
+            continue
+        found.append({'key': key, 'label': label, 'url': url})
+    return found

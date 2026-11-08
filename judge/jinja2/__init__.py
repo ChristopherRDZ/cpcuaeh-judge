@@ -28,6 +28,17 @@ def counter(start=1):
     return itertools.count(start).__next__
 
 
+@registry.function
+def mass_email_review_count(user):
+    """Emails to users waiting for approval, for the envelope of the bar (base.html); 0 for whoever does not
+    approve. The admin needs is_staff, so the rest of the accounts cost no query."""
+    if not user.is_authenticated or not user.is_active or not user.is_staff or \
+            not user.has_perm('judge.approve_mass_email'):
+        return 0
+    from judge.mass_email import review_count
+    return review_count()
+
+
 class DMOJExtension(Extension):
     def __init__(self, env):
         super(DMOJExtension, self).__init__(env)

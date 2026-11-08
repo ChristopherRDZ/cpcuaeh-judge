@@ -270,6 +270,21 @@
                    title="{{ _('Invitaciones de equipos pendientes') }}" aria-label="{{ _('Invitaciones de equipos pendientes') }}">
                     <i class="fa fa-users" aria-hidden="true"></i><span class="team-invite-badge" hidden></span>
                 </a>
+                {#- Emails to users waiting for approval, only for whoever approves them (judge/jinja2/__init__.py). -#}
+                {% set mail_review = mass_email_review_count(request.user) %}
+                {% if mail_review %}
+                    {#- As the envelope of team invitations (team/notification.html), with a class of its own: that
+                        script rewrites every .team-invite-badge with the number of invitations. -#}
+                    <style>
+                        #mass-email-notification { display: inline-flex; align-items: center; min-height: 32px; padding: 0 .5em; color: inherit; }
+                        .mass-email-badge { display: inline-block; border-radius: 1em; background: #b91c1c; color: #fff; font-size: 12px; font-weight: bold; padding: 0 .45em; line-height: 1.5; margin-left: .35em; }
+                        @media(max-width: 600px) { #mass-email-notification { padding: 0 .3em; } }
+                    </style>
+                    <a id="mass-email-notification" href="{{ url('admin:judge_massemail_changelist') }}?status__exact=review"
+                       title="{{ _('Correos por aprobar') }}" aria-label="{{ _('Correos por aprobar') }}">
+                        <i class="fa fa-envelope" aria-hidden="true"></i><span class="mass-email-badge">{{ mail_review if mail_review < 100 else '99+' }}</span>
+                    </a>
+                {% endif %}
             {% endif %}
             {% if request.user.is_authenticated %}
                 <ul>
@@ -284,6 +299,9 @@
                             <li id="team-mobile-profile"><a href="{{ url('user_page') }}">{{ _('Mi cuenta') }}</a></li>
                             {% if request.user.is_staff or request.user.is_superuser %}
                                 <li><a href="{{ url('admin:index') }}">{{ _('Admin') }}</a></li>
+                            {% endif %}
+                            {% if mail_review %}
+                                <li><a href="{{ url('admin:judge_massemail_changelist') }}?status__exact=review">{{ _('Correos por aprobar') }}<span class="mass-email-badge">{{ mail_review if mail_review < 100 else '99+' }}</span></a></li>
                             {% endif %}
                             <li><a href="{{ url('user_edit_profile') }}">{{ _('Edit profile') }}</a></li>
                             <li><a href="{{ url('my_teams') }}">{{ _('Mis equipos') }}<span class="team-invite-badge" hidden></span></a></li>

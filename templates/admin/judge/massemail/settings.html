@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+{% comment %}
+    Remitentes y redes de los correos a usuarios (judge/admin/mass_email.py, settings_view): las direcciones que el
+    formulario ofrece y los enlaces que salen con icono al pie de cada correo. Las ve todo el que tiene la sección;
+    las cambia quien aprueba.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+    <style>
+        .mass-email-settings { max-width: 760px; }
+        .mass-email-settings fieldset { margin: 0 0 20px; padding: 12px 16px; background: #f8f8f8;
+            border: 1px solid #ccc; border-radius: 3px; }
+        .mass-email-settings h2 { margin: 0 0 8px; padding: 0; background: none; color: #222; font-size: 15px;
+            font-weight: bold; text-transform: none; }
+        .mass-email-settings textarea { width: 100%; box-sizing: border-box; font-family: Consolas, 'Courier New',
+            monospace; font-size: 13px; }
+        .mass-email-settings .help { margin: 4px 0 0; color: #666; }
+        .mass-email-networks { width: 100%; border-collapse: collapse; }
+        .mass-email-networks td { padding: 5px 8px 5px 0; border: 0; vertical-align: middle; }
+        .mass-email-networks td.mass-email-icon { width: 22px; }
+        .mass-email-networks td.mass-email-icon img { display: block; }
+        .mass-email-networks td.mass-email-name { width: 90px; font-weight: bold; }
+        .mass-email-networks input { width: 100%; box-sizing: border-box; }
+        .mass-email-networks .errorlist { margin: 2px 0 0; }
+    </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+        &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+        &rsaquo; {{ title }}
+    </div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    <form method="post" class="mass-email-settings" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="errornote">{{ form.non_field_errors }}</div>{% endif %}
+        <fieldset>
+            <h2><label for="{{ form.senders.id_for_label }}">{{ form.senders.label }}</label></h2>
+            {{ form.senders.errors }}
+            {{ form.senders }}
+            <p class="help">{{ form.senders.help_text }}{% if reply_to %} {% blocktranslate with email=reply_to %}Las respuestas llegan a {{ email }}.{% endblocktranslate %}{% endif %}</p>
+        </fieldset>
+        <fieldset>
+            <h2>{% translate "Redes sociales" %}</h2>
+            <table class="mass-email-networks">
+                {% for field in networks %}
+                    <tr>
+                        <td class="mass-email-icon"><img src="/static/icons/redes/{{ field.name|slice:'7:' }}.png" width="20" height="20" alt=""></td>
+                        <td class="mass-email-name"><label for="{{ field.id_for_label }}">{{ field.label }}</label></td>
+                        <td>{{ field }}{{ field.errors }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+            <p class="help">{% translate "Salen con su icono al pie de cada correo; las vacías no salen." %}</p>
+        </fieldset>
+        {% if can_edit %}
+            <div class="submit-row">
+                <input type="submit" class="default" value="{% translate "Guardar" %}">
+            </div>
+        {% endif %}
+    </form>
+{% endblock %}

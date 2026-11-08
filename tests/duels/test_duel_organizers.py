@@ -95,8 +95,8 @@ class ArenaAccessTests(ArenaFixture):
                      .values_list('codename', 'name'))
         self.assertEqual(names, {'manage_arena': 'Organize own arena battles',
                                  'manage_all_arena': 'Organize all arena battles',
-                                 'send_mass_email': 'Write and send own emails to users',
-                                 'edit_all_mass_email': 'Edit and send all emails to users'})
+                                 'send_mass_email': 'Escribir correos a usuarios propios y pedir su aprobación',
+                                 'edit_all_mass_email': 'Editar todos los correos a usuarios'})
 
 
 class ArenaPanelTests(ArenaFixture):

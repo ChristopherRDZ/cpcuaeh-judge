@@ -12,7 +12,21 @@
 {{ body }}
 {% endblock %}
 {% block footer %}
+{#- Las redes con enlace (judge/mass_email.py, socials), en gris como el pie; las vacías no salen. -#}
+{%- if socials %}
+<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;">
+<tr>
+{%- for network in socials %}
+<td style="padding:0 7px;"><a href="{{ network.url }}" style="text-decoration:none;"><img src="{{ protocol }}://{{ domain }}/static/icons/redes/{{ network.key }}.png" width="22" height="22" alt="{{ network.label }}" title="{{ network.label }}" style="display:block;border:0;color:#777777;font-size:11px;"></a></td>
+{%- endfor %}
+</tr>
+</table>
+{%- endif %}
+{% if external %}
+{{ _('Recibes este correo porque tienes una cuenta en %(site_name)s o dejaste tu correo en un formulario del club.', site_name=site_name) }}
+{% else %}
 {{ _('You receive this email because you have an account on %(site_name)s.', site_name=site_name) }}
+{% endif %}
 <br>
 {{ _('CPC-UAEH is an independent student club; it is not an official UAEH service.') }}
 <br>
