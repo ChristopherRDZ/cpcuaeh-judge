@@ -17,11 +17,11 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from judge.arena import access, engine, live_code, rating, rules as arena_rules, scoring
-from judge.arena.tournament import draw_settings, round_count, round_name
+from judge.arena.tournament import draw_settings, problem_conflicts, round_count, round_name
 from judge.jinja2.gravatar import gravatar
 from judge.models import Language, ProblemTranslation, Submission, SubmissionTestCase
-from judge.models.arena import ArenaAction, ArenaGame, ArenaGameProblem, ArenaMatch, ArenaScreen, ArenaTournament, \
-    SLOT_A, SLOT_B
+from judge.models.arena import ArenaAction, ArenaGame, ArenaGameProblem, ArenaMatch, ArenaRating, ArenaRound, \
+    ArenaScreen, ArenaTournament, SLOT_A, SLOT_B
 
 RECENT_RESULT = timedelta(minutes=30)
 QUEUE_WARNING_SECONDS = 60
@@ -56,9 +56,18 @@ def problem_names(game_problems, language):
 
 
 def round_label(match):
+    """With `n_rounds` (with_round_count), the battles of a list do not ask once each for the rounds."""
     if not match.round_id:
         return ''
-    return round_name(match.round, match.tournament.rounds.count())
+    total = getattr(match, 'n_rounds', None)
+    return round_name(match.round, total if total is not None else match.tournament.rounds.count())
+
+
+def with_round_count(matches):
+    """`matches` with `n_rounds`, how many rounds their tournament has, in the same query (2026-11-03)."""
+    rounds = ArenaRound.objects.filter(tournament=OuterRef('tournament')).order_by().values('tournament') \
+        .annotate(n=Count('id')).values('n')[:1]
+    return matches.annotate(n_rounds=Subquery(rounds))
 
 
 def player_card(match, slot, size=128):
@@ -160,6 +169,13 @@ def _current_games(match):
     done = [game for game in games if game.status in ArenaGame.DONE_STATUSES]
     prepared = next((game for game in games if game.status == ArenaGame.PREPARED), None)
     return games, active, (done[-1] if done else None), prepared
+
+
+def _undecided_tie(games):
+    """The tied game still waiting for the organizer, if the last game that counts was a tie. A voided game does
+    not count: voiding the tiebreak leaves the tie as it was, to give or to play again (2026-11-04)."""
+    counted = [game for game in games if game.status in (ArenaGame.FINISHED, ArenaGame.TIE)]
+    return counted[-1] if counted and counted[-1].status == ArenaGame.TIE else None
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -406,9 +422,12 @@ def organizer_match_state(match, language, now=None, user=None):
     current = active or prepared or last_done
     # The last game ended in a tie and nothing is being played: the panel offers to give it to a player
     # (duelos-nucleo-v1, 2026-10-28). `current` is then the tiebreak prepared with the tie, never the tied game.
-    tied = last_done if last_done is not None and last_done.status == ArenaGame.TIE and active is None and \
-        match.status == ArenaMatch.PLAYING else None
+    tied = _undecided_tie(games) if active is None and match.status == ArenaMatch.PLAYING else None
     held_until = engine.lock_until(match, games) if match.status in ArenaMatch.LOCKING_STATUSES else None
+    # The submissions go with the game the panel lists them for: the current one once it has started, else the last
+    # one that did, so its late verdicts still arrive (2026-11-04).
+    begun = [game for game in games if _started(game, now)]
+    listed = current if _started(current, now) else (begun[-1] if begun else None)
     data = {
         'now': ts(now),
         'match': {
@@ -441,7 +460,7 @@ def organizer_match_state(match, language, now=None, user=None):
                         'decides': access.decides_ranking(user), 'url': reverse('arena_ranking_decide')},
         },
         'players': {slot: organizer_player(match, slot, now) for slot in (SLOT_A, SLOT_B)},
-        'games': [_organizer_game(game, now, language, with_submissions=current is not None and game.pk == current.pk)
+        'games': [_organizer_game(game, now, language, with_submissions=listed is not None and game.pk == listed.pk)
                   for game in games],
         'current': current.pk if current is not None else None,
         'warnings': [],
@@ -463,11 +482,21 @@ def organizer_match_state(match, language, now=None, user=None):
 def screens_overview(user=None):
     """The screens `user` manages (with their secret links), or all of them without a user. Not those aimed at a
     tournament they still play (access.screens_for, 2026-10-28)."""
-    screens = access.screens_for(user) if user is not None else ArenaScreen.objects.all()
+    screens = list((access.screens_for(user) if user is not None else ArenaScreen.objects.all())
+                   .select_related('match__player_a__user', 'match__player_b__user', 'tournament')
+                   .order_by('name', 'id'))
+    # Since 2026-11-03 also how it shows it, whether some tab has it open (and which tabs keep a view of their own),
+    # what it shows in words, and its link.
+    presence = engine.screen_presence([screen.pk for screen in screens])
     return [{'id': screen.pk, 'name': screen.name, 'mode': screen.mode, 'match': screen.match_id,
              'tournament': screen.tournament_id, 'follow_live': screen.follow_live, 'message': screen.message,
-             'token': screen.token, 'version': screen.version}
-            for screen in screens.order_by('name', 'id')]
+             'token': screen.token, 'version': screen.version, 'view': screen.view,
+             'open': presence[screen.pk]['open'], 'fixed': presence[screen.pk]['fixed'],
+             'match_name': ('%s vs %s' % (screen.match.shown_name(SLOT_A), screen.match.shown_name(SLOT_B))
+                            if screen.match_id else ''),
+             'tournament_name': screen.tournament.name if screen.tournament_id else '',
+             'url': reverse('arena_screen', args=[screen.token])}
+            for screen in screens]
 
 
 def overview(now=None, user=None):
@@ -500,6 +529,15 @@ def overview(now=None, user=None):
         .annotate(n_participants=Count('participants', distinct=True),
                   n_live=Count('matches', filter=Q(matches__status=ArenaMatch.PLAYING), distinct=True)) \
         .order_by('-created_at')[:30]
+    tournaments = list(tournaments)
+    todo, playing = _now_lists(matches, now)
+    todo += _drafts_todo([t for t in tournaments if t.status == ArenaTournament.DRAFT])
+    # The battles decided today, on the clock of whoever looks, byes left out: «Finished today» in «Now».
+    today = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    finished = with_round_count(matches.filter(status=ArenaMatch.DECIDED, decided_at__gte=today)
+                                .exclude(decided_reason='bye')
+                                .select_related('player_a__user', 'player_b__user', 'tournament', 'round')) \
+        .order_by('-decided_at', '-id')[:10]
     return {
         'now': ts(now),
         'duels': [row(match) for match in active.order_by('-id')],
@@ -508,7 +546,87 @@ def overview(now=None, user=None):
                          'participants': t.n_participants, 'live': t.n_live}
                         for t in tournaments],
         'screens': screens_overview(user),
+        # «Now», the first tab of the panel (2026-11-03): what waits for the organizer, and what is being played.
+        'todo': todo,
+        'playing': playing,
+        'finished': [{'id': match.pk, 'a': match.shown_name(SLOT_A), 'b': match.shown_name(SLOT_B),
+                      'wins': {'a': match.wins_a, 'b': match.wins_b}, 'winner': match.winner_slot or None,
+                      'tournament': match.tournament.name if match.tournament_id else '',
+                      'round': round_label(match), 'title': match.title} for match in finished],
     }
+
+
+def _now_lists(matches, now):
+    """(todo, playing) for «Now»: the battles of `matches` that are open, quick or of a running tournament.
+
+    `todo` holds one entry per battle that waits for the organizer, with what to do: 'call' (send the players to the
+    waiting room), 'start' (start the next game), 'problems' (choose the problems of the next game first),
+    'verdicts' (the time is up and verdicts are missing) or 'tie' (the last game was tied). `playing`, the games
+    being played, with their clock."""
+    open_matches = list(with_round_count(
+        matches.filter(status__in=(ArenaMatch.READY, ArenaMatch.CALLED, ArenaMatch.PLAYING))
+        .filter(Q(tournament__isnull=True) | Q(tournament__status=ArenaTournament.RUNNING))
+        .select_related('player_a__user', 'player_b__user', 'tournament', 'round')).order_by('id')[:100])
+    ids = [match.pk for match in open_matches]
+    games = {}
+    for game in ArenaGame.objects.filter(match_id__in=ids).order_by('number'):
+        games.setdefault(game.match_id, []).append(game)
+    counts = dict(ArenaGameProblem.objects.filter(game__match_id__in=ids).values('game_id')
+                  .annotate(n=Count('id')).values_list('game_id', 'n'))
+    todo, playing = [], []
+    for match in open_matches:
+        rows = games.get(match.pk, [])
+        entry = {'id': match.pk, 'version': match.version, 'a': match.shown_name(SLOT_A),
+                 'b': match.shown_name(SLOT_B), 'title': match.title, 'best_of': match.best_of,
+                 'wins': {'a': match.wins_a, 'b': match.wins_b},
+                 'tournament': match.tournament.name if match.tournament_id else '',
+                 'round': round_label(match), 'club': bool(match.display_name_a or match.display_name_b)}
+        active = next((game for game in rows if game.status in ArenaGame.ACTIVE_STATUSES), None)
+        if active is not None:
+            playing.append(dict(entry, game=active.number, status=active.status, ends_at=ts(active.ends_at),
+                                started_at=ts(active.started_at)))
+            if active.status == ArenaGame.VERIFYING:
+                todo.append(dict(entry, kind='verdicts', game=active.number))
+            continue
+        tied = _undecided_tie(rows)
+        if tied is not None and match.status == ArenaMatch.PLAYING:
+            todo.append(dict(entry, kind='tie', game=tied.number))
+            continue
+        prepared = next((game for game in rows if game.status == ArenaGame.PREPARED), None)
+        number = prepared.number if prepared is not None else (rows[-1].number + 1 if rows else 1)
+        ready = (prepared is not None and counts.get(prepared.pk)) or draw_settings(match)['auto']
+        if not ready:
+            todo.append(dict(entry, kind='problems', game=number))
+        elif match.status == ArenaMatch.READY:
+            todo.append(dict(entry, kind='call', game=number))
+        else:
+            todo.append(dict(entry, kind='start', game=number,
+                             connected={slot: engine.is_connected(match.pk, slot, now) for slot in (SLOT_A, SLOT_B)}))
+    return todo, playing
+
+
+def _drafts_todo(drafts):
+    """A draft tournament in «Now»: what it still needs before it starts, names and problems. The same two queries
+    however many drafts there are: the panel asks for this every 3 seconds. `drafts` come with `n_participants`."""
+    if not drafts:
+        return []
+    first = list(ArenaMatch.objects.filter(tournament_id__in=[t.pk for t in drafts], round__number=1)
+                 .exclude(status=ArenaMatch.DECIDED).values_list('id', 'tournament_id'))
+    with_problems = set(ArenaGameProblem.objects.filter(game__match_id__in=[pk for pk, _tid in first], game__number=1)
+                        .values_list('game__match_id', flat=True))
+    without = {}
+    for pk, tournament_id in first:
+        if pk not in with_problems:
+            without[tournament_id] = without.get(tournament_id, 0) + 1
+    result = []
+    for tournament in drafts:
+        participants = tournament.n_participants
+        missing_names = max(0, tournament.place_count(participants) - participants)
+        auto = bool((tournament.rules or {}).get('auto_draw')) and tournament.bank_id is not None
+        result.append({'kind': 'prepare', 'slug': tournament.slug, 'tournament': tournament.name,
+                       'missing_names': missing_names,
+                       'missing_problems': 0 if auto else without.get(tournament.pk, 0)})
+    return result
 
 
 def _draw_view(match):
@@ -532,6 +650,12 @@ def _problem_readiness(tournament):
     return result
 
 
+def duel_rating_map(profile_ids):
+    """{profile id: duel rating, rounded}, for who has one (judge/arena/rating.py)."""
+    return {pk: round(value) for pk, value in
+            ArenaRating.objects.filter(profile_id__in=profile_ids).values_list('profile_id', 'rating')}
+
+
 def tournament_state(tournament, language, now=None, user=None):
     """`user`: who asks; the screens are only theirs (judge/arena/access.py). Without one, all of them."""
     now = now or timezone.now()
@@ -541,6 +665,7 @@ def tournament_state(tournament, language, now=None, user=None):
     rounds = list(tournament.rounds.order_by('number'))
     total = len(rounds)
     participants = list(tournament.participants.select_related('profile__user').order_by('seed'))
+    duel_ratings = duel_rating_map([p.profile_id for p in participants])
     return {
         'now': ts(now),
         'tournament': {
@@ -560,9 +685,17 @@ def tournament_state(tournament, language, now=None, user=None):
             'ranking_decides': access.decides_ranking(user),
             'ranking_url': reverse('arena_ranking_decide'),
         },
+        # With the duel rating too (2026-11-03): the page puts them in order by either rating before saving.
         'participants': [{'id': p.profile_id, 'seed': p.seed, 'name': p.profile.display_name,
                           'username': p.profile.username, 'avatar': gravatar(p.profile, 64),
-                          'rating': p.profile.rating} for p in participants],
+                          'rating': p.profile.rating, 'duel_rating': duel_ratings.get(p.profile_id)}
+                         for p in participants],
+        # The places of the bracket (2026-11-03): a draft can have places without a name yet, filled later.
+        'places': tournament.place_count(len(participants)),
+        'missing': max(0, tournament.place_count(len(participants)) - len(participants)),
+        # Who already solved or tried a problem chosen for their battle, by battle (tournament.problem_conflicts).
+        'conflicts': {str(match_id): rows for match_id, rows in problem_conflicts(tournament).items()}
+        if tournament.status in (ArenaTournament.DRAFT, ArenaTournament.RUNNING) else {},
         'rounds': [{'number': r.number, 'name': round_name(r, total), 'custom_name': r.name, 'best_of': r.best_of,
                     'overrides': r.rules, 'draw_count': (r.rules or {}).get('draw_count'),
                     'level_min': (r.rules or {}).get('level_min'), 'level_max': (r.rules or {}).get('level_max')}
@@ -594,10 +727,14 @@ def bracket_view(tournament, rounds=None):
 
     def cell(match, slot):
         profile = match.player(slot)
+        seed = getattr(match, 'seed_' + slot)
         if profile is None:
+            # A place of a draft still without a name (2026-11-03): its number, so its battle can be told apart.
+            if seed and tournament.status == ArenaTournament.DRAFT:
+                return {'name': _('Place %(number)s') % {'number': seed}, 'seed': seed, 'avatar': None,
+                        'empty': True}
             return None
-        return {'name': match.shown_name(slot), 'seed': getattr(match, 'seed_' + slot),
-                'avatar': gravatar(profile, 64)}
+        return {'name': match.shown_name(slot), 'seed': seed, 'avatar': gravatar(profile, 64)}
 
     result = []
     for r in rounds:
@@ -686,6 +823,8 @@ def screen_state(screen, language, now=None):
     now = now or timezone.now()
     mode, match, tournament = _screen_target(screen)
     data = {'now': ts(now), 'mode': mode, 'screen': {'name': screen.name, 'version': screen.version},
+            # How to show it (2026-11-03), chosen from the panel; a tab with ?view= keeps its own.
+            'view': screen.view,
             'message': screen.message if mode == ArenaScreen.MESSAGE else '',
             'tournament': tournament.name if tournament is not None else ''}
     if mode == ArenaScreen.MATCH and match is not None:

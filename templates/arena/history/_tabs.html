@@ -1,12 +1,16 @@
 {# The tabs of the duels (2026-10-25), with the markup of the tabs of the site (tabs-base.html), so they look like
-   those of the contests: the player's page or the cover, the history of the tournaments, the ranking (2026-10-26),
-   and the panel for whoever organizes. `history_tab` says which one is open. #}
+   those of the contests: the player's page, the history of the tournaments, the ranking (2026-10-26), and the panel
+   for whoever organizes. `history_tab` says which one is open. #}
 <div class="tabs ar-history-tabs">
     {# «Duels», as the tab of the site's bar reads in English («Duelos» in Spanish). #}
     <h2>{{ _('Duels') }}</h2>
     <ul>
-        <li class="tab{% if history_tab == 'home' %} active{% endif %}"><a href="{{ url('arena_home') }}">
-            <i class="tab-icon fa fa-bolt"></i> {{ _('My battle') if request.user.is_authenticated else _('Home') }}</a></li>
+        {# «Battles» (2026-11-03, «My battle» until then): where each one plays. Without a session there is nothing to
+           play, and /duelos/ opens the tournaments. #}
+        {% if request.user.is_authenticated %}
+            <li class="tab{% if history_tab == 'home' %} active{% endif %}"><a href="{{ url('arena_home') }}">
+                <i class="tab-icon fa fa-bolt"></i> {{ _('Battles') }}</a></li>
+        {% endif %}
         <li class="tab{% if history_tab == 'tournaments' %} active{% endif %}"><a href="{{ url('arena_history') }}">
             <i class="tab-icon fa fa-trophy"></i> {{ _('Tournaments') }}</a></li>
         <li class="tab{% if history_tab == 'ranking' %} active{% endif %}"><a href="{{ url('arena_ranking') }}">

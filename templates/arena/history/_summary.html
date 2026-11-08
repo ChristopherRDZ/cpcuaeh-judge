@@ -1,6 +1,7 @@
 {# The tournaments of the history (judge/arena/history.py, 2026-10-25): being played, upcoming and finished, and for
    whoever organizes or looks after the history, the ones left out of it. Used by /duelos/ without an account, by the
-   player's page when there is no battle and by /duelos/torneos/ (`full`: everything instead of the last ones).
+   player's page when there is no battle and by /duelos/torneos/ (`full`: everything instead of the last ones; since
+   2026-11-03 the finished ones 20 per page, and the other sections only on the first page).
    Inline CSS on the arena variables, like the rest of the duels: nothing under resources/, no compress block. #}
 <style>
     .ah-sections { display: flex; flex-direction: column; gap: 1em; width: 100%; max-width: 64em; margin: 0 auto;
@@ -17,6 +18,11 @@
     .ah-actions { text-align: right; white-space: nowrap; }
     .ah-place { width: 2.5em; }
     .ah-rating { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Under a list: how many and the site's pages (arena/history/_pages.html). */
+    .ah-pages { display: flex; align-items: center; justify-content: space-between; gap: 1em; flex-wrap: wrap;
+                padding: .6em .7em; border-top: 1px solid var(--ar-soft-border); }
+    .ah-pages > .ar-muted { font-size: .9em; }
+    .ah-pages ul.pagination::after { content: ''; display: table; clear: both; }
     @media (max-width: 760px) { .ah-wide { display: none; } }
 </style>
 {% macro person(item) -%}
@@ -75,11 +81,14 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if full and sections.page_obj %}
+                {% with pager=sections.page_obj, links=finished_links %}{% include "arena/history/_pages.html" %}{% endwith %}
+            {% endif %}
             {% if not full and sections.more %}
                 <p class="ah-note"><a href="{{ url('arena_history') }}">{{ _('See every tournament') }} <i class="fa fa-arrow-right" aria-hidden="true"></i></a></p>
             {% endif %}
         {% else %}
-            <p class="ah-note ar-muted">{{ _('No tournament has finished yet. When one ends, its bracket and results stay here.') }}</p>
+            <p class="ah-note ar-muted">{{ _('No tournament has finished yet.') }}</p>
         {% endif %}
     </section>
 

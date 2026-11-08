@@ -12,13 +12,14 @@ from random import SystemRandom
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, ngettext
 
 from judge.arena import rules as arena_rules
 from judge.arena.engine import ArenaError, _bump, _check_version, _log, clean_ranking, ensure_default_screen, \
-    lock_match, problems_used_in_tournament, refresh_lock_on_commit, visible_problems
+    lock_match, problems_used_in_tournament, refresh_lock_on_commit, take_free_screen, visible_problems
 from judge.models import Submission
 from judge.models.arena import ArenaBankProblem, ArenaGame, ArenaGameProblem, ArenaMatch, ArenaParticipant, \
     ArenaProblemBank, ArenaRating, ArenaRound, ArenaTournament, RANKING_PENDING, SLOT_A, SLOT_B
@@ -94,6 +95,39 @@ def _clean_participants(profiles):
     return result
 
 
+def clean_places(value):
+    """How many places a bracket has (2026-11-03): from MIN_PARTICIPANTS to MAX_PARTICIPANTS, or None."""
+    if value in (None, ''):
+        return None
+    if isinstance(value, str) and value.isascii() and value.isdecimal():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int) or \
+            not MIN_PARTICIPANTS <= value <= MAX_PARTICIPANTS:
+        raise ArenaError(_('A tournament has from %(min)s to %(max)s places.') %
+                         {'min': MIN_PARTICIPANTS, 'max': MAX_PARTICIPANTS})
+    return value
+
+
+def _clean_slots(slots, places):
+    """The places of a tournament as the page sends them: one entry per place, in order, a profile or None for a
+    place without a name yet. Nobody twice, and nobody beyond the last place."""
+    if not isinstance(slots, list):
+        raise ArenaError(_('Invalid list of participants.'))
+    slots = list(slots)
+    while slots and slots[-1] is None:
+        slots.pop()
+    if len(slots) > places:
+        raise ArenaError(_('There are more names than places: add places or remove somebody.'))
+    seen = set()
+    for profile in slots:
+        if profile is None:
+            continue
+        if profile.pk in seen:
+            raise ArenaError(_('%(name)s is in two places.') % {'name': profile.username})
+        seen.add(profile.pk)
+    return slots + [None] * (places - len(slots))
+
+
 def _refuse_self(actor, profiles):
     """Whoever creates a tournament or changes its participants does not put themselves among them (2026-10-28,
     round 2 of the adversarial review), as nobody puts themselves in a battle (engine._refuse_self): a participant
@@ -144,8 +178,13 @@ def clean_planned_at(value, now=None):
 
 @transaction.atomic
 def create_tournament(actor, name, profiles, seeding=ArenaTournament.SEED_MANUAL, third_place=False, rules=None,
-                      description='', bank=None, show_in_history=True, planned_at=None, ranking=RANKING_PENDING):
+                      description='', bank=None, show_in_history=True, planned_at=None, ranking=RANKING_PENDING,
+                      places=None):
     """`ranking`: whether it counts for the ranking of the duels, if whoever creates it may decide that.
+
+    `places` (2026-11-03): how many places the bracket has. With it, `profiles` may be fewer, or none: the places
+    without a name are filled later, and the problems can be chosen meanwhile. Without it, one place per profile, as
+    before; either way a new tournament keeps its number of places, so removing somebody later leaves a place empty.
 
     One transaction (duelos-nucleo-1, 2026-10-28): from 2026-10-26 to 2026-10-28 the decorator sat on
     clean_planned_at by mistake, and a tournament with byes (3, 5, 6, 7... players) failed with a 500 when its byes
@@ -161,31 +200,58 @@ def create_tournament(actor, name, profiles, seeding=ArenaTournament.SEED_MANUAL
     except ValidationError as error:
         raise ArenaError(error.messages[0])
     planned_at = clean_planned_at(planned_at)
-    profiles = _clean_participants(profiles)
+    places = clean_places(places)
+    if places is None:
+        profiles = _clean_participants(profiles)
+        places = len(profiles)
+    else:
+        profiles = [profile for profile in _clean_slots(list(profiles), places) if profile is not None]
     _refuse_self(actor, profiles)
     profiles = _ordered_by_seeding(profiles, seeding)
     tournament = ArenaTournament.objects.create(
-        name=name, slug=_unique_slug(name), description=(description or '').strip()[:2000], seeding=seeding,
+        name=name, slug=_unique_slug(name), description=(description or '').strip()[:2000],
+        # The order is applied once, here: from now on the list is the order (2026-11-03).
+        seeding=ArenaTournament.SEED_MANUAL,
         third_place_match=bool(third_place), rules=rules, bank=bank, created_by=actor,
-        show_in_history=bool(show_in_history), planned_at=planned_at, ranking=ranking,
+        show_in_history=bool(show_in_history), planned_at=planned_at, ranking=ranking, places=places,
     )
     ArenaParticipant.objects.bulk_create([ArenaParticipant(tournament=tournament, profile=profile, seed=index)
                                           for index, profile in enumerate(profiles, 1)])
-    _sync_rounds(tournament, len(profiles))
+    _sync_rounds(tournament, places)
     # The bracket is there from the start, so its matches can get their problems before anything else.
     _build_bracket(actor, tournament)
-    _log('tournament_create', actor, tournament=tournament, participants=len(profiles), ranking=ranking)
+    _log('tournament_create', actor, tournament=tournament, participants=len(profiles), places=places,
+         ranking=ranking)
     ensure_default_screen(actor)
     return tournament
 
 
 def _sync_rounds(tournament, count):
-    """One round per level of the bracket, keeping whatever was configured on rounds that still exist."""
-    rounds = round_count(count)
-    ArenaRound.objects.filter(tournament=tournament, number__gt=rounds).delete()
-    existing = set(ArenaRound.objects.filter(tournament=tournament).values_list('number', flat=True))
-    ArenaRound.objects.bulk_create([ArenaRound(tournament=tournament, number=number)
-                                    for number in range(1, rounds + 1) if number not in existing])
+    """One round per level of the bracket, keeping whatever was configured on each round by its place counted from
+    the final (2026-11-03): the final stays the final, with its name and its games, when the bracket grows or shrinks.
+    Until then the rounds were kept by their number from the first one, so a bracket of 8 that grew to 9 or more
+    took its quarterfinal for the round of 16 and its final for a semifinal.
+
+    The matches of the tournament must be gone already (_build_bracket): a round that goes takes its matches."""
+    needed = round_count(count)
+    rounds = list(ArenaRound.objects.filter(tournament=tournament).order_by('number'))
+    shift = needed - len(rounds)
+    if shift < 0:
+        # The first rounds go; the others move down, in order, so no two share a number at any moment.
+        ArenaRound.objects.filter(pk__in=[r.pk for r in rounds[:-shift]]).delete()
+        for round_obj in rounds[-shift:]:
+            round_obj.number += shift
+            round_obj.save(update_fields=['number'])
+    elif shift > 0:
+        for round_obj in reversed(rounds):
+            round_obj.number += shift
+            round_obj.save(update_fields=['number'])
+        ArenaRound.objects.bulk_create([ArenaRound(tournament=tournament, number=number)
+                                        for number in range(1, shift + 1)])
+    if ArenaRound.objects.filter(tournament=tournament).count() != needed or \
+            set(ArenaRound.objects.filter(tournament=tournament).values_list('number', flat=True)) != \
+            set(range(1, needed + 1)):
+        raise ArenaError(_('The rounds of this tournament are out of order. Ask an administrator.'))
 
 
 @transaction.atomic
@@ -249,28 +315,56 @@ def set_show_in_history(actor, tournament_id, show):
     return tournament
 
 
+ORDERS = (ArenaTournament.SEED_RATING, ArenaTournament.SEED_DUEL, ArenaTournament.SEED_RANDOM)
+
+
 @transaction.atomic
-def set_participants(actor, tournament_id, profiles, seeding=None, version=None):
+def set_participants(actor, tournament_id, profiles, seeding=None, version=None, places=None, order=None):
+    """The places of a draft and who is in each one. Saving rebuilds the bracket at once: there is no separate step
+    to forget, and the problems already chosen stay with their battles (_build_bracket).
+
+    `profiles` has one entry per place, a profile or None for a place without a name yet (2026-11-03); `places`, how
+    many there are (None leaves it as it is). For a tournament from before (no `places`) with no `places` given, the
+    list is one place per profile, as it always was.
+
+    `order` (or `seeding`, the old name): put the names in order once, by contest rating, by duel rating or at
+    random; the empty places go after them. Until 2026-11-03 the order of a tournament was applied again at every
+    save, so a random one was drawn anew each time; now the list is the order."""
     tournament = _lock_tournament(tournament_id)
     _check_version(tournament, version)
     if tournament.status != ArenaTournament.DRAFT:
         raise ArenaError(_('Participants can only change while the tournament is a draft.'))
-    if seeding is not None:
-        if seeding not in dict(ArenaTournament.SEEDING):
-            raise ArenaError(_('Invalid seeding.'))
-        tournament.seeding = seeding
-    profiles = _clean_participants(profiles)
-    _refuse_self(actor, profiles)
-    profiles = _ordered_by_seeding(profiles, tournament.seeding)
+    if order is None and seeding not in (None, ArenaTournament.SEED_MANUAL):
+        order = seeding
+    if order is not None and order not in ORDERS:
+        raise ArenaError(_('Invalid seeding.'))
+    places = clean_places(places)
+    if places is None and tournament.places is None:
+        slots = _clean_participants(profiles)
+        places_value = None
+    else:
+        places_value = places or tournament.places
+        slots = _clean_slots(profiles, places_value)
+    names = [profile for profile in slots if profile is not None]
+    _refuse_self(actor, names)
+    if order is not None:
+        names = _ordered_by_seeding(names, order)
+        slots = names + [None] * (len(slots) - len(names))
+    # Read before anything changes: the problems stay with their place in the bracket.
+    chosen = _chosen_problems(tournament)
     ArenaParticipant.objects.filter(tournament=tournament).delete()
     ArenaParticipant.objects.bulk_create([ArenaParticipant(tournament=tournament, profile=profile, seed=index)
-                                          for index, profile in enumerate(profiles, 1)])
-    _sync_rounds(tournament, len(profiles))
+                                          for index, profile in enumerate(slots, 1) if profile is not None])
+    tournament.places = places_value
+    tournament.seeding = ArenaTournament.SEED_MANUAL
     tournament.version += 1
-    tournament.save(update_fields=['seeding', 'version'])
-    # Saving the participants rebuilds the bracket at once: there is no separate step to forget.
-    _build_bracket(actor, tournament)
-    _log('participants', actor, tournament=tournament, participants=len(profiles))
+    tournament.save(update_fields=['seeding', 'places', 'version'])
+    lost = _build_bracket(actor, tournament, chosen=chosen)
+    _log('participants', actor, tournament=tournament, participants=len(names), places=places_value,
+         order=order or '', lost=lost)
+    # How many battles lost the problems chosen for them (a place that became a bye, a round that went): the page
+    # says so. An attribute, so whoever called this before still gets the tournament.
+    tournament.lost_problems = lost
     return tournament
 
 
@@ -324,29 +418,41 @@ def generate_bracket(actor, tournament_id, version=None):
 
 
 def _chosen_problems(tournament):
-    """Problems already chosen for the games of a draft bracket, by place: (round, position, third place, game)."""
+    """Problems already chosen for the games of a draft bracket, by place: (round counted from the final, position,
+    third place, game). From the final (2026-11-03), so they stay with their battle when the bracket grows or
+    shrinks: the battle of the places 1 and 8 of a bracket of 8 is the quarterfinal 1 in a bracket of 16 too."""
     chosen = {}
+    total = ArenaRound.objects.filter(tournament=tournament).count()
     games = ArenaGame.objects.filter(match__tournament=tournament, contest__isnull=True).select_related('match__round')
     for game in games:
         rows = list(ArenaGameProblem.objects.filter(game=game).order_by('order').values_list('problem_id', 'points'))
         if rows and game.match.round_id:
-            chosen[(game.match.round.number, game.match.position, game.match.is_third_place, game.number)] = rows
+            chosen[(total - game.match.round.number, game.match.position, game.match.is_third_place,
+                    game.number)] = rows
     return chosen
 
 
-def _build_bracket(actor, tournament):
-    """Every match of the bracket from the seeds, for a draft tournament already locked by the caller.
+def _build_bracket(actor, tournament, chosen=None):
+    """Every match of the bracket from the seeds, for a draft tournament already locked by the caller. Returns how
+    many battles lost problems that had been chosen for them, because they are gone or became a bye.
 
     Building again starts the matches over, but the problems an organizer already chose stay with their place in
-    the bracket (round, position, game), so changing the participants does not undo that work.
+    the bracket (round from the final, position, game), so changing the participants does not undo that work.
+    `chosen`: read before the caller changed anything (set_participants); by default, read here.
+
+    The bracket has `places` places (2026-11-03). A place without a name yet is kept, with its seed and no player,
+    so its battle can get problems; only the places beyond the last one are byes. A bye of a place without a name
+    sends that place, still without a name, to the next round.
     """
     participants = list(ArenaParticipant.objects.filter(tournament=tournament).select_related('profile')
                         .order_by('seed'))
-    count = len(participants)
+    count = tournament.place_count(len(participants))
     if count < MIN_PARTICIPANTS:
         raise ArenaError(_('A tournament needs at least %(count)s participants.') % {'count': MIN_PARTICIPANTS})
-    chosen = _chosen_problems(tournament)
-    # Games point to their match with PROTECT: the prepared ones go first (in a draft none has been played).
+    if chosen is None:
+        chosen = _chosen_problems(tournament)
+    # Games point to their match with PROTECT: the prepared ones go first (in a draft none has been played). The
+    # matches go before the rounds change, which takes the matches of a round that goes (a 500 until 2026-11-03).
     ArenaGame.objects.filter(match__tournament=tournament, contest__isnull=True).delete()
     ArenaMatch.objects.filter(tournament=tournament).delete()
     _sync_rounds(tournament, count)
@@ -384,48 +490,81 @@ def _build_bracket(actor, tournament):
     now = timezone.now()
     for position, match in enumerate(by_round[1]):
         seed_a, seed_b = order[2 * position], order[2 * position + 1]
-        match.player_a, match.seed_a = seeds.get(seed_a), seed_a if seed_a in seeds else None
-        match.player_b, match.seed_b = seeds.get(seed_b), seed_b if seed_b in seeds else None
+        match.player_a, match.seed_a = seeds.get(seed_a), seed_a if seed_a <= count else None
+        match.player_b, match.seed_b = seeds.get(seed_b), seed_b if seed_b <= count else None
         if match.player_a and match.player_b:
             match.status = ArenaMatch.READY
             match.save(update_fields=['player_a', 'seed_a', 'player_b', 'seed_b', 'status'])
         else:
             match.save(update_fields=['player_a', 'seed_a', 'player_b', 'seed_b'])
-    # Byes: the lone player goes straight through.
+    # Byes: a place against nobody goes straight through, with its name or still without one.
     for match in by_round[1]:
-        if match.status == ArenaMatch.PENDING:
+        if match.seed_a is None or match.seed_b is None:
             match = lock_match(match.pk)
-            slot = SLOT_A if match.player_a_id else SLOT_B
+            slot = SLOT_A if match.seed_a is not None else SLOT_B
             match.status = ArenaMatch.DECIDED
             match.winner_slot = slot
             match.decided_reason = 'bye'
             match.decided_at = now
             _bump(match, 'status', 'winner_slot', 'decided_reason', 'decided_at')
             advance(match, now)
+    restored = set()
     if chosen:
         for match in ArenaMatch.objects.filter(tournament=tournament).exclude(status=ArenaMatch.DECIDED) \
                 .select_related('round'):
-            numbers = sorted(number for (round_number, position, third, number) in chosen
-                             if (round_number, position, third) == (match.round.number, match.position,
-                                                                    match.is_third_place))
+            where = (total_rounds - match.round.number, match.position, match.is_third_place)
+            numbers = sorted(number for (from_final, position, third, number) in chosen
+                             if (from_final, position, third) == where)
             for number in range(1, max(numbers, default=0) + 1):
                 game = ArenaGame.objects.create(match=match, number=number)
-                rows = chosen.get((match.round.number, match.position, match.is_third_place, number), [])
+                rows = chosen.get(where + (number,), [])
                 ArenaGameProblem.objects.bulk_create([ArenaGameProblem(game=game, problem_id=problem_id, order=order,
                                                                        points=points)
                                                       for order, (problem_id, points) in enumerate(rows)])
+            if numbers:
+                restored.add(where)
+    lost = len({key[:3] for key in chosen} - restored)
     tournament.version += 1
     tournament.save(update_fields=['version'])
-    _log('bracket', actor, tournament=tournament, participants=count, size=size)
-    return tournament
+    _log('bracket', actor, tournament=tournament, participants=len(participants), places=count, size=size, lost=lost)
+    return lost
 
 
 @transaction.atomic
-def start_tournament(actor, tournament_id, version=None):
+def start_tournament(actor, tournament_id, version=None, shrink=False):
+    """Start a draft. Every place needs a name (2026-11-03); with `shrink`, the places without one are dropped first:
+    the names keep their order, and the bracket is rebuilt for that many places, as when the places are lowered."""
     tournament = _lock_tournament(tournament_id)
     _check_version(tournament, version)
     if tournament.status != ArenaTournament.DRAFT:
         raise ArenaError(_('This tournament has already started.'))
+    participants = list(ArenaParticipant.objects.filter(tournament=tournament).order_by('seed'))
+    missing = tournament.place_count(len(participants)) - len(participants)
+    if missing > 0:
+        if not shrink:
+            raise ArenaError(ngettext('%(count)d place has no name yet.', '%(count)d places have no name yet.',
+                                      missing) % {'count': missing})
+        if len(participants) < MIN_PARTICIPANTS:
+            raise ArenaError(_('A tournament needs at least %(count)s participants.') % {'count': MIN_PARTICIPANTS})
+        chosen = _chosen_problems(tournament)
+        for seed, participant in enumerate(participants, 1):
+            if participant.seed != seed:
+                participant.seed = seed
+                participant.save(update_fields=['seed'])
+        tournament.places = len(participants)
+        tournament.save(update_fields=['places'])
+        _build_bracket(actor, tournament, chosen=chosen)
+        tournament.refresh_from_db()
+    elif _has_empty_places(tournament):
+        # Every name is there, but the bracket kept a place without anybody (a tournament edited with the code from
+        # before this change and installed again): it is built again for its names, in their order, before it starts.
+        chosen = _chosen_problems(tournament)
+        for seed, participant in enumerate(participants, 1):
+            if participant.seed != seed:
+                participant.seed = seed
+                participant.save(update_fields=['seed'])
+        _build_bracket(actor, tournament, chosen=chosen)
+        tournament.refresh_from_db()
     if not ArenaMatch.objects.filter(tournament=tournament).exists():
         raise ArenaError(_('Build the bracket before starting.'))
     tournament.status = ArenaTournament.RUNNING
@@ -433,7 +572,16 @@ def start_tournament(actor, tournament_id, version=None):
     tournament.version += 1
     tournament.save(update_fields=['status', 'started_at', 'version'])
     _log('tournament_start', actor, tournament=tournament)
+    ensure_default_screen(actor)
+    take_free_screen(actor, tournament=tournament)
     return tournament
+
+
+def _has_empty_places(tournament):
+    """Whether a battle of the first round still has a place with its number and nobody in it."""
+    empty = Q(seed_a__isnull=False, player_a__isnull=True) | Q(seed_b__isnull=False, player_b__isnull=True)
+    return ArenaMatch.objects.filter(tournament=tournament, round__number=1).exclude(status=ArenaMatch.DECIDED) \
+        .filter(empty).exists()
 
 
 @transaction.atomic
@@ -739,6 +887,57 @@ def fill_ready_matches(actor, tournament_id):
     return filled
 
 
+@transaction.atomic
+def set_rounds(actor, tournament_id, rounds, version=None):
+    """All the rounds of a tournament at once, from the tab «Rounds and problems» (2026-11-03), so one Save keeps
+    them all or none: `rounds` is a list of {number, name, best_of, draw_count, level_min, level_max}."""
+    if not isinstance(rounds, list) or len(rounds) > round_count(MAX_PARTICIPANTS) + 1:
+        raise ArenaError(_('Invalid request.'))
+    tournament = _lock_tournament(tournament_id)
+    _check_version(tournament, version)
+    for row in rounds:
+        if not isinstance(row, dict) or isinstance(row.get('number'), bool) or not isinstance(row.get('number'), int):
+            raise ArenaError(_('That round does not exist.'), status=404)
+        draw = {key: row[key] for key in ('draw_count', 'level_min', 'level_max') if key in row}
+        set_round(actor, tournament.pk, row['number'], best_of=row.get('best_of'), name=row.get('name'),
+                  version=ArenaTournament.objects.get(pk=tournament.pk).version, draw=draw or None)
+    return ArenaTournament.objects.get(pk=tournament.pk)
+
+
+def problem_conflicts(tournament):
+    """{match id: [{slot, profile, name, code, kind}]}: in the battles not played yet whose players are known, who
+    already solved ('solved') or tried ('tried') a problem chosen for them. The panel says so when a problem is chosen
+    (engine.problem_warnings); a place named later, after its problems, is checked here (2026-11-03). Two queries
+    for the whole bracket."""
+    matches = {m.pk: m for m in ArenaMatch.objects.filter(
+        tournament=tournament, status__in=(ArenaMatch.PENDING, ArenaMatch.READY, ArenaMatch.CALLED))
+        .select_related('player_a__user', 'player_b__user')}
+    rows = list(ArenaGameProblem.objects.filter(game__match_id__in=list(matches), game__status=ArenaGame.PREPARED)
+                .values_list('game__match_id', 'problem_id', 'problem__code'))
+    players = {profile_id for match in matches.values() for profile_id in (match.player_a_id, match.player_b_id)
+               if profile_id}
+    if not rows or not players:
+        return {}
+    problems = {problem_id for _match, problem_id, _code in rows}
+    attempts = Submission.objects.filter(user_id__in=players, problem_id__in=problems)
+    tried = set(attempts.values_list('user_id', 'problem_id').distinct())
+    solved = set(attempts.filter(result='AC', case_points__gte=F('case_total'))
+                 .values_list('user_id', 'problem_id').distinct())
+    result = {}
+    for match_id, problem_id, code in rows:
+        match = matches[match_id]
+        for slot in (SLOT_A, SLOT_B):
+            profile_id = match.player_id(slot)
+            if not profile_id or (profile_id, problem_id) not in tried:
+                continue
+            entry = {'slot': slot, 'profile': profile_id, 'name': match.shown_name(slot), 'code': code,
+                     'kind': 'solved' if (profile_id, problem_id) in solved else 'tried'}
+            if entry not in result.setdefault(match_id, []):
+                result[match_id].append(entry)
+    return result
+
+
 __all__ = ['seeding_order', 'bracket_size', 'round_count', 'default_round_name', 'round_name', 'create_tournament',
-           'update_tournament', 'set_participants', 'set_round', 'generate_bracket', 'start_tournament',
-           'archive_tournament', 'advance', 'set_winner', 'create_bank', 'set_bank_problems', 'draw_problems']
+           'update_tournament', 'set_participants', 'set_round', 'set_rounds', 'generate_bracket', 'start_tournament',
+           'archive_tournament', 'advance', 'set_winner', 'create_bank', 'set_bank_problems', 'draw_problems',
+           'clean_places', 'problem_conflicts']

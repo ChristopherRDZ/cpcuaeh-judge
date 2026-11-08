@@ -62,7 +62,8 @@ class ArenaError(Exception):
 
 class Conflict(ArenaError):
     def __init__(self, message=None):
-        super().__init__(message or _('Somebody else changed this battle a moment ago. The page has been updated; '
+        # Not «this battle» (2026-11-03): a tournament, a projector or a bank answer the same.
+        super().__init__(message or _('Somebody else made a change here a moment ago. The page has been updated; '
                                       'check it and try again.'), status=409)
 
 
@@ -455,34 +456,60 @@ def create_duel(actor, player_a, player_b, games, best_of=1, rules=None, display
         _set_problems(game, problems)
     _log('create', actor, match, best_of=best_of, games=len(cleaned), ranking=ranking)
     ensure_default_screen(actor)
-    screen = _free_screen(actor)
-    if screen is not None:
-        # The projector moves on to the new battle by itself, unless it is busy with another one still going.
-        screen.mode, screen.match = ArenaScreen.MATCH, match
-        screen.message = ''
-        screen.version += 1
-        screen.save(update_fields=['mode', 'match', 'message', 'version', 'updated_at'])
-        _log('screen', actor, match, screen=screen.pk)
+    take_free_screen(actor, match=match)
     refresh_lock_on_commit()
     return match
 
 
+# How long what is over stays on a projector before something new takes it (2026-11-04): counted from when it ended
+# and from the last change to the projector, so whatever the organizer just put up stays.
+SCREEN_FREE_AFTER = timedelta(minutes=30)
+
+
 def _free_screen(actor=None):
-    """The first screen with nothing to show for now: waiting, or still showing a battle that is over. Screens on
-    a bracket or a message, and screens with a battle still going, are left alone. With an `actor`, only among the
-    screens they manage: a new battle never takes the projector of another organizer."""
+    """The first screen with nothing to show for now: waiting, or showing a battle or a tournament that is over for
+    SCREEN_FREE_AFTER. Screens with a message, a battle still going or a tournament still being played are left
+    alone. With an `actor`, only among the screens they manage: something new never takes the projector of another
+    organizer."""
     screens = access.screens_of_actor(actor)
-    # Only the screen rows are locked; the status of the battles they show is a plain read.
+    # Only the screen rows are locked; what they show is a plain read.
     screens = list(screens.select_for_update().order_by('name', 'id'))
-    statuses = dict(ArenaMatch.objects.filter(pk__in=[s.match_id for s in screens if s.match_id])
-                    .values_list('pk', 'status'))
+    battles = {pk: (status in (ArenaMatch.DECIDED, ArenaMatch.CANCELLED), ended) for pk, status, ended in
+               ArenaMatch.objects.filter(pk__in=[s.match_id for s in screens if s.match_id])
+               .values_list('pk', 'status', 'decided_at')}
+    tournaments = {pk: (status in (ArenaTournament.FINISHED, ArenaTournament.ARCHIVED), ended) for pk, status, ended in
+                   ArenaTournament.objects.filter(pk__in=[s.tournament_id for s in screens if s.tournament_id])
+                   .values_list('pk', 'status', 'finished_at')}
+    now = timezone.now()
     for screen in screens:
         if screen.mode == ArenaScreen.IDLE:
             return screen
-        if screen.mode == ArenaScreen.MATCH and statuses.get(screen.match_id, ArenaMatch.DECIDED) in \
-                (ArenaMatch.DECIDED, ArenaMatch.CANCELLED):
+        if screen.mode == ArenaScreen.MATCH:
+            over, ended = battles.get(screen.match_id, (True, None))
+        elif screen.mode == ArenaScreen.BRACKET:
+            over, ended = tournaments.get(screen.tournament_id, (True, None))
+        else:
+            continue
+        if over and now - max(filter(None, (screen.updated_at, ended))) >= SCREEN_FREE_AFTER:
             return screen
     return None
+
+
+def take_free_screen(actor, match=None, tournament=None):
+    """A new quick battle (`match`) or a tournament that starts (`tournament`) goes by itself to a free projector."""
+    screen = _free_screen(actor)
+    if screen is None:
+        return None
+    # As show_on_screen: what the other mode had chosen stays, for when the panel goes back to it.
+    if match is not None:
+        screen.mode, screen.match = ArenaScreen.MATCH, match
+    else:
+        screen.mode, screen.tournament, screen.follow_live = ArenaScreen.BRACKET, tournament, True
+    screen.message = ''
+    screen.version += 1
+    screen.save(update_fields=['mode', 'match', 'tournament', 'follow_live', 'message', 'version', 'updated_at'])
+    _log('screen', actor, match, tournament=tournament, screen=screen.pk)
+    return screen
 
 
 def _require_running_tournament(match):
@@ -1219,21 +1246,34 @@ def create_screen(actor, name):
     return ArenaScreen.objects.create(name=name, token=new_screen_token(), created_by=actor)
 
 
+SCREEN_VIEWS = tuple(key for key, _label in ArenaScreen.VIEWS)
+
+
 @transaction.atomic
 def show_on_screen(actor, screen_id, mode, match=None, tournament=None, message='', follow_live=None,
-                   version=None):
+                   version=None, view=None):
+    """What a screen shows (`mode` and its battle, tournament or message) and, since 2026-11-03, how (`view`, None
+    leaves it as it is). A tab opened with ?view= in its address keeps its own view."""
     screen = ArenaScreen.objects.select_for_update().filter(pk=screen_id).first()
     if screen is None:
         raise ArenaError(_('That screen does not exist.'), status=404)
     _check_version(screen, version)
     if mode not in dict(ArenaScreen.MODES):
         raise ArenaError(_('Invalid screen mode.'))
+    if view is not None and view not in SCREEN_VIEWS:
+        raise ArenaError(_('Invalid screen mode.'))
+    if mode == ArenaScreen.MATCH and match is None and screen.match_id is None:
+        raise ArenaError(_('Choose a battle.'))
+    if mode == ArenaScreen.BRACKET and tournament is None and screen.tournament_id is None:
+        raise ArenaError(_('Choose a tournament.'))
     screen.mode = mode
     screen.match = match if mode == ArenaScreen.MATCH else (screen.match if match is None else match)
     if tournament is not None:
         screen.tournament = tournament
     if follow_live is not None:
         screen.follow_live = bool(follow_live)
+    if view is not None:
+        screen.view = view
     screen.message = (message or '').strip()[:200]
     screen.version += 1
     screen.save()
@@ -1245,7 +1285,10 @@ def rename_screen(actor, screen_id, name):
     screen = ArenaScreen.objects.select_for_update().filter(pk=screen_id).first()
     if screen is None:
         raise ArenaError(_('That screen does not exist.'), status=404)
-    screen.name = (name or '').strip()[:60] or screen.name
+    name = (name or '').strip()[:60]
+    if not name:
+        raise ArenaError(_('Write a name.'))
+    screen.name = name
     screen.version += 1
     screen.save()
     return screen
@@ -1259,6 +1302,137 @@ def regenerate_screen_token(actor, screen_id):
     screen.token = new_screen_token()
     screen.version += 1
     screen.save()
+    return screen
+
+
+# Which tabs of a screen are open (2026-11-03), so the panel can say «Open» or «Nobody has it open»: every tab marks
+# itself when it asks for its state, every 1 to 3 seconds, as following the panel or with its own view (?view=).
+SCREEN_SEEN_SECONDS = 10
+SCREEN_TAB_KINDS = ('panel',) + SCREEN_VIEWS
+
+
+def _screen_seen_key(screen_id, kind):
+    return 'arena:screen-seen:%d:%s' % (screen_id, kind)
+
+
+def mark_screen_seen(screen_id, fixed_view=None):
+    kind = fixed_view if fixed_view in SCREEN_VIEWS else 'panel'
+    try:
+        cache.set(_screen_seen_key(screen_id, kind), timezone.now().timestamp(), 60)
+    except Exception:
+        pass
+
+
+def screen_presence(screen_ids, now=None):
+    """{screen id: {'open': whether some tab asked in the last seconds, 'fixed': the views of the open tabs that keep
+    their own}}. Nothing open if the cache is down."""
+    now = (now or timezone.now()).timestamp()
+    keys = {_screen_seen_key(pk, kind): (pk, kind) for pk in screen_ids for kind in SCREEN_TAB_KINDS}
+    try:
+        found = cache.get_many(list(keys)) if keys else {}
+    except Exception:
+        found = {}
+    result = {pk: {'open': False, 'fixed': []} for pk in screen_ids}
+    for key, seen in found.items():
+        pk, kind = keys[key]
+        if seen is None or now - seen > SCREEN_SEEN_SECONDS:
+            continue
+        result[pk]['open'] = True
+        if kind != 'panel':
+            result[pk]['fixed'].append(kind)
+    for entry in result.values():
+        entry['fixed'].sort(key=SCREEN_VIEWS.index)
+    return result
+
+
+# Connecting a projector with a code (2026-11-03): the computer of the projector opens /proyector, which shows a code;
+# an organizer types it in the panel and that computer opens the screen, without anybody passing its secret link
+# around. The code is shown by the projector and typed by an organizer with the permission, and the link only goes to
+# the page that holds the secret of that code: guessing a code gives nothing. Codes live in the cache for ten minutes.
+PAIR_ALPHABET = 'ACDEFHJKMNPRTUVWXY34679'
+PAIR_LENGTH = 6
+PAIR_SECONDS = 600
+
+
+def _pair_key(code):
+    return 'arena:pair:' + code
+
+
+def clean_pair_code(value):
+    """A code as somebody typed it: spaces and dashes out, in capitals. None if it cannot be one."""
+    if not isinstance(value, str):
+        return None
+    code = ''.join(value.split()).replace('-', '').upper()
+    if len(code) != PAIR_LENGTH or any(char not in PAIR_ALPHABET for char in code):
+        return None
+    return code
+
+
+def new_pairing():
+    """(code, secret) for the page /proyector, or None if the cache is down."""
+    for _attempt in range(20):
+        code = ''.join(secrets.choice(PAIR_ALPHABET) for _index in range(PAIR_LENGTH))
+        secret = secrets.token_urlsafe(24)
+        try:
+            if cache.add(_pair_key(code), {'secret': secret, 'token': None,
+                                           'until': timezone.now().timestamp() + PAIR_SECONDS}, PAIR_SECONDS):
+                return code, secret
+        except Exception:
+            return None
+    return None
+
+
+def pairing_token(code, secret):
+    """For the page that shows `code`: 'waiting', 'expired', or the token of the screen it was given."""
+    code = clean_pair_code(code)
+    if code is None or not isinstance(secret, str):
+        return 'expired'
+    try:
+        entry = cache.get(_pair_key(code))
+    except Exception:
+        return 'waiting'
+    if not entry or not secrets.compare_digest(entry.get('secret', ''), secret):
+        return 'expired'
+    if not entry.get('token'):
+        return 'waiting'
+    # Given once: the code is used up.
+    try:
+        cache.delete(_pair_key(code))
+    except Exception:
+        pass
+    return entry['token']
+
+
+def pairing_open(code):
+    """Whether a projector shows `code` and waits for it: checked before creating a new screen for it."""
+    code = clean_pair_code(code)
+    if code is None:
+        return False
+    try:
+        entry = cache.get(_pair_key(code))
+    except Exception:
+        raise ArenaError(_('Connecting with a code does not work right now. Copy the link instead.'), status=503)
+    return bool(entry) and not entry.get('token')
+
+
+def pair_screen(actor, code, screen):
+    """An organizer types the code a projector shows: that projector opens `screen`."""
+    clean = clean_pair_code(code)
+    entry = None
+    if clean is not None:
+        try:
+            entry = cache.get(_pair_key(clean))
+        except Exception:
+            raise ArenaError(_('Connecting with a code does not work right now. Copy the link instead.'), status=503)
+    if not entry or entry.get('token'):
+        raise ArenaError(_('That code does not exist or has expired. Check the code on the projector.'))
+    entry['token'] = screen.token
+    left = max(5, int(entry.get('until', 0) - timezone.now().timestamp()))
+    try:
+        cache.set(_pair_key(clean), entry, left)
+    except Exception:
+        raise ArenaError(_('Connecting with a code does not work right now. Copy the link instead.'), status=503)
+    _log('screen_pair', actor, screen=screen.pk, name=screen.name)
     return screen
 
 

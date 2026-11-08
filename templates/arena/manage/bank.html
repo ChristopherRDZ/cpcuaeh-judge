@@ -4,6 +4,9 @@
 {% include "arena/_style.html" %}
 {% endblock %}
 
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
 {% block js_media %}
 {% include "arena/_js.html" %}
 {% include "arena/manage/_widgets.html" %}
@@ -81,9 +84,7 @@ $(function () {
 {% block body %}
 <form id="ar-csrf" hidden>{% csrf_token %}</form>
 <div class="am-page">
-    <p class="ar-row"><a href="{{ url('arena_manage') }}"><i class="fa fa-arrow-left"></i> {{ _('Battle panel') }}</a>
-        <span class="ar-grow"></span>
-        <a href="{{ url('arena_manage_guide') }}#bancos" target="_blank" rel="noopener"><i class="fa fa-question-circle"></i> {{ _('How do banks work?') }}</a></p>
+    {% include "arena/manage/_nav.html" %}
     <div class="am-grid">
         <div class="am-stack">
             {% if selected %}
@@ -91,7 +92,7 @@ $(function () {
                     <h3 class="ar-panel-head"><i class="fa fa-book" aria-hidden="true"></i> {{ selected.name }}</h3>
                     <div class="ar-panel-body">
                         {% if selected.description %}<p>{{ selected.description }}</p>{% endif %}
-                        <p class="am-hint">{{ _('A bank is a list of problems prepared in advance for tournaments. A tournament can give its battles problems from it by itself, or suggest them for you to check; it never repeats a problem in the tournament and avoids those the players already tried. Give each problem a difficulty so harder rounds can get harder problems.') }}</p>
+                        <p class="am-hint">{{ _('Give each problem a difficulty, so later rounds get harder problems.') }}</p>
                         {% if hidden %}<p class="ar-alert ar-alert-info" id="bk-hidden">{{ _('This bank also has %(count)s problems you cannot see. They are not listed here, and saving keeps them.', count=hidden) }}</p>{% endif %}
                         <div id="bk-add"></div>
                         <table class="am-table" id="bk-table" style="margin-top: .8em;">
@@ -101,8 +102,8 @@ $(function () {
                         <div class="am-actions" style="margin-top: 1em;"><button type="button" class="ar-btn" id="bk-save">{{ _('Save bank') }}</button></div>
                     </div>
                 </section>
-            {% else %}
-                <div class="ar-alert ar-alert-info">{{ _('Choose a bank on the right, or create one.') }}</div>
+            {% elif banks %}
+                <p class="ar-muted am-tight">{{ _('Choose a bank from the list.') }}</p>
             {% endif %}
         </div>
         <div class="am-stack">

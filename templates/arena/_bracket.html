@@ -55,6 +55,9 @@
                background: var(--ar-bg); border: 1px solid var(--ar-soft-border); border-radius: 4px; padding: 2px 8px;
                pointer-events: none; transition: opacity .3s; }
     body.sc-idle-cursor .ab-tools, body.sc-idle-cursor .ab-hint { opacity: 0; }
+    /* On a narrow screen the hint went under the buttons (2026-11-04); it speaks of a mouse anyway, as on the history
+       page. */
+    @media (max-width: 760px) { .ab-hint { display: none; } }
 </style>
 <script type="text/javascript">
 window.ArenaBracket = (function () {
@@ -191,7 +194,8 @@ window.ArenaBracket = (function () {
         function slotNode(m, slot, height) {
             var p = m[slot];
             var cls = 'ab-slot';
-            if (!p) cls += ' ab-empty';
+            // A place of a draft still without a name (2026-11-03) reads like an empty one, with its number.
+            if (!p || p.empty) cls += ' ab-empty';
             else if (m.winner === slot) cls += ' ab-win';
             else if (m.winner) cls += ' ab-lose';
             var node = A.el('div', {'class': cls}, p ? [

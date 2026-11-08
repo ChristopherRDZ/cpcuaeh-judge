@@ -1,0 +1,13 @@
+{# The bar under a list of the duels (2026-11-03): «1–20 of 47» and, when there is more than one page, the site's
+   pages (list-pages.html). Expects `pager`, a page of judge/views/arena_history.paginate, and `links`, from
+   arena_history.page_links. The page that includes it styles .ah-pages. #}
+{% if pager.paginator.count %}
+    <div class="ah-pages">
+        <span class="ar-muted">{{ _('%(first)s–%(last)s of %(total)s', first=pager.start_index(), last=pager.end_index(), total=pager.paginator.count) }}</span>
+        {% if pager.has_other_pages() %}
+            {% with page_obj=pager, page_prefix=links.page_prefix, page_suffix=links.page_suffix, first_page_href=links.first_page_href %}
+                {% include "list-pages.html" %}
+            {% endwith %}
+        {% endif %}
+    </div>
+{% endif %}

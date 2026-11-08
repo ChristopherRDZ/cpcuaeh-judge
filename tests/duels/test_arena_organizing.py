@@ -54,7 +54,8 @@ class BracketBuiltByItselfTests(AjustesTestCase):
 
     def test_saving_participants_or_the_third_place_rebuilds_it(self):
         cup = self.tournament(4)
-        arena_tournament.set_participants(self.organizer.profile, cup.pk, [p.profile for p in self.players[:6]])
+        arena_tournament.set_participants(self.organizer.profile, cup.pk, [p.profile for p in self.players[:6]],
+                                          places=6)
         self.assertEqual(ArenaMatch.objects.filter(tournament=cup).count(), 7)
         arena_tournament.update_tournament(self.organizer.profile, cup.pk, third_place=True)
         self.assertTrue(ArenaMatch.objects.filter(tournament=cup, is_third_place=True).exists())
@@ -75,7 +76,8 @@ class BracketBuiltByItselfTests(AjustesTestCase):
         cup = self.tournament(4)
         first = self.first_round(cup)[0]
         engine.set_game_problems(self.organizer.profile, first.pk, None, [{'id': self.problems[0].id}], number=1)
-        arena_tournament.set_participants(self.organizer.profile, cup.pk, [p.profile for p in self.players[:3]])
+        arena_tournament.set_participants(self.organizer.profile, cup.pk, [p.profile for p in self.players[:3]],
+                                          places=3)
         bye = ArenaMatch.objects.get(tournament=cup, round__number=1, position=0)
         self.assertEqual(bye.decided_reason, 'bye')
         self.assertFalse(ArenaGame.objects.filter(match=bye).exists())

@@ -15,17 +15,15 @@
     .tm-rounds td input, .tm-rounds td select { width: 100%; }
     .tm-rounds td.tm-levels { white-space: nowrap; }
     .tm-rounds td.tm-levels select { width: auto; }
-    .tm-steps ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: .45em; }
-    .tm-steps li.tm-done::marker { color: var(--ar-ok-solid); }
-    .tm-steps .tm-step-state { margin-left: .4em; }
-    .tm-choice { display: flex; gap: .6em; align-items: flex-start; padding: .6em .7em; border: 1px solid var(--ar-soft-border);
-                 border-radius: 4px; margin-bottom: .5em; cursor: pointer; }
-    .tm-choice.tm-chosen { border-color: var(--ar-blue); background: var(--ar-info-bg); }
-    .tm-choice input { margin-top: .25em; }
-    .tm-choice b { display: block; }
-    .tm-head-links { display: flex; gap: 1em; margin-left: auto; }
+    .tm-live { display: grid; grid-template-columns: minmax(0, 1fr) 24em; gap: 1em; align-items: start; }
+    .tm-place .ar-input { flex: 1 1 12em; }
+    .tm-place img { width: 24px; height: 24px; border-radius: 3px; }
+    @media (max-width: 900px) { .tm-live { grid-template-columns: minmax(0, 1fr); } }
 </style>
 {% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
 
 {% block js_media %}
 {% include "arena/_js.html" %}
@@ -34,68 +32,121 @@
 {{ state|json_script('tm-state') }}
 {{ languages|json_script('tm-languages') }}
 <script type="text/javascript">
+// The page of a tournament (2026-11-03): in tabs, with what is missing before it starts on top and, while it is
+// played, what comes next beside the bracket.
 $(function () {
     var A = window.Arena, W = window.ArenaWidgets;
     var TEXT = {
-        status: {draft: {{ _('Being prepared')|tojson }}, running: {{ _('In progress')|tojson }},
+        status: {draft: {{ _('Being prepared')|tojson }}, running: {{ _('Being played')|tojson }},
                  finished: {{ _('Finished')|tojson }}, archived: {{ _('Archived')|tojson }}},
-        matchStatus: {pending: {{ _('Waiting for players')|tojson }}, ready: {{ _('Ready to call')|tojson }},
-                      called: {{ _('In the waiting room')|tojson }}, playing: {{ _('Playing')|tojson }},
-                      decided: {{ _('Decided')|tojson }}, cancelled: {{ _('Cancelled')|tojson }}},
-        problems: {{ _('Problems')|tojson }},
-        problemsTitle: {{ _('Choose the problems of each game of this battle')|tojson }},
-        call: {{ _('Call')|tojson }},
-        callTitle: {{ _('The two players go to the waiting room of the arena')|tojson }},
-        goTo: {{ _('Go to the battle')|tojson }},
-        result: {{ _('See result')|tojson }},
+        matchStatus: {pending: {{ _('Waiting for players')|tojson }}, ready: {{ _('Ready to start')|tojson }},
+                      called: {{ _('In the waiting room')|tojson }}, playing: {{ _('Being played')|tojson }},
+                      decided: {{ _('Ended')|tojson }}, cancelled: {{ _('Called off')|tojson }}},
+        vs: {{ _('vs')|tojson }},
         live: {{ _('LIVE')|tojson }},
-        bye: {{ _('Bye')|tojson }},
+        problems: {{ _('Problems')|tojson }},
+        chooseProblems: {{ _('Choose problems')|tojson }},
+        call: {{ _('Send to the waiting room')|tojson }},
+        open: {{ _('Open')|tojson }},
+        see: {{ _('See')|tojson }},
         ready: {{ _('Problems ready')|tojson }},
-        missing: {{ _('No problems yet')|tojson }},
+        missing: {{ _('No problems')|tojson }},
         fromBank: {{ _('From the bank')|tojson }},
-        fromBankTitle: {{ _('The bank gives them its problems when it is called')|tojson }},
-        saved: {{ _('Saved')|tojson }},
-        participantsSaved: {{ _('Participants saved. The bracket was updated.')|tojson }},
-        generate: {{ _('Build the bracket')|tojson }},
-        start: {{ _('Start the tournament')|tojson }},
-        startConfirm: {{ _('After this the participants and the bracket can no longer change. You call the battles one by one, when it is their turn.')|tojson }},
-        startMissing: {{ _('Some battles of the first round have no problems yet. You can still choose them later, before starting each one.')|tojson }},
-        archive: {{ _('Archive (hide from the panel)')|tojson }},
-        archiveConfirm: {{ _('The tournament leaves the panel and cannot come back to it from here. Its page in the history stays as it is.')|tojson }},
+        fromBankTitle: {{ _('The bank gives them its problems when it is sent to the waiting room')|tojson }},
+        seen: {{ _('Already saw a problem')|tojson }},
+        solvedIt: {{ _('%(name)s already solved %(problem)s', name='%(name)s', problem='%(problem)s')|tojson }},
+        triedIt: {{ _('%(name)s already tried %(problem)s', name='%(name)s', problem='%(problem)s')|tojson }},
+        won: {{ _('%(name)s won', name='%(name)s')|tojson }},
         champion: {{ _('Champion')|tojson }},
-        show: {{ _('Show the bracket on')|tojson }},
-        follow: {{ _('and follow the battle being played')|tojson }},
+        // What is missing before starting.
+        before: {{ _('Before starting')|tojson }},
+        named: {{ _('%(named)s of %(places)s places with a name', named='%(named)s', places='%(places)s')|tojson }},
+        everyone: {{ _('%(count)s participants', count='%(count)s')|tojson }},
+        problemsBank: {{ _('Problems: from the bank')|tojson }},
+        firstRoundMissing: {{ _('First round: battles without problems: %(count)s', count='%(count)s')|tojson }},
+        firstRoundReady: {{ _('Problems of the first round')|tojson }},
+        conflicts: {{ _('Players who already saw a problem of their battle: %(count)s', count='%(count)s')|tojson }},
+        start: {{ _('Start the tournament')|tojson }},
+        startConfirm: {{ _('After this the participants and the bracket no longer change.')|tojson }},
+        startMissing: {{ _('Some battles of the first round have no problems yet: you can choose them before each one.')|tojson }},
+        namesMissing: {{ _('Names missing: %(count)s.', count='%(count)s')|tojson }},
+        complete: {{ _('Fill them in')|tojson }},
+        startWith: {{ _('Start with %(count)s places', count='%(count)s')|tojson }},
+        // Places.
+        placeN: {{ _('Place %(number)s', number='%(number)s')|tojson }},
+        searchPlace: {{ _('Place %(number)s: search...', number='%(number)s')|tojson }},
+        withName: {{ _('%(count)s with a name', count='%(count)s')|tojson }},
+        fromTo: {{ _('From %(old)s to %(new)s places', old='%(old)s', new='%(new)s')|tojson }},
+        tooMany: {{ _('There are %(count)s names: remove somebody before going down to %(places)s.', count='%(count)s', places='%(places)s')|tojson }},
+        beyond: {{ _('%(name)s is in place %(place)s: move them up or remove them before going down to %(places)s.', name='%(name)s', place='%(place)s', places='%(places)s')|tojson }},
+        roundsAdded: {{ _('New rounds at the start, without problems: %(names)s.', names='%(names)s')|tojson }},
+        roundsRemoved: {{ _('These rounds go, with the problems of their battles: %(names)s.', names='%(names)s')|tojson }},
+        battlesLost: {{ _('No longer played, with their problems: %(names)s.', names='%(names)s')|tojson }},
+        battlesNew: {{ _('New battles, without problems: %(names)s.', names='%(names)s')|tojson }},
+        byes: {{ _('Go straight to the next round: %(names)s.', names='%(names)s')|tojson }},
+        rest: {{ _('Everything else stays in its place.')|tojson }},
+        changeTo: {{ _('Change to %(count)s', count='%(count)s')|tojson }},
+        cancel: {{ _('Cancel')|tojson }},
+        badPlaces: {{ _('A tournament has from %(min)s to %(max)s places.', min=min_places, max=max_places)|tojson }},
+        and: {{ _('and')|tojson }},
+        unsaved: {{ _('Unsaved changes')|tojson }},
+        saved: {{ _('Saved')|tojson }},
+        participantsSaved: {{ _('Saved.')|tojson }},
+        lost: {{ _('Problems removed from battles: %(count)s.', count='%(count)s')|tojson }},
+        remove: {{ _('Remove')|tojson }},
+        up: {{ _('Move up')|tojson }},
+        down: {{ _('Move down')|tojson }},
+        // Rounds.
+        final: {{ _('Final')|tojson }}, semifinal: {{ _('Semifinal')|tojson }}, quarter: {{ _('Quarterfinal')|tojson }},
+        r16: {{ _('Round of 16')|tojson }}, roundN: {{ _('Round %(number)s', number='%(number)s')|tojson }},
         bestOf: {{ _('Best of')|tojson }},
         single: {{ _('A single game')|tojson }},
         any: {{ _('any')|tojson }},
-        save: {{ _('Save')|tojson }},
+        battles: {{ _('battles: %(count)s', count='%(count)s')|tojson }},
+        withoutProblems: {{ _('without problems: %(count)s', count='%(count)s')|tojson }},
+        allReady: {{ _('ready')|tojson }},
+        choose: {{ _('Choose')|tojson }},
         chooseBank: {{ _('Choose the bank the problems come from.')|tojson }},
-        bankHintAuto: {{ _('The problems of every battle come from here.')|tojson }},
-        bankHintHand: {{ _('Optional: with a bank, every battle has a Suggest from the bank button that fills its list for you to check.')|tojson }},
-        filled: {{ _('Problems given from the bank to battles:')|tojson }},
+        filled: {{ _('Battles that got problems from the bank: %(count)s.', count='%(count)s')|tojson }},
         noneFilled: {{ _('No battle was waiting for problems.')|tojson }},
-        stepOk: {{ _('Done')|tojson }},
-        stepBank: {{ _('They will come from the bank')|tojson }},
-        stepMissing: {{ _('Battles of the first round without problems:')|tojson }},
-        readyToCall: {{ _('Battles ready to call:')|tojson }},
-        organizersSaved: {{ _('Organizers saved')|tojson }},
+        // Settings.
         history: {shown: {{ _('Anybody can see it in Duels → Tournaments.')|tojson }},
-                  upcoming: {{ _('Announced as upcoming in Duels → Tournaments, with its planned date.')|tojson }},
-                  waiting: {{ _('Not visible yet: it appears in the history when the tournament starts.')|tojson }},
-                  hidden: {{ _('Left out of the history: only its organizers see it.')|tojson }}},
-        historySaved: {{ _('Saved. The public history is updated.')|tojson }},
-        ranking: {pending: {{ _('Not decided yet')|tojson }}, counts: {{ _('Counts')|tojson }},
+                  upcoming: {{ _('Announced as upcoming in Duels → Tournaments, with its date.')|tojson }},
+                  waiting: {{ _('It appears in Duels → Tournaments when it starts.')|tojson }},
+                  hidden: {{ _('Only its organizers see it.')|tojson }}},
+        ranking: {pending: {{ _('To review')|tojson }}, counts: {{ _('Counts')|tojson }},
                   excluded: {{ _('Does not count')|tojson }}},
-        noDate: {{ _('Choose a date and an hour first.')|tojson }}
+        noDate: {{ _('Choose a date and an hour first.')|tojson }},
+        organizersSaved: {{ _('Organizers saved')|tojson }},
+        archiveConfirm: {{ _('It leaves the panel. Its public page stays.')|tojson }},
+        archive: {{ _('Archive the tournament')|tojson }},
+        // Projectors.
+        showsBracket: {{ _('%(name)s shows the bracket', name='%(name)s')|tojson }},
+        showsBattle: {{ _('%(name)s shows one of its battles', name='%(name)s')|tojson }},
+        showOn: {{ _('Show on a projector')|tojson }},
+        showOnOne: {{ _('Show on %(name)s', name='%(name)s')|tojson }},
+        connect: {{ _('Connect a projector')|tojson }},
+        projectors: {{ _('Projectors')|tojson }},
+        shown: {{ _('Shown on %(name)s.', name='%(name)s')|tojson }}
     };
     var languages = JSON.parse(document.getElementById('tm-languages').textContent);
     var state = JSON.parse(document.getElementById('tm-state').textContent);
     var ACTION = {{ url('arena_manage_tournament_action', state.tournament.slug)|tojson }};
     var STATE = {{ url('arena_manage_tournament_state', state.tournament.slug)|tojson }};
-    var participants = null, rules = null, problemsForm = false, organizers = null, plannedForm = false;
+    var MATCH = {{ url('arena_manage_match', 0)|tojson }};
+    var MATCH_ACTION = {{ url('arena_manage_match_action', 0)|tojson }};
+    var MIN = {{ min_places }}, MAX = {{ max_places }};
+    var rules = null, organizers = null, forms = false;
     var paint = W.painter();
-
-    function matchUrl(id) { return {{ url('arena_manage_match', 0)|tojson }}.replace('/0/', '/' + id + '/'); }
+    function fill(text, values) {
+        Object.keys(values).forEach(function (key) { text = text.split('%(' + key + ')s').join(values[key]); });
+        return text;
+    }
+    function list(items) {
+        return items.length > 1 ? items.slice(0, -1).join(', ') + ' ' + TEXT.and + ' ' + items[items.length - 1] : items[0];
+    }
+    function matchUrl(id, tab) { return MATCH.replace('/0/', '/' + id + '/') + (tab ? '#' + tab : ''); }
+    function draft() { return state.tournament.status === 'draft'; }
 
     function act(data, done) {
         data.version = state.tournament.version;
@@ -107,68 +158,364 @@ $(function () {
     }
 
     function allMatches() {
-        var list = [];
-        state.bracket.rounds.forEach(function (round) { list = list.concat(round.matches); });
-        return list;
+        var all = [];
+        state.bracket.rounds.forEach(function (round) { all = all.concat(round.matches); });
+        return all;
     }
+    function bankDraws() { return !!(state.draw.auto && state.draw.bank); }
+    function playable(m) { return m.reason !== 'bye'; }
+    function conflictsOf(id) { return state.conflicts[String(id)] || []; }
+
+    var tabs = W.subTabs(document.getElementById('tm-tabs'), 'bracket', function (name) {
+        if (name === 'bracket' && bracketView) bracketView.refresh(false);
+    });
 
     function render() {
         var t = state.tournament;
-        var draft = t.status === 'draft';
-        $('#tm-status').text(TEXT.status[t.status] || t.status);
-        $('#tm-draft').prop('hidden', !draft);
-        $('#tm-steps').prop('hidden', !draft);
-        $('#tm-running').prop('hidden', t.status !== 'running');
-        if (draft && !participants) {
-            participants = W.userList(document.getElementById('tm-participants'), state.participants.map(function (p) {
-                return {id: p.id, name: p.name, username: p.username, avatar: p.avatar};
-            }));
-            $('#tm-seeding').val(t.seeding);
-        }
-        $('#tm-third').prop('checked', t.third_place);
-        renderHistory();
-        if (!rules) {
+        $('#tm-title').text(t.name);
+        $('#tm-status').text(TEXT.status[t.status] || t.status)
+            .attr('class', 'ar-badge ' + (t.status === 'running' ? 'ar-bad' : 'ar-none'));
+        $('#tm-public-link').attr('href', t.public_url);
+        if (!forms) {
             // The forms are filled once; later refreshes must not overwrite what is being typed.
+            forms = true;
             $('#tm-name').val(t.name);
             $('#tm-description').val(t.description);
+            $('#tm-planned').val(t.planned_at || '');
             rules = W.rulesEditor(document.getElementById('tm-rules'), t.rules, languages);
-        }
-        if (!organizers) {
             organizers = W.organizerList(document.getElementById('tm-organizers'), state.organizers.creator,
                                          state.organizers.list, true);
-        }
-        if (!problemsForm) {
-            problemsForm = true;
             $('input[name="tm-mode"][value="' + (state.draw.auto ? 'bank' : 'hand') + '"]').prop('checked', true);
             $('#tm-bank').val(state.draw.bank ? String(state.draw.bank) : '');
             $('#tm-draw-count').val(state.draw.count || 1);
             showMode();
         }
-        // Giving problems now only makes sense with a saved bank.
-        $('#tm-fill').prop('hidden', !state.draw.bank);
-        // Only what changed is redrawn: a refresh must not close the list of a round someone is choosing from.
-        paint('steps', [state.bracket, state.draw], renderSteps);
-        paint('rounds', [state.rounds, state.draw.bank, state.draw.count], renderRounds);
+        $('#tm-third').prop('checked', t.third_place).prop('disabled', !draft());
+        renderChampion();
+        paint('before', [t.status, state.places, state.participants.length, state.bracket, state.draw, state.conflicts], renderBefore);
+        paint('places', [t.status, state.places, state.participants, state.conflicts], renderPlaces);
+        paint('rounds', [state.rounds, state.draw], renderRounds);
+        paint('round-status', [roundSummary(), bankDraws()], renderRoundStatus);
+        paint('next', [t.status, state.bracket, state.draw], renderNext);
+        paint('screens', [state.screens, t.id], renderScreens);
+        paint('settings', [t.show_in_history, t.status, t.planned_at, t.ranking, t.ranking_decides], renderSettings);
         renderBracket();
-        paint('buttons', [t.status, allMatches().length > 0], renderButtons);
-        paint('screens', [state.tournament.id, state.screens.map(function (s) { return [s.id, s.name]; })], renderScreens);
+        $('#tm-fill').prop('hidden', !state.draw.bank);
+        $('#tm-archive-box').prop('hidden', t.status !== 'finished');
     }
 
-    // ------------------------------------------------------------ what is left to do
-    function renderSteps() {
-        var firstRound = (state.bracket.rounds[0] || {matches: []}).matches.filter(function (m) { return m.reason !== 'bye'; });
-        var missing = firstRound.filter(function (m) { return !m.problems.next_ready; }).length;
-        var bank = state.draw.auto && state.draw.bank;
-        var stepState = A.clear(document.getElementById('tm-step-problems-state'));
-        if (bank) stepState.appendChild(W.badge(TEXT.stepBank, 'ok'));
-        else if (missing) stepState.appendChild(W.badge(TEXT.stepMissing + ' ' + missing, 'warn'));
-        else stepState.appendChild(W.badge(TEXT.stepOk, 'ok'));
-        $('#tm-step-problems').toggleClass('tm-done', bank || !missing);
-        var ready = allMatches().filter(function (m) { return m.status === 'ready'; }).length;
-        $('#tm-ready-count').text(TEXT.readyToCall + ' ' + ready);
+    function renderChampion() {
+        var champion = state.bracket.champion;
+        $('#tm-champion').prop('hidden', !champion).empty();
+        if (champion) {
+            $('#tm-champion').append(A.el('span', {}, [A.el('i', {'class': 'fa fa-trophy'}), ' ' + TEXT.champion + ': ',
+                champion.avatar ? A.el('img', {src: champion.avatar, alt: '', style: 'width:28px;height:28px;border-radius:3px;vertical-align:middle;'}) : null,
+                ' ', A.el('b', {text: champion.name})]));
+        }
     }
 
-    // ------------------------------------------------------------ rounds
+    // ------------------------------------------------------------ before starting
+    function check(ok, text, tab) {
+        return A.el('a', {href: '#' + tab, onclick: function (event) { event.preventDefault(); tabs.show(tab, true); }}, [
+            A.el('i', {'class': 'fa ' + (ok ? 'fa-check am-check' : 'fa-exclamation-triangle am-warn'), 'aria-hidden': 'true'}), ' ' + text]);
+    }
+
+    function renderBefore() {
+        $('#tm-before').prop('hidden', !draft());
+        if (!draft()) return;
+        var strip = A.clear(document.getElementById('tm-strip'));
+        var named = state.participants.length, missing = state.missing;
+        strip.appendChild(A.el('b', {text: TEXT.before}));
+        strip.appendChild(missing ? check(false, fill(TEXT.named, {named: named, places: state.places}), 'participants')
+                                  : check(true, fill(TEXT.everyone, {count: named}), 'participants'));
+        if (bankDraws()) {
+            strip.appendChild(check(true, TEXT.problemsBank, 'problems'));
+        } else {
+            var first = (state.bracket.rounds[0] || {matches: []}).matches.filter(playable);
+            var without = first.filter(function (m) { return !m.problems.next_ready; }).length;
+            strip.appendChild(without ? check(false, fill(TEXT.firstRoundMissing, {count: without}), 'problems')
+                                      : check(true, TEXT.firstRoundReady, 'problems'));
+        }
+        var seen = 0;
+        Object.keys(state.conflicts).forEach(function (key) { seen += state.conflicts[key].length; });
+        if (seen) strip.appendChild(check(false, fill(TEXT.conflicts, {count: seen}), 'bracket'));
+        strip.appendChild(A.el('span', {'class': 'ar-grow'}));
+        strip.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-green', text: TEXT.start, onclick: startClicked}));
+        $('#tm-start-missing').prop('hidden', true);
+    }
+
+    function startLines() {
+        var lines = [TEXT.startConfirm];
+        var first = (state.bracket.rounds[0] || {matches: []}).matches.filter(playable);
+        if (!bankDraws() && first.some(function (m) { return !m.problems.next_ready; })) lines.push(TEXT.startMissing);
+        return lines;
+    }
+
+    function startClicked() {
+        var missing = state.missing, named = state.participants.length;
+        if (!missing) {
+            W.confirmBox(TEXT.start, startLines(), TEXT.start, function () { act({action: 'start'}); });
+            return;
+        }
+        // Places without a name: fill them in, or start with the names there are.
+        var box = A.clear(document.getElementById('tm-start-missing'));
+        box.appendChild(A.el('i', {'class': 'fa fa-exclamation-triangle am-warn', 'aria-hidden': 'true'}));
+        box.appendChild(A.el('span', {text: fill(TEXT.namesMissing, {count: missing})}));
+        box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.complete,
+                                        onclick: function () { tabs.show('participants', true); }}));
+        if (named >= MIN) {
+            box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: fill(TEXT.startWith, {count: named}),
+                onclick: function () {
+                    W.confirmBox(fill(TEXT.startWith, {count: named}), startLines(), TEXT.start, function () {
+                        act({action: 'start', shrink: true});
+                    });
+                }}));
+            var effect = placesEffect(state.places, named, named, true);
+            box.appendChild(A.el('span', {'class': 'am-hint', text: effect.lines.join(' ')}));
+        }
+        box.hidden = false;
+    }
+
+    // ------------------------------------------------------------ what changing the number of places does
+    // The same reckoning as tournament.py: a bracket of the next power of two, the standard seeding order, and the
+    // problems and rounds kept by their distance from the final.
+    function pow2(n) { var size = 1; while (size < n) size *= 2; return size; }
+    function roundsFor(n) { return Math.round(Math.log(pow2(Math.max(n, 2))) / Math.LN2); }
+    function seedingOrder(size) {
+        var order = [1];
+        while (order.length < size) {
+            var total = order.length * 2 + 1, next = [];
+            order.forEach(function (seed) { next.push(seed, total - seed); });
+            order = next;
+        }
+        return order;
+    }
+    function defaultRoundName(number, total) {
+        var fromEnd = total - number;
+        return [TEXT.final, TEXT.semifinal, TEXT.quarter, TEXT.r16][fromEnd] || fill(TEXT.roundN, {number: number});
+    }
+    function currentRoundName(number) {
+        var round = state.rounds.filter(function (r) { return r.number === number; })[0];
+        return round ? round.name : defaultRoundName(number, state.rounds.length);
+    }
+    function placeName(seed) {
+        var slot = slots[seed - 1];
+        return slot ? slot.name : fill(TEXT.placeN, {number: seed});
+    }
+
+    // `named`: how many names there are; `shrinking`: the places without a name go (the names keep their order).
+    function placesEffect(oldN, newN, named, shrinking) {
+        if (newN < named) return {bad: true, lines: [fill(TEXT.tooMany, {count: named, places: newN})]};
+        if (!shrinking) {
+            for (var i = newN; i < slots.length; i++) {
+                if (slots[i]) return {bad: true, lines: [fill(TEXT.beyond, {name: slots[i].name, place: i + 1, places: newN})]};
+            }
+        }
+        var lines = [], ro = roundsFor(oldN), rn = roundsFor(newN);
+        if (rn > ro) {
+            var added = [];
+            for (var a = 1; a <= rn - ro; a++) added.push(defaultRoundName(a, rn));
+            lines.push(fill(TEXT.roundsAdded, {names: list(added)}));
+        }
+        if (rn < ro) {
+            var removed = [];
+            for (var r = 1; r <= ro - rn; r++) removed.push(currentRoundName(r));
+            lines.push(fill(TEXT.roundsRemoved, {names: list(removed)}));
+        }
+        var order = seedingOrder(pow2(newN)), lost = [], fresh = [], byes = [];
+        for (var k = 0; k < order.length / 2; k++) {
+            var top = order[2 * k], bottom = order[2 * k + 1];
+            if (bottom > newN) byes.push(top);
+            if (rn === ro && !shrinking && bottom > newN && bottom <= oldN) lost.push(fill(TEXT.placeN, {number: top}) + ' ' + TEXT.vs + ' ' + fill(TEXT.placeN, {number: bottom}));
+            if (rn === ro && !shrinking && bottom <= newN && bottom > oldN) fresh.push(fill(TEXT.placeN, {number: top}) + ' ' + TEXT.vs + ' ' + fill(TEXT.placeN, {number: bottom}));
+        }
+        if (lost.length) lines.push(fill(TEXT.battlesLost, {names: list(lost)}));
+        if (fresh.length) lines.push(fill(TEXT.battlesNew, {names: list(fresh)}));
+        if (byes.length) {
+            byes.sort(function (x, y) { return x - y; });
+            var names = shrinking ? byes.map(function (seed) { return namedInOrder()[seed - 1].name; })
+                                  : byes.map(function (seed) { return fill(TEXT.placeN, {number: seed}); });
+            lines.push(fill(TEXT.byes, {names: list(names)}));
+        }
+        if (!shrinking) lines.push(TEXT.rest);
+        return {lines: lines};
+    }
+    function namedInOrder() { return slots.filter(function (slot) { return !!slot; }); }
+
+    // ------------------------------------------------------------ places and who is in each one
+    var slots = [], savedSlots = '[]', places = 0;
+    function slotIds() { return slots.map(function (slot) { return slot ? slot.id : null; }); }
+    function dirty() { return JSON.stringify(slotIds()) !== savedSlots; }
+    function fromServer() {
+        places = state.places;
+        slots = [];
+        for (var i = 0; i < places; i++) slots.push(null);
+        state.participants.forEach(function (p) {
+            if (p.seed >= 1 && p.seed <= places) slots[p.seed - 1] = {id: p.id, name: p.name, username: p.username, avatar: p.avatar,
+                                                                      rating: p.rating, duel_rating: p.duel_rating};
+        });
+        savedSlots = JSON.stringify(slotIds());
+    }
+
+    function renderPlaces() {
+        var editable = draft();
+        $('#tm-places-edit').prop('hidden', !editable);
+        $('#tm-places-read').prop('hidden', editable);
+        if (!editable) {
+            var read = A.clear(document.getElementById('tm-places-read-list'));
+            state.participants.forEach(function (p) {
+                read.appendChild(A.el('div', {'class': 'am-item tm-place'}, [A.el('span', {'class': 'am-letter', text: String(p.seed)}),
+                    p.avatar ? A.el('img', {src: p.avatar, alt: ''}) : null, A.el('b', {text: p.name}),
+                    p.name !== p.username ? A.el('span', {'class': 'ar-muted', text: p.username}) : null]));
+            });
+            return;
+        }
+        // Somebody else saved, or this is the first time: follow the server unless there are changes here.
+        if (!slots.length || !dirty()) fromServer();
+        drawPlaces();
+    }
+
+    function conflictBadges(slot) {
+        var badges = [];
+        Object.keys(state.conflicts).forEach(function (key) {
+            state.conflicts[key].forEach(function (row) {
+                if (row.profile !== slot.id) return;
+                badges.push(W.badge(fill(row.kind === 'solved' ? TEXT.solvedIt : TEXT.triedIt, {name: row.name, problem: row.code}),
+                                    row.kind === 'solved' ? 'bad' : 'warn'));
+            });
+        });
+        return badges;
+    }
+
+    function drawPlaces() {
+        $('#tm-places').val(places);
+        $('#tm-named').text(fill(TEXT.withName, {count: namedInOrder().length}));
+        $('#tm-unsaved').prop('hidden', !dirty());
+        // What is being typed in an empty place stays when the list is drawn again, as when another tab saves
+        // (2026-11-04).
+        var typed = {}, focused = null;
+        document.querySelectorAll('#tm-place-list [data-place] input').forEach(function (input) {
+            var at = input.closest('[data-place]').getAttribute('data-place');
+            if (input.value) typed[at] = input.value;
+            if (document.activeElement === input) focused = {at: at, start: input.selectionStart, end: input.selectionEnd};
+        });
+        var box = A.clear(document.getElementById('tm-place-list'));
+        slots.forEach(function (slot, index) {
+            var number = A.el('span', {'class': 'am-letter', text: String(index + 1)});
+            if (!slot) {
+                var holder = A.el('div', {'class': 'ar-grow'});
+                var row = A.el('div', {'class': 'am-item tm-place', 'data-place': index}, [number, holder]);
+                var search = W.searchBox(holder, {fetch: W.fetchUsers, row: W.userRow, placeholder: fill(TEXT.searchPlace, {number: index + 1}),
+                    pick: function (user) {
+                        var already = slots.findIndex(function (s) { return s && s.id === user.id; });
+                        if (already !== -1) slots[already] = null;
+                        slots[index] = user;
+                        drawPlaces();
+                    }});
+                box.appendChild(row);
+                if (typed[index]) search.input.value = typed[index];
+                if (focused && focused.at === String(index)) {
+                    search.input.focus();
+                    search.input.setSelectionRange(focused.start, focused.end);
+                }
+                return;
+            }
+            box.appendChild(A.el('div', {'class': 'am-item tm-place'}, [number,
+                slot.avatar ? A.el('img', {src: slot.avatar, alt: ''}) : null,
+                A.el('b', {text: slot.name}),
+                slot.name !== slot.username ? A.el('span', {'class': 'ar-muted', text: slot.username}) : null
+            ].concat(conflictBadges(slot)).concat([
+                A.el('span', {'class': 'ar-grow'}),
+                A.el('button', {type: 'button', 'class': 'am-icon-btn', title: TEXT.up, text: '↑', onclick: function () { move(index, -1); }}),
+                A.el('button', {type: 'button', 'class': 'am-icon-btn', title: TEXT.down, text: '↓', onclick: function () { move(index, 1); }}),
+                A.el('button', {type: 'button', 'class': 'am-icon-btn', title: TEXT.remove, text: '✕',
+                                onclick: function () { slots[index] = null; drawPlaces(); }})
+            ])));
+        });
+    }
+
+    function move(index, delta) {
+        var target = index + delta;
+        if (target < 0 || target >= slots.length) return;
+        var item = slots[index]; slots[index] = slots[target]; slots[target] = item;
+        drawPlaces();
+    }
+
+    // The order buttons put the names in order on the page; nothing is saved until Save.
+    function reorder(kind) {
+        var names = namedInOrder();
+        if (kind === 'random') {
+            for (var i = names.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1)); var swap = names[i]; names[i] = names[j]; names[j] = swap;
+            }
+        } else {
+            var key = kind === 'duel' ? 'duel_rating' : 'rating';
+            names.sort(function (x, y) {
+                var a = x[key], b = y[key];
+                if (a == null && b == null) return (y.rating || 0) - (x.rating || 0);
+                if (a == null) return 1;
+                if (b == null) return -1;
+                return b - a;
+            });
+        }
+        slots = names.concat(slots.filter(function (slot) { return !slot; }));
+        drawPlaces();
+    }
+    $('.tm-order').on('click', function () { reorder($(this).data('order')); });
+
+    // `next`: the places to save, when they are not those on the page (a new number of places): the page keeps its
+    // own until the server takes them, so a refused change leaves it as it was.
+    function saveSlots(newPlaces, next) {
+        var ids = (next || slots).map(function (slot) { return slot ? slot.id : null; });
+        return act({action: 'participants', participants: ids, places: newPlaces || places}, function (result) {
+            fromServer();
+            drawPlaces();
+            A.toast(TEXT.participantsSaved, 'ok', 3000);
+            if (result.lost_problems) A.toast(fill(TEXT.lost, {count: result.lost_problems}), 'warn', 6000);
+        });
+    }
+    $('#tm-save-places').on('click', function () { saveSlots(); });
+
+    $('#tm-places').on('input', function () {
+        var box = document.getElementById('tm-places-effect');
+        var value = parseInt(this.value, 10);
+        if (!(value >= MIN && value <= MAX) || value === places) { box.hidden = true; return; }
+        var named = namedInOrder().length;
+        var effect = placesEffect(places, value, named, false);
+        A.clear(box);
+        box.className = 'ar-alert am-mt' + (effect.bad ? '' : ' ar-alert-warn');
+        box.appendChild(A.el('b', {text: fill(TEXT.fromTo, {old: places, 'new': value})}));
+        effect.lines.forEach(function (line) { box.appendChild(A.el('div', {text: line})); });
+        if (!effect.bad) {
+            box.appendChild(A.el('div', {'class': 'am-actions', style: 'margin-top: .6em;'}, [
+                A.el('button', {type: 'button', 'class': 'ar-btn', text: fill(TEXT.changeTo, {count: value}), onclick: function () {
+                    box.hidden = true;
+                    var next = slots.slice(0, value);
+                    while (next.length < value) next.push(null);
+                    saveSlots(value, next);
+                }}),
+                A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.cancel, onclick: function () {
+                    $('#tm-places').val(places); box.hidden = true;
+                }})
+            ]));
+        }
+        box.hidden = false;
+    });
+
+    $('#tm-third').on('change', function () {
+        act({action: 'update', third_place: $(this).prop('checked')}, function () { A.toast(TEXT.saved, 'ok', 2000); });
+    });
+
+    // ------------------------------------------------------------ rounds and problems
+    function mode() { return $('input[name="tm-mode"]:checked').val() || 'hand'; }
+    function showMode() {
+        $('.tm-choice').each(function () { $(this).toggleClass('tm-chosen', $(this).find('input').prop('checked')); });
+        $('#tm-bank-settings').prop('hidden', mode() !== 'bank' && !$('#tm-bank').val());
+        $('.tm-bank-col').prop('hidden', mode() !== 'bank');
+    }
+    $('#tm-bank').on('change', showMode);
+    $('input[name="tm-mode"]').on('change', showMode);
+
     function levelSelect(value) {
         var select = A.el('select', {'class': 'ar-select'});
         select.appendChild(A.el('option', {value: '', text: TEXT.any}));
@@ -180,11 +527,11 @@ $(function () {
         return select;
     }
 
+    var roundInputs = [];
     function renderRounds() {
         var body = A.clear(document.getElementById('tm-rounds'));
-        var bank = !!state.draw.bank;
-        $('.tm-bank-col').prop('hidden', !bank);
-        state.rounds.forEach(function (round) {
+        roundInputs = [];
+        state.rounds.forEach(function (round, index) {
             var select = A.el('select', {'class': 'ar-select'});
             [1, 3, 5, 7, 9].forEach(function (n) {
                 var option = A.el('option', {value: n, text: n === 1 ? TEXT.single : TEXT.bestOf + ' ' + n});
@@ -195,48 +542,89 @@ $(function () {
             var count = A.el('input', {'class': 'ar-input', type: 'number', min: 1, max: 5, value: round.draw_count || '',
                                        placeholder: String(state.draw.count || 1)});
             var low = levelSelect(round.level_min), high = levelSelect(round.level_max);
+            var status = A.el('td');
+            roundInputs.push({number: round.number, select: select, name: name, count: count, low: low, high: high,
+                              status: status});
             body.appendChild(A.el('tr', {}, [
                 A.el('td', {text: String(round.number)}),
                 A.el('td', {}, [name]),
                 A.el('td', {}, [select]),
-                A.el('td', {'class': 'tm-bank-col', hidden: !bank}, [count]),
-                A.el('td', {'class': 'tm-bank-col tm-levels', hidden: !bank}, [low, ' – ', high]),
-                A.el('td', {}, [A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.save, onclick: function () {
-                    var data = {action: 'round', number: round.number, best_of: parseInt(select.value, 10), name: name.value};
-                    if (bank) {
-                        data.draw = {draw_count: parseInt(count.value, 10) || null, level_min: parseInt(low.value, 10) || null,
-                                     level_max: parseInt(high.value, 10) || null};
-                    }
-                    act(data, function () { A.toast(TEXT.saved, 'ok', 2000); });
-                }})])
+                A.el('td', {'class': 'tm-bank-col', hidden: mode() !== 'bank'}, [count]),
+                A.el('td', {'class': 'tm-bank-col tm-levels', hidden: mode() !== 'bank'}, [low, ' – ', high]),
+                status
             ]));
+        });
+        renderRoundStatus();
+    }
+
+    // What each round still needs, apart from its fields: a battle that ends or gets its problems redraws only this
+    // column, and what is being typed in the fields stays.
+    function roundSummary() {
+        return state.rounds.map(function (round, index) {
+            var matches = ((state.bracket.rounds[index] || {}).matches || []).filter(playable);
+            var open = matches.filter(function (m) { return m.status !== 'decided' && m.status !== 'cancelled'; });
+            var without = open.filter(function (m) { return !m.problems.next_ready; });
+            return {battles: matches.length, open: open.length, without: without.length,
+                    first: without.length ? without[0].id : null};
+        });
+    }
+    function renderRoundStatus() {
+        var summary = roundSummary();
+        roundInputs.forEach(function (row, index) {
+            var item = summary[index];
+            if (!item) return;
+            var cell = [fill(TEXT.battles, {count: item.battles}), ' '];
+            if (!bankDraws() && item.without) {
+                cell.push(W.badge(fill(TEXT.withoutProblems, {count: item.without}), 'warn'), ' ',
+                          A.el('a', {href: matchUrl(item.first, 'problems'), text: TEXT.choose}));
+            } else if (item.open) {
+                cell.push(W.badge(bankDraws() ? TEXT.fromBank : TEXT.allReady, 'ok'));
+            }
+            A.clear(row.status).appendChild(A.el('span', {}, cell));
         });
     }
 
-    // ------------------------------------------------------------ where the problems come from
-    function mode() { return $('input[name="tm-mode"]:checked').val() || 'hand'; }
-    function showMode() {
-        $('.tm-choice').each(function () { $(this).toggleClass('tm-chosen', $(this).find('input').prop('checked')); });
-        $('#tm-bank-hint').text(mode() === 'bank' ? TEXT.bankHintAuto : TEXT.bankHintHand);
-    }
-    $('#tm-bank').on('change', showMode);
-    $('input[name="tm-mode"]').on('change', showMode);
     $('#tm-save-problems').on('click', function () {
         var bank = parseInt($('#tm-bank').val(), 10) || null;
         var auto = mode() === 'bank';
         if (auto && !bank) { A.toast(TEXT.chooseBank, 'warn'); return; }
+        var rounds = roundInputs.map(function (row) {
+            var data = {number: row.number, best_of: parseInt(row.select.value, 10), name: row.name.value};
+            if (auto) {
+                data.draw_count = parseInt(row.count.value, 10) || null;
+                data.level_min = parseInt(row.low.value, 10) || null;
+                data.level_max = parseInt(row.high.value, 10) || null;
+            }
+            return data;
+        });
         act({action: 'update', bank: auto ? bank : (bank || null),
-             draw: {auto_draw: auto, draw_count: parseInt($('#tm-draw-count').val(), 10) || 1}},
-            function () { A.toast(TEXT.saved, 'ok', 2000); });
+             draw: {auto_draw: auto, draw_count: parseInt($('#tm-draw-count').val(), 10) || 1}}, function () {
+            act({action: 'rounds', rounds: rounds}, function () { A.toast(TEXT.saved, 'ok', 2000); });
+        });
     });
     $('#tm-fill').on('click', function () {
         act({action: 'fill'}, function (result) {
-            A.toast(result.filled ? TEXT.filled + ' ' + result.filled : TEXT.noneFilled, result.filled ? 'ok' : 'info', 4000);
+            A.toast(result.filled ? fill(TEXT.filled, {count: result.filled}) : TEXT.noneFilled, result.filled ? 'ok' : 'info', 4000);
         });
     });
 
-    // ------------------------------------------------------------ the bracket
-    // Under each match, two rows: where it stands and whether its problems are chosen; then what can be done.
+    // ------------------------------------------------------------ the bracket and what comes next
+    function names(m) { return [m.a ? m.a.name : '?', m.b ? m.b.name : '?']; }
+
+    function callButton(m, cls) {
+        return A.el('button', {type: 'button', 'class': 'ar-btn ' + (cls || ''), text: TEXT.call, onclick: function () {
+            A.post(MATCH_ACTION.replace('/0/', '/' + m.id + '/'), {action: 'call'})
+                .then(function () { window.location.href = matchUrl(m.id); }).catch(W.fail);
+        }});
+    }
+
+    function problemsBadge(m) {
+        if (m.problems.next_ready) return W.badge('✓ ' + TEXT.ready, 'ok');
+        if (bankDraws()) { var badge = W.badge(TEXT.fromBank, 'info'); badge.title = TEXT.fromBankTitle; return badge; }
+        return W.badge(TEXT.missing, 'warn');
+    }
+
+    // Under each battle, two rows: where it stands and its problems; then what can be done.
     function matchFooter(m) {
         var running = state.tournament.status === 'running';
         var over = m.status === 'decided' || m.status === 'cancelled';
@@ -245,140 +633,139 @@ $(function () {
             A.el('span', {'class': 'ar-grow'})
         ]);
         var bottom = A.el('div', {'class': 'tm-foot-row'}, [A.el('span', {'class': 'ar-grow'})]);
-        if (!over) {
-            var badge = m.problems.next_ready ? W.badge('✓ ' + TEXT.ready, 'ok')
-                : (state.draw.auto && state.draw.bank ? W.badge(TEXT.fromBank, 'info') : W.badge(TEXT.missing, 'warn'));
-            if (!m.problems.next_ready && state.draw.auto && state.draw.bank) badge.title = TEXT.fromBankTitle;
-            top.appendChild(badge);
+        if (!over) top.appendChild(problemsBadge(m));
+        var seen = conflictsOf(m.id);
+        if (seen.length && !over) {
+            var warn = W.badge(TEXT.seen, 'bad');
+            warn.title = seen.map(function (row) {
+                return fill(row.kind === 'solved' ? TEXT.solvedIt : TEXT.triedIt, {name: row.name, problem: row.code});
+            }).join('\n');
+            bottom.insertBefore(warn, bottom.firstChild);
         }
         if (m.status === 'pending' || m.status === 'ready') {
-            bottom.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id) + '#mm-problems-panel',
-                                          text: TEXT.problems, title: TEXT.problemsTitle}));
+            bottom.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id, 'problems'), text: TEXT.problems}));
         }
-        if (running && m.status === 'ready') {
-            bottom.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn', text: TEXT.call, title: TEXT.callTitle, onclick: function () {
-                A.post({{ url('arena_manage_match_action', 0)|tojson }}.replace('/0/', '/' + m.id + '/'), {action: 'call'})
-                    .then(function () { window.location.href = matchUrl(m.id); }).catch(W.fail);
-            }}));
-        }
-        if (m.status === 'called' || m.status === 'playing') {
-            bottom.appendChild(A.el('a', {'class': 'ar-btn', href: matchUrl(m.id), text: TEXT.goTo}));
-        }
-        if (over) bottom.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id), text: TEXT.result}));
+        if (running && m.status === 'ready' && (m.problems.next_ready || bankDraws())) bottom.appendChild(callButton(m));
+        if (m.status === 'called' || m.status === 'playing') bottom.appendChild(A.el('a', {'class': 'ar-btn', href: matchUrl(m.id), text: TEXT.open}));
+        if (over && m.reason !== 'bye') bottom.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id), text: TEXT.see}));
         return A.el('div', {'class': 'tm-match-foot'}, [top, bottom]);
     }
 
     var bracketView = null;
     function renderBracket() {
-        var bracket = state.bracket;
-        if (bracket.champion) {
-            $('#tm-champion').prop('hidden', false).empty().append(A.el('span', {}, [
-                A.el('i', {'class': 'fa fa-trophy'}), ' ' + TEXT.champion + ': ',
-                bracket.champion.avatar ? A.el('img', {src: bracket.champion.avatar, alt: '', style: 'width:28px;height:28px;border-radius:3px;vertical-align:middle;'}) : null,
-                ' ', A.el('b', {text: bracket.champion.name})]));
-        } else {
-            $('#tm-champion').prop('hidden', true);
-        }
+        $('#tm-next-panel').prop('hidden', state.tournament.status !== 'running');
+        $('#tm-bracket-grid').toggleClass('tm-live', state.tournament.status === 'running');
         if (!bracketView) {
             bracketView = ArenaBracket.mount(document.getElementById('tm-bracket'),
                                              {footer: matchFooter, wheel: 'ctrl', follow: false, minReadable: 0.7,
                                               cardWidth: 17.5, footHeight: 4.6});
         }
-        bracketView.update(bracket, state.tournament.status + '|' + JSON.stringify(state.draw));
+        bracketView.update(state.bracket, state.tournament.status + '|' + JSON.stringify(state.draw) + '|' +
+                           JSON.stringify(state.conflicts));
     }
     window.arenaTournamentDebug = {bracket: function () { return bracketView; }};
 
-    function renderButtons() {
-        var t = state.tournament;
-        var box = A.clear(document.getElementById('tm-buttons'));
-        var hasBracket = allMatches().length > 0;
-        if (t.status === 'draft') {
-            if (!hasBracket) box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn', text: TEXT.generate,
-                onclick: function () { act({action: 'generate'}); }}));
-            if (hasBracket) box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-green ar-btn-big', text: TEXT.start,
-                onclick: function () {
-                    var firstRound = (state.bracket.rounds[0] || {matches: []}).matches.filter(function (m) { return m.reason !== 'bye'; });
-                    var lines = [TEXT.startConfirm];
-                    if (!(state.draw.auto && state.draw.bank) && firstRound.some(function (m) { return !m.problems.next_ready; })) {
-                        lines.push(TEXT.startMissing);
-                    }
-                    W.confirmBox(TEXT.start, lines, TEXT.start, function () { act({action: 'start'}); });
-                }}));
-        } else if (t.status === 'finished') {
-            box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.archive,
-                onclick: function () {
-                    W.confirmBox(TEXT.archive, [TEXT.archiveConfirm], TEXT.archive, function () { act({action: 'archive'}); });
-                }}));
+    function nextRow(m, round) {
+        var pair = names(m), sub = [], action = null;
+        if (m.status === 'called' || m.status === 'playing') {
+            sub = [m.live ? A.el('span', {'class': 'am-live-dot'}) : null, ' ' + (m.live ? TEXT.matchStatus.playing : TEXT.matchStatus.called) +
+                   (m.best_of > 1 ? ' · ' + m.wins.a + '–' + m.wins.b : '')];
+            action = A.el('a', {'class': 'ar-btn', href: matchUrl(m.id), text: TEXT.open});
+        } else if (m.status === 'ready') {
+            var ready = m.problems.next_ready || bankDraws();
+            sub = [A.el('i', {'class': 'fa ' + (ready ? 'fa-check am-check' : 'fa-exclamation-triangle am-warn'), 'aria-hidden': 'true'}),
+                   ' ' + (m.problems.next_ready ? TEXT.ready : (bankDraws() ? TEXT.fromBank : TEXT.missing))];
+            action = ready ? callButton(m) : A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id, 'problems'), text: TEXT.chooseProblems});
+        } else {
+            // The score only when it agrees with the winner: not for a battle given without playing or corrected.
+            var agrees = m.winner && m.wins[m.winner] > m.wins[m.winner === 'a' ? 'b' : 'a'];
+            sub = [m.winner ? fill(TEXT.won, {name: pair[m.winner === 'a' ? 0 : 1]}) + (agrees ? ' ' + m.wins.a + '–' + m.wins.b : '') : TEXT.matchStatus[m.status]];
+            action = A.el('a', {'class': 'ar-btn ar-btn-plain', href: matchUrl(m.id), text: TEXT.see});
         }
+        return A.el('tr', {}, [
+            A.el('td', {}, [A.el('span', {text: pair[0] + ' ' + TEXT.vs + ' ' + pair[1]}),
+                            A.el('span', {'class': 'am-sub'}, [round.name + ' · '].concat(sub))]),
+            A.el('td', {'class': 'am-act'}, [action])
+        ]);
     }
 
-    function renderScreens() {
-        var box = A.clear(document.getElementById('tm-screens'));
-        state.screens.forEach(function (screen) {
-            var follow = A.el('input', {type: 'checkbox'});
-            follow.checked = true;
-            box.appendChild(A.el('div', {'class': 'am-item'}, [
-                A.el('i', {'class': 'fa fa-television'}), A.el('b', {text: screen.name}),
-                A.el('span', {'class': 'ar-grow'}),
-                A.el('label', {}, [follow, ' ' + TEXT.follow]),
-                A.el('button', {type: 'button', 'class': 'ar-btn', text: TEXT.show + ' ' + screen.name, onclick: function () {
-                    A.post({{ url('arena_manage_screen_action')|tojson }}, {action: 'show', screen: screen.id, mode: 'bracket',
-                        tournament: state.tournament.id, follow_live: follow.checked})
-                        .then(function () { A.toast(TEXT.saved, 'ok', 2000); }).catch(W.fail);
-                }})
-            ]));
+    function renderNext() {
+        if (state.tournament.status !== 'running') return;
+        var body = A.clear(document.getElementById('tm-next'));
+        var groups = [['playing', {{ _('Being played')|tojson }}], ['ready', {{ _('Ready battles')|tojson }}],
+                      ['decided', {{ _('Finished battles')|tojson }}]];
+        groups.forEach(function (group) {
+            var rows = [];
+            state.bracket.rounds.forEach(function (round) {
+                round.matches.filter(playable).forEach(function (m) {
+                    var key = m.status === 'called' ? 'playing' : m.status;
+                    if (key === group[0]) rows.push([m, round]);
+                });
+            });
+            if (group[0] === 'decided') rows = rows.reverse().slice(0, 5);
+            if (!rows.length) return;
+            body.appendChild(A.el('tr', {'class': 'am-group'}, [A.el('td', {colspan: 2, text: group[1]})]));
+            rows.forEach(function (pair) { body.appendChild(nextRow(pair[0], pair[1])); });
         });
     }
 
+    // ------------------------------------------------------------ projectors
+    function renderScreens() {
+        var t = state.tournament, summary = A.clear(document.getElementById('tm-screen-summary'));
+        var mine = state.screens.filter(function (s) { return s.mode === 'bracket' && s.tournament === t.id; });
+        var battle = state.screens.filter(function (s) {
+            return s.mode === 'match' && allMatches().some(function (m) { return m.id === s.match; });
+        });
+        summary.appendChild(A.el('i', {'class': 'fa fa-desktop', 'aria-hidden': 'true'}));
+        summary.appendChild(document.createTextNode(' ' + (mine.length ? fill(TEXT.showsBracket, {name: mine.map(function (s) { return s.name; }).join(', ')})
+            : (battle.length ? fill(TEXT.showsBattle, {name: battle[0].name}) : TEXT.showOn))));
+        var box = A.clear(document.getElementById('tm-screen-buttons'));
+        state.screens.forEach(function (screen) {
+            if (mine.indexOf(screen) !== -1) return;
+            box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: fill(TEXT.showOnOne, {name: screen.name}),
+                onclick: function () {
+                    A.post({{ url('arena_manage_screen_action')|tojson }}, {action: 'show', screen: screen.id, mode: 'bracket',
+                        tournament: t.id, follow_live: true, version: screen.version}).then(function (data) {
+                        state.screens = data.screens;
+                        renderScreens();
+                        A.toast(fill(TEXT.shown, {name: screen.name}), 'ok', 2500);
+                    }).catch(W.fail);
+                }}));
+        });
+        box.appendChild(A.el('a', {href: {{ url('arena_manage_screens')|tojson }}, text: state.screens.length ? TEXT.projectors : TEXT.connect}));
+    }
+
+    // ------------------------------------------------------------ settings
+    function renderSettings() {
+        var t = state.tournament;
+        $('#tm-history').prop('checked', t.show_in_history);
+        var key = !t.show_in_history ? 'hidden' : (t.status !== 'draft' ? 'shown' : (t.planned_at ? 'upcoming' : 'waiting'));
+        $('#tm-history-state').text(TEXT.history[key]);
+        var ranking = t.ranking || 'pending';
+        A.clear(document.getElementById('tm-ranking-state')).appendChild(
+            W.badge(TEXT.ranking[ranking], {pending: 'warn', counts: 'ok', excluded: 'none'}[ranking]));
+        $('#tm-ranking-link').prop('hidden', !t.ranking_decides).attr('href', t.ranking_url);
+        $('#tm-ranking-who').prop('hidden', !!t.ranking_decides || t.ranking !== 'pending');
+    }
+    $('#tm-history').on('change', function () {
+        act({action: 'update', show_in_history: $(this).prop('checked')}, function () { A.toast(TEXT.saved, 'ok', 2000); });
+    });
+    $('#tm-save').on('click', function () {
+        var planned = $('#tm-planned').val();
+        act({action: 'update', name: $('#tm-name').val(), description: $('#tm-description').val(), planned_at: planned || ''},
+            function () { A.toast(TEXT.saved, 'ok', 2000); });
+    });
+    $('#tm-save-rules').on('click', function () {
+        act({action: 'update', rules: rules.get()}, function () { A.toast(TEXT.saved, 'ok', 2000); });
+    });
     $('#tm-save-organizers').on('click', function () {
         act({action: 'organizers', organizers: organizers.get().map(function (u) { return u.id; })}, function () {
             organizers.set(state.organizers.list);
             A.toast(TEXT.organizersSaved, 'ok', 2000);
         });
     });
-
-    $('#tm-save').on('click', function () {
-        act({action: 'update', name: $('#tm-name').val(), description: $('#tm-description').val(), rules: rules.get()},
-            function () { A.toast(TEXT.saved, 'ok', 2000); });
-    });
-    $('#tm-save-participants').on('click', function () {
-        act({action: 'participants', participants: participants.get().map(function (u) { return u.id; }),
-             seeding: $('#tm-seeding').val()}, function () {
-            participants.set(state.participants.map(function (p) { return {id: p.id, name: p.name, username: p.username, avatar: p.avatar}; }));
-            A.toast(TEXT.participantsSaved, 'ok', 3000);
-        });
-    });
-    // ------------------------------------------------------------ the public history
-    // Whether anybody can see the tournament in Duels → Tournaments, said in words next to the box.
-    function renderHistory() {
-        var t = state.tournament;
-        $('#tm-history').prop('checked', t.show_in_history);
-        $('#tm-public-link').attr('href', t.public_url);
-        if (!plannedForm) { plannedForm = true; $('#tm-planned').val(t.planned_at || ''); }
-        var key = !t.show_in_history ? 'hidden' : (t.status !== 'draft' ? 'shown' : (t.planned_at ? 'upcoming' : 'waiting'));
-        var kind = {hidden: 'warn', shown: 'ok', upcoming: 'info', waiting: 'none'}[key];
-        A.clear(document.getElementById('tm-history-state')).appendChild(W.badge(TEXT.history[key], kind));
-        // The ranking of the duels: read only here, decided by whoever has its permission.
-        var ranking = t.ranking || 'pending';
-        A.clear(document.getElementById('tm-ranking-state')).appendChild(
-            W.badge(TEXT.ranking[ranking], {pending: 'warn', counts: 'ok', excluded: 'none'}[ranking]));
-        $('#tm-ranking-link').prop('hidden', !t.ranking_decides).attr('href', t.ranking_url);
-    }
-    $('#tm-history').on('change', function () {
-        act({action: 'update', show_in_history: $(this).prop('checked')}, function () { A.toast(TEXT.historySaved, 'ok', 2500); });
-    });
-    $('#tm-save-planned').on('click', function () {
-        var value = $('#tm-planned').val();
-        if (!value) { A.toast(TEXT.noDate, 'warn'); return; }
-        act({action: 'update', planned_at: value}, function () { A.toast(TEXT.historySaved, 'ok', 2500); });
-    });
-    $('#tm-clear-planned').on('click', function () {
-        act({action: 'update', planned_at: ''}, function () { $('#tm-planned').val(''); A.toast(TEXT.historySaved, 'ok', 2500); });
-    });
-
-    // The third place match goes in or out of the bracket as soon as the box changes.
-    $('#tm-third').on('change', function () {
-        act({action: 'update', third_place: $(this).prop('checked')}, function () { A.toast(TEXT.saved, 'ok', 2000); });
+    $('#tm-archive').on('click', function () {
+        W.confirmBox(TEXT.archive, [TEXT.archiveConfirm], TEXT.archive, function () { act({action: 'archive'}); });
     });
 
     function refresh() {
@@ -393,153 +780,144 @@ $(function () {
 {% block body %}
 <form id="ar-csrf" hidden>{% csrf_token %}</form>
 <div class="am-page">
-    <p class="ar-row"><a href="{{ url('arena_manage') }}"><i class="fa fa-arrow-left"></i> {{ _('Battle panel') }}</a>
-        <b id="tm-status"></b>
-        <span class="tm-head-links">
-            <a href="{{ url('arena_manage_guide') }}#torneo" target="_blank" rel="noopener"><i class="fa fa-question-circle"></i> {{ _('How does a tournament work?') }}</a>
-        </span></p>
+    {% include "arena/manage/_nav.html" %}
+    <div class="am-head">
+        <a href="{{ url('arena_manage_tournaments') }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ _('Tournaments') }}</a>
+        <h3 id="tm-title">{{ state.tournament.name }}</h3><span class="ar-badge ar-none" id="tm-status"></span>
+        <span class="ar-grow"></span>
+        <details class="am-details am-plain-details" id="tm-screen-line">
+            <summary id="tm-screen-summary"></summary>
+            <div class="am-actions am-mt" id="tm-screen-buttons"></div>
+        </details>
+        <a id="tm-public-link" target="_blank" rel="noopener"><i class="fa fa-external-link" aria-hidden="true"></i> {{ _('Public page') }}</a>
+    </div>
     <div class="ar-alert ar-alert-info" id="tm-champion" hidden></div>
-
-    <section class="ar-panel tm-steps" id="tm-steps" hidden>
-        <h3 class="ar-panel-head"><i class="fa fa-check-square-o" aria-hidden="true"></i> {{ _('How to prepare the tournament') }}</h3>
-        <div class="ar-panel-body">
-            <ol>
-                <li class="tm-done">{{ _('Check the participants and their order, in Participants. Saving them updates the bracket.') }}</li>
-                <li class="tm-done">{{ _('Choose how many games each battle has in every round, in Rounds. One game is the default.') }}</li>
-                <li id="tm-step-problems">{{ _('Decide where the problems come from, in Problems: chosen by hand for each battle, or by themselves from a bank.') }}<span class="tm-step-state" id="tm-step-problems-state"></span></li>
-                <li>{{ _('Press Start the tournament. Then you call each battle when it is its turn.') }}</li>
-            </ol>
-        </div>
+    <section class="ar-panel" id="tm-before" style="margin-bottom: 1em;" hidden>
+        <div class="am-strip" id="tm-strip"></div>
+        <div class="am-line" id="tm-start-missing" hidden></div>
     </section>
-    <div class="ar-alert ar-alert-info" id="tm-running" hidden>
-        {{ _('During the tournament: press Call on a battle that is ready, and on its page press Start the game. Whoever wins moves forward in the bracket by itself.') }}
-        <b id="tm-ready-count"></b>
+    <div class="tabs am-subtabs" id="tm-tabs">
+        <ul>
+            <li class="tab"><a href="#bracket" data-tab="bracket"><i class="tab-icon fa fa-sitemap"></i> {{ _('Bracket') }}</a></li>
+            <li class="tab"><a href="#participants" data-tab="participants"><i class="tab-icon fa fa-users"></i> {{ _('Participants') }}</a></li>
+            <li class="tab"><a href="#problems" data-tab="problems"><i class="tab-icon fa fa-puzzle-piece"></i> {{ _('Rounds and problems') }}</a></li>
+            <li class="tab"><a href="#rules" data-tab="rules"><i class="tab-icon fa fa-gavel"></i> {{ _('Rules') }}</a></li>
+            <li class="tab"><a href="#settings" data-tab="settings"><i class="tab-icon fa fa-sliders"></i> {{ _('Settings') }}</a></li>
+        </ul>
     </div>
 
-    <section class="ar-panel" style="margin-top: 1em;">
-        <h3 class="ar-panel-head"><i class="fa fa-sitemap" aria-hidden="true"></i> {{ _('Bracket') }}
-            <span class="ar-spacer"></span><span class="am-actions" id="tm-buttons"></span></h3>
-        <div class="tm-bracket-view" id="tm-bracket"></div>
-    </section>
-    <div class="am-grid" style="margin-top: 1em;">
-        <div class="am-stack">
-            <section class="ar-panel" id="tm-draft" hidden>
-                <h3 class="ar-panel-head"><i class="fa fa-users" aria-hidden="true"></i> {{ _('Participants') }}</h3>
-                <div class="ar-panel-body">
-                    <p class="am-hint">{{ _('The first of the list is the strongest. The strongest are kept apart until the end, and if the number of participants does not fill the bracket, they are the ones who go straight to the next round.') }}</p>
-                    <div id="tm-participants"></div>
-                    <div class="am-two mm-section" style="margin-top: .8em;">
-                        <div class="am-field">
-                            <label for="tm-seeding">{{ _('Order in the bracket') }}</label>
-                            <select class="ar-select" id="tm-seeding">
-                                <option value="manual">{{ _('As in the list') }}</option>
-                                <option value="random">{{ _('At random') }}</option>
-                                <option value="rating">{{ _('By contest rating') }}</option>
-                                <option value="duel">{{ _('By duel rating') }}</option>
-                            </select>
-                        </div>
-                        <div class="am-field">
-                            <span class="am-label">&nbsp;</span>
-                            <button type="button" class="ar-btn" id="tm-save-participants">{{ _('Save participants') }}</button>
-                        </div>
-                    </div>
-                    <label><input type="checkbox" id="tm-third"> {{ _('Play a match for third place (with 4 or more participants)') }}</label>
-                </div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-list-ol" aria-hidden="true"></i> {{ _('Rounds') }}</h3>
-                <table class="am-table tm-rounds">
-                    <thead><tr><th>#</th><th>{{ _('Name') }}</th><th>{{ _('Games per battle') }}</th>
-                        <th class="tm-bank-col">{{ _('Problems per game') }}</th>
-                        <th class="tm-bank-col">{{ _('Difficulty (bank levels)') }}</th><th></th></tr></thead>
-                    <tbody id="tm-rounds"></tbody>
-                </table>
-                <p class="am-hint tm-bank-col" style="padding: 0 .8em;">{{ _('Difficulty uses the levels of the bank, from 1 (easy) to 5 (hard). Harder rounds can draw harder problems; empty means any level.') }}</p>
-            </section>
-            <section class="ar-panel" id="tm-problems-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-puzzle-piece" aria-hidden="true"></i> {{ _('Problems') }}</h3>
-                <div class="ar-panel-body">
-                    <label class="tm-choice"><input type="radio" name="tm-mode" value="hand">
-                        <span><b>{{ _('I choose them for each battle') }}</b>
-                        <span class="am-hint">{{ _('In each battle of the bracket press Problems and choose the problems of every game. Good when you know the players and want harder problems for the strongest.') }}</span></span></label>
-                    <label class="tm-choice"><input type="radio" name="tm-mode" value="bank">
-                        <span><b>{{ _('They come by themselves from a problem bank') }}</b>
-                        <span class="am-hint">{{ _('When a battle is called, each game gets problems from the bank that nobody has used in the tournament and that the players have not tried. You can still change the problems of any battle by hand: yours are never replaced.') }}</span></span></label>
-                    <div id="tm-bank-settings">
-                        <div class="am-two">
-                            <div class="am-field">
-                                <label for="tm-bank">{{ _('Problem bank') }}</label>
-                                <select class="ar-select" id="tm-bank">
-                                    <option value="">—</option>
-                                    {% for bank in banks %}<option value="{{ bank.id }}">{{ bank.name }}</option>{% endfor %}
-                                </select>
-                                <span class="am-hint" id="tm-bank-hint"></span>
-                                <a class="am-hint" href="{{ url('arena_manage_banks') }}" target="_blank" rel="noopener">{{ _('Create or edit banks') }}</a>
-                            </div>
-                            <div class="am-field">
-                                <label for="tm-draw-count">{{ _('Problems per game') }}</label>
-                                <input class="ar-input" type="number" min="1" max="5" id="tm-draw-count">
-                                <span class="am-hint">{{ _('Each round can change it, and choose a difficulty, in Rounds.') }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="am-actions">
-                        <button type="button" class="ar-btn" id="tm-save-problems">{{ _('Save') }}</button>
-                        <button type="button" class="ar-btn ar-btn-plain" id="tm-fill" title="{{ _('Gives problems from the bank now to the battles whose players are known and whose next game has none, so you can check them before calling') }}">{{ _('Give problems from the bank now') }}</button>
-                    </div>
-                </div>
+    <div data-pane="bracket">
+        <div id="tm-bracket-grid">
+            <section class="ar-panel"><div class="tm-bracket-view" id="tm-bracket"></div></section>
+            <section class="ar-panel" id="tm-next-panel" hidden>
+                <h3 class="ar-panel-head"><i class="fa fa-list-ol" aria-hidden="true"></i> {{ _('What comes next') }}</h3>
+                <table class="am-rows"><tbody id="tm-next"></tbody></table>
             </section>
         </div>
-        <div class="am-stack">
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-television" aria-hidden="true"></i> {{ _('Screens') }}</h3>
-                <div class="ar-panel-body"><div class="am-list" id="tm-screens"></div></div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-user-plus" aria-hidden="true"></i> {{ _('Organizers') }}</h3>
-                <div class="ar-panel-body">
-                    <p class="am-hint">{{ _('Besides whoever organizes all battles, only these people see and run this tournament and its battles. Add whoever helps you; they need a permission to organize battles.') }}</p>
-                    <div id="tm-organizers"></div>
-                    <div class="am-actions" style="margin-top: 1em;"><button type="button" class="ar-btn" id="tm-save-organizers">{{ _('Save organizers') }}</button></div>
+    </div>
+
+    <div data-pane="participants" hidden>
+        <div class="am-grid">
+            <section class="ar-panel" id="tm-places-edit" hidden><div class="ar-panel-body">
+                <div class="ar-row"><label class="am-label" for="tm-places">{{ _('Places') }}</label>
+                    <input id="tm-places" class="ar-input am-w-num" type="number" min="{{ min_places }}" max="{{ max_places }}">
+                    <span class="ar-muted" id="tm-named"></span></div>
+                <div class="ar-alert am-mt" id="tm-places-effect" hidden></div>
+                <div class="am-list am-mt" id="tm-place-list"></div>
+                <div class="am-actions am-mt">
+                    <span class="am-label">{{ _('Order:') }}</span>
+                    <button type="button" class="ar-btn ar-btn-plain tm-order" data-order="rating">{{ _('By contest rating') }}</button>
+                    <button type="button" class="ar-btn ar-btn-plain tm-order" data-order="duel">{{ _('By duel rating') }}</button>
+                    <button type="button" class="ar-btn ar-btn-plain tm-order" data-order="random">{{ _('At random') }}</button>
                 </div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-sliders" aria-hidden="true"></i> {{ _('Tournament') }}</h3>
-                <div class="ar-panel-body">
-                    <div class="am-field"><label for="tm-name">{{ _('Name') }}</label><input class="ar-input" id="tm-name" maxlength="100"></div>
-                    <div class="am-field"><label for="tm-description">{{ _('Description') }}</label>
-                        <textarea class="ar-input" id="tm-description" rows="2"></textarea></div>
-                    <p class="am-label">{{ _('Rules of every game') }}</p>
-                    <div id="tm-rules"></div>
-                    <div class="am-actions" style="margin-top: 1em;"><button type="button" class="ar-btn" id="tm-save">{{ _('Save') }}</button></div>
+                <label class="am-mt" style="display: block;"><input type="checkbox" id="tm-third"> {{ _('Match for third place') }}</label>
+                <div class="am-actions am-mt"><button type="button" class="ar-btn" id="tm-save-places">{{ _('Save') }}</button>
+                    <span class="ar-badge ar-warn" id="tm-unsaved" hidden>{{ _('Unsaved changes') }}</span></div>
+            </div></section>
+            <section class="ar-panel" id="tm-places-read" hidden><div class="ar-panel-body">
+                <div class="am-list" id="tm-places-read-list"></div>
+            </div></section>
+        </div>
+    </div>
+
+    <div data-pane="problems" hidden>
+        <section class="ar-panel"><div class="ar-panel-body">
+            <div class="am-label">{{ _('Who chooses the problems?') }}</div>
+            <div class="am-two" style="margin: .4em 0 1em;">
+                <label class="tm-choice"><input type="radio" name="tm-mode" value="hand">
+                    <span><b>{{ _('I do, in each battle') }}</b></span></label>
+                <label class="tm-choice"><input type="radio" name="tm-mode" value="bank">
+                    <span><b>{{ _('A bank, by itself') }}</b><span class="am-hint">{{ _('Each battle gets problems nobody used.') }}</span></span></label>
+            </div>
+            <div class="am-two" id="tm-bank-settings">
+                <div class="am-field">
+                    <label for="tm-bank">{{ _('Problem bank') }}</label>
+                    <select class="ar-select" id="tm-bank">
+                        <option value="">—</option>
+                        {% for bank in banks %}<option value="{{ bank.id }}">{{ bank.name }}</option>{% endfor %}
+                    </select>
+                    <a class="am-hint" href="{{ url('arena_manage_banks') }}" target="_blank" rel="noopener">{{ _('Create or edit banks') }}</a>
                 </div>
-            </section>
-            <section class="ar-panel" id="tm-history-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-history" aria-hidden="true"></i> {{ _('Public history') }}
-                    <span class="ar-spacer"></span><a class="ar-btn ar-btn-plain" id="tm-public-link" target="_blank" rel="noopener"><i class="fa fa-external-link" aria-hidden="true"></i> {{ _('See the public page') }}</a></h3>
-                <div class="ar-panel-body">
-                    <label><input type="checkbox" id="tm-history"> <b>{{ _('Show in the history of the duels') }}</b></label>
-                    <p class="am-hint">{{ _('Anybody, even without an account, will see the bracket and the results once the tournament starts. Uncheck it for a test tournament.') }}</p>
-                    <p id="tm-history-state"></p>
-                    <div class="am-field">
-                        <label for="tm-planned">{{ _('Planned date (optional)') }}</label>
-                        <input class="ar-input" type="datetime-local" id="tm-planned">
-                        <span class="am-hint">{{ _('With a date, the tournament is announced as upcoming in Duels → Tournaments. Nothing starts by itself: the tournament starts when you press Start the tournament.') }}</span>
+                <div class="am-field tm-bank-col">
+                    <label for="tm-draw-count">{{ _('Problems per game') }}</label>
+                    <input class="ar-input am-w-num" type="number" min="1" max="5" id="tm-draw-count">
+                </div>
+            </div>
+            <table class="am-table tm-rounds">
+                <thead><tr><th>#</th><th>{{ _('Round') }}</th><th>{{ _('Games per battle') }}</th>
+                    <th class="tm-bank-col">{{ _('Problems per game') }}</th>
+                    <th class="tm-bank-col">{{ _('Difficulty') }}</th><th>{{ _('Battles') }}</th></tr></thead>
+                <tbody id="tm-rounds"></tbody>
+            </table>
+            <p class="am-hint tm-bank-col">{{ _('Difficulty from 1 (easy) to 5 (hard), as in the bank. Empty means any.') }}</p>
+            <div class="am-actions am-mt">
+                <button type="button" class="ar-btn" id="tm-save-problems">{{ _('Save') }}</button>
+                <button type="button" class="ar-btn ar-btn-plain" id="tm-fill" hidden>{{ _('Give problems from the bank now') }}</button>
+            </div>
+        </div></section>
+    </div>
+
+    <div data-pane="rules" hidden>
+        <section class="ar-panel"><div class="ar-panel-body">
+            <p class="am-hint am-tight" style="margin-bottom: .8em;">{{ _('They apply to every game of the tournament.') }}</p>
+            <div id="tm-rules"></div>
+            <div class="am-actions am-mt"><button type="button" class="ar-btn" id="tm-save-rules">{{ _('Save') }}</button></div>
+        </div></section>
+    </div>
+
+    <div data-pane="settings" hidden>
+        <div class="am-grid">
+            <section class="ar-panel"><div class="ar-panel-body">
+                <div class="am-field"><label for="tm-name">{{ _('Name') }}</label><input class="ar-input" id="tm-name" maxlength="100"></div>
+                <div class="am-field"><label for="tm-description">{{ _('Description') }}</label>
+                    <textarea class="ar-input" id="tm-description" rows="2"></textarea></div>
+                <label><input type="checkbox" id="tm-history"> {{ _('Show in Duels → Tournaments') }}</label>
+                <p class="am-hint" style="margin: .2em 0 .8em 1.6em;" id="tm-history-state"></p>
+                <div class="am-field"><label for="tm-planned">{{ _('Planned date (optional)') }}</label>
+                    <input class="ar-input" type="datetime-local" id="tm-planned" style="max-width: 16em;">
+                    <span class="am-hint">{{ _('It is announced as upcoming. It does not start by itself.') }}</span></div>
+                <div class="am-actions"><button type="button" class="ar-btn" id="tm-save">{{ _('Save') }}</button></div>
+            </div></section>
+            <div class="am-stack">
+                <section class="ar-panel">
+                    <h3 class="ar-panel-head"><i class="fa fa-user-plus" aria-hidden="true"></i> {{ _('Organizers') }}</h3>
+                    <div class="ar-panel-body">
+                        <div id="tm-organizers"></div>
+                        <div class="am-actions am-mt"><button type="button" class="ar-btn" id="tm-save-organizers">{{ _('Save') }}</button></div>
                     </div>
-                    <div class="am-actions">
-                        <button type="button" class="ar-btn" id="tm-save-planned">{{ _('Save the date') }}</button>
-                        <button type="button" class="ar-btn ar-btn-plain" id="tm-clear-planned">{{ _('Remove the date') }}</button>
-                    </div>
-                </div>
-            </section>
-            <section class="ar-panel" id="tm-ranking-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-signal" aria-hidden="true"></i> {{ _('Ranking of the duels') }}</h3>
-                <div class="ar-panel-body">
-                    <p id="tm-ranking-state"></p>
-                    <p class="am-hint">{{ _('Whether its games count for the ranking of the duels is decided by whoever has the permission to decide the ranking, not by whoever organizes. Until then they do not count.') }}</p>
-                    <a class="ar-btn ar-btn-plain" id="tm-ranking-link" hidden><i class="fa fa-gavel" aria-hidden="true"></i> {{ _('Decide what counts') }}</a>
-                </div>
-            </section>
+                </section>
+                <section class="ar-panel">
+                    <h3 class="ar-panel-head"><i class="fa fa-signal" aria-hidden="true"></i> {{ _('Ranking') }}</h3>
+                    <div class="ar-panel-body"><span id="tm-ranking-state"></span>
+                        <span class="am-hint" id="tm-ranking-who">{{ _('Approved by whoever has the permission.') }}</span>
+                        <a class="ar-btn ar-btn-plain" id="tm-ranking-link" hidden>{{ _('Approve results') }}</a></div>
+                </section>
+                <details class="am-details" id="tm-archive-box" hidden>
+                    <summary>{{ _('Archive') }}</summary>
+                    <p class="am-hint">{{ _('It leaves the panel. Its public page stays.') }}</p>
+                    <button type="button" class="ar-btn ar-btn-plain" id="tm-archive">{{ _('Archive the tournament') }}</button>
+                </details>
+            </div>
         </div>
     </div>
 </div>

@@ -264,5 +264,5 @@ class NameAndBarTests(DuelsTestCase):
     def test_the_guide_speaks_of_duelos(self):
         self.client.force_login(self.organizer)
         page = self.client.get(reverse('arena_manage_guide')).content.decode('utf-8')
-        self.assertIn('<code>/duelos/</code>', page)
+        self.assertIn('/duelos/</b>', page)
         self.assertNotIn('la arena', page)

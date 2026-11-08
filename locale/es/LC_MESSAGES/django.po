@@ -9277,7 +9277,7 @@ msgstr "Esperando a que el organizador inicie la partida."
 
 #: judge/arena
 msgid "Won by walkover"
-msgstr "Ganó por incomparecencia"
+msgstr "Ganó sin seguir jugando"
 
 #: judge/arena
 msgid "Won the series"
@@ -9893,7 +9893,7 @@ msgstr "Mostrar el bracket en"
 
 #: judge/arena
 msgid "Show the code on the screens"
-msgstr "Mostrar el código en las pantallas"
+msgstr "Mostrar el código en el proyector"
 
 #: judge/arena
 msgid "Show the waiting screen"
@@ -9973,7 +9973,7 @@ msgstr "El orden de la lista"
 
 #: judge/arena
 msgid "The whole battle goes to this player without playing on."
-msgstr "La batalla completa es para este jugador sin seguir jugando."
+msgstr "Gana la batalla sin seguir jugando."
 
 #: judge/arena
 msgid "Third place"
@@ -10057,7 +10057,7 @@ msgstr "corrigió el ganador"
 
 #: judge/arena
 msgid "put it on a screen"
-msgstr "la puso en una pantalla"
+msgstr "la puso en un proyector"
 
 #: judge/arena
 msgid "created the battle"
@@ -10150,7 +10150,7 @@ msgstr "Llena la lista con problemas del banco del torneo que nadie ha usado. No
 
 #: judge/arena
 msgid "Games per battle"
-msgstr "Partidas por enfrentamiento"
+msgstr "Partidas por batalla"
 
 #: judge/arena
 msgid "Give the whole battle to"
@@ -10553,12 +10553,12 @@ msgstr "El organizador decidió esta batalla a favor de %(rival)s."
 
 #: judge/arena
 msgid "The organizer gave you the whole battle."
-msgstr "El organizador te dio la batalla completa."
+msgstr "El organizador te dio la batalla."
 
 #: judge/arena
 #, python-format
 msgid "The organizer gave the whole battle to %(rival)s."
-msgstr "El organizador le dio la batalla completa a %(rival)s."
+msgstr "El organizador le dio la batalla a %(rival)s."
 
 #: judge/arena
 #, python-format
@@ -12204,7 +12204,7 @@ msgstr "Pase directo, sin rival: nunca cuenta."
 
 #: cpc 2026-10-26
 msgid "Won without playing on: it never counts."
-msgstr "Ganada sin jugar: nunca cuenta."
+msgstr "Ganada sin seguir jugando: nunca cuenta."
 
 #: cpc 2026-10-26
 msgid "Played on a club laptop with a typed name: it never counts."
@@ -12326,7 +12326,7 @@ msgstr "El número aparece después de %(number)s partidas que cuenten. Quien pa
 
 #: cpc 2026-10-26
 msgid "They never count: ties, voided games, cancelled battles, byes, battles won without playing on and battles played on a club laptop with a typed name."
-msgstr "Nunca cuentan: los empates, las partidas anuladas, las batallas canceladas, los pases directos, las batallas ganadas sin jugar y las jugadas en una laptop del club con un nombre escrito."
+msgstr "Nunca cuentan: los empates, las partidas anuladas, las batallas canceladas, los pases directos, las batallas ganadas sin seguir jugando y las jugadas en una laptop del club con un nombre escrito."
 
 #: cpc 2026-10-26
 msgid "Nobody changes a rating by hand. The rating of the contests does not change. It is worked out with Glicko-2."
@@ -12354,7 +12354,7 @@ msgstr "Aquí sólo se ven los resultados, nunca enunciados, código ni envíos.
 
 #: cpc 2026-10-26
 msgid "The ranking is not up to date with these decisions. It is usually worked out again by itself; press the button to do it now."
-msgstr "El ranking no está al día con estas decisiones. Normalmente se vuelve a calcular solo; pulsa el botón para hacerlo ahora."
+msgstr "El ranking no está al día con estas decisiones."
 
 #: cpc 2026-10-26
 msgid "Work it out again"
@@ -12407,19 +12407,19 @@ msgstr "Dejarla fuera"
 
 #: cpc 2026-10-26
 msgid "No tournament left to decide."
-msgstr "No queda ningún torneo por decidir."
+msgstr "No queda ningún torneo por revisar."
 
 #: cpc 2026-10-26
 msgid "Quick battles"
-msgstr "Duelos rápidos"
+msgstr "Batallas rápidas"
 
 #: cpc 2026-10-26
 msgid "No quick battles yet."
-msgstr "Todavía no hay duelos rápidos."
+msgstr "Todavía no hay batallas rápidas."
 
 #: cpc 2026-10-26
 msgid "No quick battle left to decide."
-msgstr "No queda ningún duelo rápido por decidir."
+msgstr "No queda ninguna batalla rápida por revisar."
 
 #: cpc 2026-10-26
 #, python-format
@@ -13352,3 +13352,1113 @@ msgstr "Estos nombres coinciden con más de un registro, cuenta o equipo: elige 
 #: cpc 2026-11-01
 msgid "El concurso ya terminó."
 msgstr "El concurso ya terminó."
+
+#: cpc 2026-11-03
+msgid "Battles"
+msgstr "Batallas"
+
+#: cpc 2026-11-03
+msgid "Here you will play your battles."
+msgstr "Aquí jugarás tus batallas."
+
+#: cpc 2026-11-03
+msgid "When it is your turn to play, the battle opens by itself on this page. Leave it open."
+msgstr "Cuando te toque jugar, la batalla se abrirá sola en esta página. Déjala abierta."
+
+#: cpc 2026-11-03
+msgid "Now"
+msgstr "Ahora"
+
+#: cpc 2026-11-03
+msgid "Projectors"
+msgstr "Proyectores"
+
+#: cpc 2026-11-03
+msgid "Quick battle"
+msgstr "Batalla rápida"
+
+#: cpc 2026-11-03
+msgid "Guide"
+msgstr "Guía"
+
+#: cpc 2026-11-03
+msgid "You see what you organize: what you created and what you were added to."
+msgstr "Ves lo que creaste y lo que te dieron a organizar."
+
+#: cpc 2026-11-03
+msgid "Your turn"
+msgstr "Te toca"
+
+#: cpc 2026-11-03
+msgid "Nothing to do right now."
+msgstr "Nada por hacer ahora."
+
+#: cpc 2026-11-03
+msgid "Nobody is playing right now."
+msgstr "Nadie está jugando ahora."
+
+#: cpc 2026-11-03
+msgid "Manage"
+msgstr "Administrar"
+
+#: cpc 2026-11-03
+msgid "No projectors yet."
+msgstr "Todavía no hay proyectores."
+
+#: cpc 2026-11-03
+msgid "Connect one"
+msgstr "Conectar uno"
+
+#: cpc 2026-11-03
+msgid "Finished today"
+msgstr "Terminadas hoy"
+
+#: cpc 2026-11-03
+msgid "None yet."
+msgstr "Ninguna todavía."
+
+#: cpc 2026-11-03
+msgid "club laptops"
+msgstr "laptops del club"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "best of %(count)s"
+msgstr "al mejor de %(count)s"
+
+#: cpc 2026-11-03
+msgid "Send to the waiting room"
+msgstr "Mandar a la sala de espera"
+
+#: cpc 2026-11-03
+msgid "Ready to start"
+msgstr "Lista para empezar"
+
+#: cpc 2026-11-03
+msgid "ready to start"
+msgstr "listo para empezar"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Start game %(number)s"
+msgstr "Iniciar partida %(number)s"
+
+#: cpc 2026-11-03
+msgid "Both have Duels open"
+msgstr "Los dos tienen Duelos abierto"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s does not have Duels open"
+msgstr "%(name)s no tiene Duelos abierto"
+
+#: cpc 2026-11-03
+msgid "Neither has Duels open"
+msgstr "Ninguno tiene Duelos abierto"
+
+#: cpc 2026-11-03
+msgid "Choose problems"
+msgstr "Elegir problemas"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s has no problems"
+msgstr "La partida %(number)s no tiene problemas"
+
+#: cpc 2026-11-03
+msgid "Time is up: waiting for verdicts"
+msgstr "Se acabó el tiempo: esperando veredictos"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s ended in a tie"
+msgstr "La partida %(number)s quedó empatada"
+
+#: cpc 2026-11-03
+msgid "Keep preparing"
+msgstr "Seguir preparando"
+
+#: cpc 2026-11-03
+msgid "Tournament being prepared"
+msgstr "Torneo en preparación"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "names missing: %(count)s"
+msgstr "nombres que faltan: %(count)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "battles without problems: %(count)s"
+msgstr "batallas sin problemas: %(count)s"
+
+#: cpc 2026-11-03
+msgid "Starts in"
+msgstr "Empieza en"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s won"
+msgstr "Ganó %(name)s"
+
+#: cpc 2026-11-03
+msgid "Is open"
+msgstr "Abierto"
+
+#: cpc 2026-11-03
+msgid "Nobody has it open"
+msgstr "Nadie lo tiene abierto"
+
+#: cpc 2026-11-03
+msgid "Waiting screen"
+msgstr "Pantalla de espera"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Bracket of %(name)s"
+msgstr "Bracket de %(name)s"
+
+#: cpc 2026-11-03
+msgid "moves to the battle being played by itself"
+msgstr "sigue la batalla en juego"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Open (%(count)s)"
+msgstr "Abiertas (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Ended (%(count)s)"
+msgstr "Terminadas (%(count)s)"
+
+#: cpc 2026-11-03
+msgid "Created"
+msgstr "Creada"
+
+#: cpc 2026-11-03
+msgid "Ended"
+msgstr "Terminada"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s being played"
+msgstr "Partida %(number)s en juego"
+
+#: cpc 2026-11-03
+msgid "Not sent to the waiting room"
+msgstr "Sin mandar a la sala de espera"
+
+#: cpc 2026-11-03
+msgid "Between games"
+msgstr "Entre partidas"
+
+#: cpc 2026-11-03
+msgid "Called off"
+msgstr "Cancelada"
+
+#: cpc 2026-11-03
+msgid "See"
+msgstr "Ver"
+
+#: cpc 2026-11-03
+msgid "No open battles."
+msgstr "No hay batallas abiertas."
+
+#: cpc 2026-11-03
+msgid "No finished battles yet."
+msgstr "Todavía no termina ninguna batalla."
+
+#: cpc 2026-11-03
+msgid "They play on the club laptops"
+msgstr "Juegan en las laptops del club"
+
+#: cpc 2026-11-03
+msgid "Who sits at A"
+msgstr "Quién se sienta en A"
+
+#: cpc 2026-11-03
+msgid "Who sits at B"
+msgstr "Quién se sienta en B"
+
+#: cpc 2026-11-03
+msgid "Games"
+msgstr "Partidas"
+
+#: cpc 2026-11-03
+msgid "Minutes per game"
+msgstr "Minutos por partida"
+
+#: cpc 2026-11-03
+msgid "Problems of game 1"
+msgstr "Problemas de la partida 1"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Choose those of games %(numbers)s"
+msgstr "Problemas de las partidas %(numbers)s"
+
+#: cpc 2026-11-03
+msgid "and"
+msgstr "y"
+
+#: cpc 2026-11-03
+msgid "More rules"
+msgstr "Más reglas"
+
+#: cpc 2026-11-03
+msgid "For example: Club final"
+msgstr "Por ejemplo: Final del club"
+
+#: cpc 2026-11-03
+msgid "Does it count for the ranking?"
+msgstr "¿Cuenta para el ranking?"
+
+#: cpc 2026-11-03
+msgid "Yes, it counts"
+msgstr "Sí, cuenta"
+
+#: cpc 2026-11-03
+msgid "No, it is a test"
+msgstr "No, es una prueba"
+
+#: cpc 2026-11-03
+msgid "Create and send to the waiting room"
+msgstr "Crear y mandar a la sala de espera"
+
+#: cpc 2026-11-03
+msgid "Only create"
+msgstr "Sólo crear"
+
+#: cpc 2026-11-03
+msgid "Choose the problems of game 1."
+msgstr "Elige los problemas de la partida 1."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "countdown %(seconds)s s"
+msgstr "cuenta regresiva %(seconds)s s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(minutes)s min per failed attempt"
+msgstr "%(minutes)s min por intento fallido"
+
+#: cpc 2026-11-03
+msgid "no penalty"
+msgstr "sin penalización"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "at most %(count)s attempts"
+msgstr "máximo %(count)s intentos"
+
+#: cpc 2026-11-03
+msgid "no limit of attempts"
+msgstr "sin límite de intentos"
+
+#: cpc 2026-11-03
+msgid "partial points"
+msgstr "puntos parciales"
+
+#: cpc 2026-11-03
+msgid "pasting blocked"
+msgstr "pegado bloqueado"
+
+#: cpc 2026-11-03
+msgid "code on the projector"
+msgstr "código en el proyector"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Active (%(count)s)"
+msgstr "Activos (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Finished (%(count)s)"
+msgstr "Terminados (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Archived (%(count)s)"
+msgstr "Archivados (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "battles being played: %(count)s"
+msgstr "batallas en juego: %(count)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(named)s of %(places)s"
+msgstr "%(named)s de %(places)s"
+
+#: cpc 2026-11-03
+msgid "No tournaments here."
+msgstr "No hay torneos aquí."
+
+#: cpc 2026-11-03
+msgid "Create one"
+msgstr "Crear uno"
+
+#: cpc 2026-11-03
+msgid "Do you already know who plays?"
+msgstr "¿Ya sabes quiénes juegan?"
+
+#: cpc 2026-11-03
+msgid "Not yet"
+msgstr "Todavía no"
+
+#: cpc 2026-11-03
+msgid "Only how many places; the names come later."
+msgstr "Sólo cuántos lugares; los nombres van después."
+
+#: cpc 2026-11-03
+msgid "Yes"
+msgstr "Sí"
+
+#: cpc 2026-11-03
+msgid "You add them now."
+msgstr "Los agregas ahora."
+
+#: cpc 2026-11-03
+msgid "Places"
+msgstr "Lugares"
+
+#: cpc 2026-11-03
+msgid "From the strongest to the weakest."
+msgstr "Del más fuerte al más débil."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "A tournament has from %(min)s to %(max)s places."
+msgstr "Un torneo tiene de %(min)s a %(max)s lugares."
+
+#: cpc 2026-11-03
+msgid "Public page"
+msgstr "Página pública"
+
+#: cpc 2026-11-03
+msgid "Rounds and problems"
+msgstr "Rondas y problemas"
+
+#: cpc 2026-11-03
+msgid "What comes next"
+msgstr "Lo que sigue"
+
+#: cpc 2026-11-03
+msgid "Ready battles"
+msgstr "Listas"
+
+#: cpc 2026-11-03
+msgid "Finished battles"
+msgstr "Terminadas"
+
+#: cpc 2026-11-03
+msgid "No problems"
+msgstr "Sin problemas"
+
+#: cpc 2026-11-03
+msgid "The bank gives them its problems when it is sent to the waiting room"
+msgstr "El banco le da sus problemas al mandarla a la sala de espera"
+
+#: cpc 2026-11-03
+msgid "Already saw a problem"
+msgstr "Ya vio uno de sus problemas"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s already solved %(problem)s"
+msgstr "%(name)s ya resolvió %(problem)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s already tried %(problem)s"
+msgstr "%(name)s ya intentó %(problem)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(named)s of %(places)s places with a name"
+msgstr "%(named)s de %(places)s lugares con nombre"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(count)s participants"
+msgstr "%(count)s participantes"
+
+#: cpc 2026-11-03
+msgid "Problems: from the bank"
+msgstr "Problemas: del banco"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "First round: battles without problems: %(count)s"
+msgstr "Primera ronda: batallas sin problemas: %(count)s"
+
+#: cpc 2026-11-03
+msgid "Problems of the first round"
+msgstr "Problemas de la primera ronda"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Players who already saw a problem of their battle: %(count)s"
+msgstr "Jugadores que ya vieron un problema de su batalla: %(count)s"
+
+#: cpc 2026-11-03
+msgid "After this the participants and the bracket no longer change."
+msgstr "Después de esto ya no cambian los participantes ni el bracket."
+
+#: cpc 2026-11-03
+msgid "Some battles of the first round have no problems yet: you can choose them before each one."
+msgstr "Algunas batallas de la primera ronda todavía no tienen problemas: puedes elegirlos antes de cada una."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Names missing: %(count)s."
+msgstr "Nombres que faltan: %(count)s."
+
+#: cpc 2026-11-03
+msgid "Fill them in"
+msgstr "Completarlos"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Start with %(count)s places"
+msgstr "Iniciar con %(count)s lugares"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Place %(number)s"
+msgstr "Lugar %(number)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Place %(number)s: search..."
+msgstr "Lugar %(number)s: buscar..."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(count)s with a name"
+msgstr "%(count)s con nombre"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "From %(old)s to %(new)s places"
+msgstr "De %(old)s a %(new)s lugares"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "There are %(count)s names: remove somebody before going down to %(places)s."
+msgstr "Hay %(count)s nombres: quita a alguien antes de bajar a %(places)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s is in place %(place)s: move them up or remove them before going down to %(places)s."
+msgstr "%(name)s está en el lugar %(place)s: súbelo o quítalo antes de bajar a %(places)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "New rounds at the start, without problems: %(names)s."
+msgstr "Rondas nuevas al principio, sin problemas: %(names)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "These rounds go, with the problems of their battles: %(names)s."
+msgstr "Se quitan estas rondas, con los problemas de sus batallas: %(names)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "No longer played, with their problems: %(names)s."
+msgstr "Ya no se jugarán y pierden sus problemas: %(names)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "New battles, without problems: %(names)s."
+msgstr "Batallas nuevas, sin problemas: %(names)s."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Go straight to the next round: %(names)s."
+msgstr "Pasan directo a la siguiente ronda: %(names)s."
+
+#: cpc 2026-11-03
+msgid "Everything else stays in its place."
+msgstr "Lo demás se queda en su lugar."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Change to %(count)s"
+msgstr "Cambiar a %(count)s"
+
+#: cpc 2026-11-03
+msgid "Saved."
+msgstr "Guardado."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Problems removed from battles: %(count)s."
+msgstr "Batallas a las que se les quitaron los problemas: %(count)s."
+
+#: cpc 2026-11-03
+msgid "Order:"
+msgstr "Ordenar:"
+
+#: cpc 2026-11-03
+msgid "Match for third place"
+msgstr "Partida por el tercer lugar"
+
+#: cpc 2026-11-03
+msgid "Who chooses the problems?"
+msgstr "¿Quién pone los problemas?"
+
+#: cpc 2026-11-03
+msgid "I do, in each battle"
+msgstr "Yo, en cada batalla"
+
+#: cpc 2026-11-03
+msgid "A bank, by itself"
+msgstr "Un banco de problemas"
+
+#: cpc 2026-11-03
+msgid "Each battle gets problems nobody used."
+msgstr "Cada batalla recibe problemas sin repetir."
+
+#: cpc 2026-11-03
+msgid "Difficulty"
+msgstr "Dificultad"
+
+#: cpc 2026-11-03
+msgid "Difficulty from 1 (easy) to 5 (hard), as in the bank. Empty means any."
+msgstr "Dificultad de 1 (fácil) a 5 (difícil), como en el banco. Déjalo vacío para cualquiera."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "battles: %(count)s"
+msgstr "batallas: %(count)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "without problems: %(count)s"
+msgstr "sin problemas: %(count)s"
+
+#: cpc 2026-11-03
+msgid "ready"
+msgstr "listas"
+
+#: cpc 2026-11-03
+msgid "Choose"
+msgstr "Elegir"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Battles that got problems from the bank: %(count)s."
+msgstr "Batallas que recibieron problemas del banco: %(count)s."
+
+#: cpc 2026-11-03
+msgid "They apply to every game of the tournament."
+msgstr "Valen para todas las partidas del torneo."
+
+#: cpc 2026-11-03
+msgid "Show in Duels → Tournaments"
+msgstr "Mostrar en Duelos → Torneos"
+
+#: cpc 2026-11-03
+msgid "Announced as upcoming in Duels → Tournaments, with its date."
+msgstr "Se anuncia como próximo en Duelos → Torneos, con su fecha."
+
+#: cpc 2026-11-03
+msgid "It appears in Duels → Tournaments when it starts."
+msgstr "Aparece en Duelos → Torneos cuando empieza."
+
+#: cpc 2026-11-03
+msgid "Only its organizers see it."
+msgstr "Sólo lo ven sus organizadores."
+
+#: cpc 2026-11-03
+msgid "It is announced as upcoming. It does not start by itself."
+msgstr "Se anuncia como próximo. No empieza solo."
+
+#: cpc 2026-11-03
+msgid "Approved by whoever has the permission."
+msgstr "Lo aprueba quien tiene el permiso."
+
+#: cpc 2026-11-03
+msgid "It leaves the panel. Its public page stays."
+msgstr "Sale del panel. Su página pública se queda."
+
+#: cpc 2026-11-03
+msgid "Archive the tournament"
+msgstr "Archivar el torneo"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s shows the bracket"
+msgstr "%(name)s muestra el bracket"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s shows one of its battles"
+msgstr "%(name)s muestra una de sus batallas"
+
+#: cpc 2026-11-03
+msgid "Show on a projector"
+msgstr "Mostrar en un proyector"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Show on %(name)s"
+msgstr "Mostrar en %(name)s"
+
+#: cpc 2026-11-03
+msgid "Connect a projector"
+msgstr "Conectar un proyector"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Shown on %(name)s."
+msgstr "Se muestra en %(name)s."
+
+#: cpc 2026-11-03
+msgid "In Duels"
+msgstr "En Duelos"
+
+#: cpc 2026-11-03
+msgid "Does not have Duels open"
+msgstr "No tiene Duelos abierto"
+
+#: cpc 2026-11-03
+msgid "From there they cannot leave Duels."
+msgstr "Desde ahí no pueden salir de Duelos."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s does not have Duels open."
+msgstr "%(name)s no tiene Duelos abierto."
+
+#: cpc 2026-11-03
+msgid "Neither has Duels open."
+msgstr "Ninguno tiene Duelos abierto."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "First choose the problems of game %(number)s."
+msgstr "Primero elige los problemas de la partida %(number)s."
+
+#: cpc 2026-11-03
+msgid "Choose them"
+msgstr "Elegirlos"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s starts in"
+msgstr "La partida %(number)s empieza en"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s: time is up, waiting for verdicts."
+msgstr "Partida %(number)s: se acabó el tiempo, esperando veredictos."
+
+#: cpc 2026-11-03
+msgid "Stop waiting"
+msgstr "Dejar de esperar"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Game %(number)s ended in a tie: give it to somebody, or play one more."
+msgstr "La partida %(number)s quedó empatada: dásela a alguien o jueguen otra."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Give the game to %(name)s"
+msgstr "Dar la partida a %(name)s"
+
+#: cpc 2026-11-03
+msgid "Battle cancelled."
+msgstr "Batalla cancelada."
+
+#: cpc 2026-11-03
+msgid "The bank gives the problems when the game is called or started. If you choose some here, yours are used."
+msgstr "El banco pone los problemas al mandar a la sala o al iniciar. Si eliges aquí, se usan los tuyos."
+
+#: cpc 2026-11-03
+msgid "Give each problem a difficulty, so later rounds get harder problems."
+msgstr "Dale a cada problema una dificultad, para que las rondas más avanzadas tengan problemas más difíciles."
+
+#: cpc 2026-11-03
+msgid "Choose a bank from the list."
+msgstr "Elige un banco de la lista."
+
+#: cpc 2026-11-03
+msgid "No tournament has finished yet."
+msgstr "Todavía no termina ningún torneo."
+
+#: cpc 2026-11-03
+msgid "Review mode: nothing is submitted anymore."
+msgstr "Modo repaso: ya no se envía nada."
+
+#: cpc 2026-11-03
+msgid "The players come from the previous round. You can already choose the problems."
+msgstr "Los jugadores vienen de la ronda anterior. Ya puedes elegir los problemas."
+
+#: cpc 2026-11-03
+msgid "The tournament has not started. You can already choose the problems."
+msgstr "El torneo no ha empezado. Ya puedes elegir los problemas."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Give the battle to %(name)s"
+msgstr "Dar la batalla a %(name)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Correct: the winner is %(name)s"
+msgstr "Corregir: el ganador es %(name)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s shows it (%(view)s view)"
+msgstr "%(name)s la muestra (vista %(view)s)"
+
+#: cpc 2026-11-03
+msgid "This game has no problems yet."
+msgstr "Esta partida todavía no tiene problemas."
+
+#: cpc 2026-11-03
+msgid "This game takes its problems from the bank when it starts. You can also choose them."
+msgstr "Esta partida toma sus problemas del banco al empezar. También puedes elegirlos."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "The players are no longer kept in Duels: more than %(minutes)s minutes went by without anything happening in this battle. They are kept again when the next game starts."
+msgstr "Los jugadores ya pueden salir de Duelos: la batalla lleva más de %(minutes)s minutos sin actividad. Al iniciar la siguiente partida ya no podrán salir."
+
+#: cpc 2026-11-03
+msgid "Something went wrong?"
+msgstr "¿Algo salió mal?"
+
+#: cpc 2026-11-03
+msgid "Review: the next game starts when the organizer starts it."
+msgstr "Repaso: la siguiente partida empieza cuando el organizador la inicie."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Your rating appears after %(needed)s games that count; you have %(games)s."
+msgstr "Tu rating aparece tras %(needed)s partidas que cuenten; llevas %(games)s."
+
+#: cpc 2026-11-03
+msgid "No game ended with a winner: the ranking does not change."
+msgstr "Ninguna partida tuvo ganador: el ranking no cambia."
+
+#: cpc 2026-11-03
+msgid "Whether it counts for the ranking is decided later."
+msgstr "Más adelante se decide si cuenta para el ranking."
+
+#: cpc 2026-11-03
+msgid "It does not count for the ranking."
+msgstr "No cuenta para el ranking."
+
+#: cpc 2026-11-03
+msgid "Somebody else made a change here a moment ago. The page has been updated; check it and try again."
+msgstr "Otra persona hizo un cambio aquí hace un momento. La página se actualizó; revísala y vuelve a intentarlo."
+
+#: cpc 2026-11-03
+msgid "The battles will show here."
+msgstr "Aquí se verán las batallas."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s won without playing on."
+msgstr "%(name)s ganó sin seguir jugando."
+
+#: cpc 2026-11-03
+msgid "They apply from the next game on."
+msgstr "Se aplican desde la siguiente partida."
+
+#: cpc 2026-11-03
+msgid "Those of the tournament. They change on its page."
+msgstr "Los del torneo. Se cambian en su página."
+
+#: cpc 2026-11-03
+msgid "A battle"
+msgstr "Una batalla"
+
+#: cpc 2026-11-03
+msgid "A tournament"
+msgstr "Un torneo"
+
+#: cpc 2026-11-03
+msgid "A message"
+msgstr "Un mensaje"
+
+#: cpc 2026-11-03
+msgid "View"
+msgstr "Vista"
+
+#: cpc 2026-11-03
+msgid "View of the battle"
+msgstr "Vista de la batalla"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Tabs with a view of their own: %(views)s."
+msgstr "Pestañas con su propia vista: %(views)s."
+
+#: cpc 2026-11-03
+msgid "Move to the battle being played by itself"
+msgstr "Seguir la batalla en juego"
+
+#: cpc 2026-11-03
+msgid "No battles open"
+msgstr "No hay batallas abiertas"
+
+#: cpc 2026-11-03
+msgid "No tournaments"
+msgstr "No hay torneos"
+
+#: cpc 2026-11-03
+msgid "For example: Break of 10 minutes"
+msgstr "Por ejemplo: Pausa de 10 minutos"
+
+#: cpc 2026-11-03
+msgid "Show"
+msgstr "Mostrar"
+
+#: cpc 2026-11-03
+msgid "Copy link"
+msgstr "Copiar enlace"
+
+#: cpc 2026-11-03
+msgid "Link copied."
+msgstr "Enlace copiado."
+
+#: cpc 2026-11-03
+msgid "Open here"
+msgstr "Abrir aquí"
+
+#: cpc 2026-11-03
+msgid "Name of the projector"
+msgstr "Nombre del proyector"
+
+#: cpc 2026-11-03
+msgid "Changing the link disconnects the open tabs."
+msgstr "Cambiar el enlace desconecta las pestañas abiertas."
+
+#: cpc 2026-11-03
+msgid "The current link stops working. Every open tab will need the new one."
+msgstr "El enlace actual deja de funcionar. Cada pestaña abierta necesitará el nuevo."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "As %(name)s"
+msgstr "Como %(name)s"
+
+#: cpc 2026-11-03
+msgid "As a new one"
+msgstr "Como uno nuevo"
+
+#: cpc 2026-11-03
+msgid "Type the code the projector shows."
+msgstr "Escribe el código que muestra el proyector."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Done: %(name)s opened on that projector."
+msgstr "Listo: ese proyector ahora es %(name)s."
+
+#: cpc 2026-11-03
+msgid "No projectors yet. Connect the first one with its code."
+msgstr "Todavía no hay proyectores. Conecta el primero con su código."
+
+#: cpc 2026-11-03
+msgid "On the computer of the projector open"
+msgstr "En la computadora del proyector abre"
+
+#: cpc 2026-11-03
+msgid "Type the code that appears there:"
+msgstr "Escribe el código que aparece ahí:"
+
+#: cpc 2026-11-03
+msgid "Projector"
+msgstr "Proyector"
+
+#: cpc 2026-11-03
+msgid "Connect"
+msgstr "Conectar"
+
+#: cpc 2026-11-03
+msgid "Add projector"
+msgstr "Agregar proyector"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Projector %(number)s"
+msgstr "Proyector %(number)s"
+
+#: cpc 2026-11-03
+msgid "Connect this projector"
+msgstr "Conecta este proyector"
+
+#: cpc 2026-11-03
+msgid "In the battle panel, go to Projectors and type this code:"
+msgstr "En el panel de batallas, ve a Proyectores y escribe este código:"
+
+#: cpc 2026-11-03
+msgid "A code could not be shown right now. It tries again in a minute."
+msgstr "Ahora no se pudo mostrar un código. Se intenta de nuevo en un minuto."
+
+#: cpc 2026-11-03
+msgid "Connected. Opening..."
+msgstr "Conectado. Abriendo..."
+
+#: cpc 2026-11-03
+msgid "That code does not exist or has expired. Check the code on the projector."
+msgstr "Ese código no existe o ya venció. Revisa el código en el proyector."
+
+#: cpc 2026-11-03
+msgid "Connecting with a code does not work right now. Copy the link instead."
+msgstr "Conectar con código no funciona en este momento. Copia el enlace."
+
+#: cpc 2026-11-03
+msgid "Choose a battle."
+msgstr "Elige una batalla."
+
+#: cpc 2026-11-03
+msgid "Choose a tournament."
+msgstr "Elige un torneo."
+
+#: cpc 2026-11-03
+msgid "There are more names than places: add places or remove somebody."
+msgstr "Hay más nombres que lugares: agrega lugares o quita a alguien."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(name)s is in two places."
+msgstr "%(name)s está en dos lugares."
+
+#: cpc 2026-11-03
+msgid "The rounds of this tournament are out of order. Ask an administrator."
+msgstr "Las rondas de este torneo están desordenadas. Avisa a un administrador."
+
+#: cpc 2026-11-03
+msgid "places"
+msgstr "lugares"
+
+#: cpc 2026-11-03
+msgid "Write a name."
+msgstr "Escribe un nombre."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(first)s–%(last)s of %(total)s"
+msgstr "%(first)s–%(last)s de %(total)s"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "With a rating (%(count)s)"
+msgstr "Con rating (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Without a rating yet (%(count)s)"
+msgstr "Aún sin rating (%(count)s)"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Inactive (%(count)s)"
+msgstr "Inactivos (%(count)s)"
+
+#: cpc 2026-11-03
+msgid "Approve results"
+msgstr "Aprobar resultados"
+
+#: cpc 2026-11-03
+msgid "Go to my place"
+msgstr "Ir a mi lugar"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "Their number appears after playing %(number)s games that count."
+msgstr "Su número aparece al jugar %(number)s partidas que cuenten."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "No game that counts in the last %(days)s days. They come back when they play one."
+msgstr "Sin partidas que cuenten en los últimos %(days)s días. Vuelven al jugar una."
+
+#: cpc 2026-11-03
+msgid "What counts for the ranking?"
+msgstr "¿Qué cuenta para el ranking?"
+
+#: cpc 2026-11-03
+msgid "Only what is approved counts. It can change later."
+msgstr "Sólo cuenta lo aprobado. Se puede cambiar después."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "To review (%(count)s)"
+msgstr "Por revisar (%(count)s)"
+
+#: cpc 2026-11-03
+msgid "To review"
+msgstr "Por revisar"
+
+#: cpc 2026-11-03
+msgid "left out of the history"
+msgstr "fuera del historial"
+
+#: cpc 2026-11-03
+msgid "See the tournament"
+msgstr "Ver el torneo"
+
+#: cpc 2026-11-03
+msgid "With its tournament"
+msgstr "Con su torneo"
+
+#: cpc 2026-11-03
+msgid "Take out"
+msgstr "Quitar"
+
+#: cpc 2026-11-03
+msgid "Taken out"
+msgstr "Quitada"
+
+#: cpc 2026-11-03
+msgid "Put back"
+msgstr "Devolver"
+
+#: cpc 2026-11-03
+msgid "Never counts: cancelled"
+msgstr "Nunca cuenta: cancelada"
+
+#: cpc 2026-11-03
+msgid "Never counts: bye"
+msgstr "Nunca cuenta: pase directo"
+
+#: cpc 2026-11-03
+msgid "Never counts: won without playing on"
+msgstr "Nunca cuenta: ganada sin seguir jugando"
+
+#: cpc 2026-11-03
+msgid "Never counts: club laptops"
+msgstr "Nunca cuenta: laptops del club"
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(count)d place has no name yet."
+msgid_plural "%(count)d places have no name yet."
+msgstr[0] "A %(count)d lugar le falta nombre."
+msgstr[1] "A %(count)d lugares les falta nombre."
+
+#: cpc 2026-11-03
+#, python-format
+msgid "%(num)s participant"
+msgid_plural "%(num)s participants"
+msgstr[0] "%(num)s participante"
+msgstr[1] "%(num)s participantes"
+
+#: cpc 2026-11-03
+msgid "Its battle"
+msgid_plural "Its %(num)s battles"
+msgstr[0] "Su batalla"
+msgstr[1] "Sus %(num)s batallas"

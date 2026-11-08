@@ -3,34 +3,39 @@
 {% block media %}
 {% include "arena/_style.html" %}
 <style>
-    .mm-players { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 1em; align-items: center; }
-    .mm-player { display: flex; align-items: center; gap: .8em; padding: .8em; border-radius: 4px; background: var(--ar-bg);
-                 border: 1px solid var(--ar-border); border-top: 5px solid var(--side); }
-    .mm-player.mm-a { --side: var(--ar-a); }
-    .mm-player.mm-b { --side: var(--ar-b); }
-    .mm-player img { width: 64px; height: 64px; border-radius: 4px; }
-    .mm-player .mm-name { font-size: 1.4em; font-weight: 600; }
-    .mm-player .mm-wins { margin-left: auto; font-size: 2.2em; font-weight: bold; font-variant-numeric: tabular-nums; }
-    .mm-vs { font-size: 1.6em; font-weight: bold; color: var(--ar-muted); text-align: center; }
-    .mm-status { font-size: 1.15em; }
-    .mm-clock { font-size: 2em; font-weight: bold; font-variant-numeric: tabular-nums; }
+    /* The two players and the score, then the one button of the next step (2026-11-03). */
+    .mm-duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 1em;
+               padding: .9em 1em; }
+    .mm-side { display: flex; align-items: center; gap: .8em; min-width: 0; }
+    .mm-side.mm-right { flex-direction: row-reverse; text-align: right; }
+    .mm-side img { width: 56px; height: 56px; border-radius: 4px; }
+    .mm-side .mm-name { font-size: 1.3em; font-weight: 600; }
+    .mm-mid { text-align: center; }
+    .mm-big-score { font-size: 2.2em; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .mm-control { display: flex; align-items: center; gap: .6em; flex-wrap: wrap; padding: .8em 1em;
+                  border-top: 1px solid var(--ar-soft-border); }
+    .mm-clock { font-size: 1.8em; font-weight: bold; font-variant-numeric: tabular-nums; }
     .mm-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1em; }
     .mm-code { height: 22em; border-top: 1px solid var(--ar-soft-border); }
     .mm-cursor { position: absolute; border-left: 3px solid var(--ar-a); }
     #mm-code-b .mm-cursor { border-left-color: var(--ar-b); }
     .mm-subs { max-height: 18em; overflow: auto; }
+    .mm-subs .ar-empty { padding: .5em .8em; }
     .mm-sub { display: flex; align-items: center; gap: .5em; padding: .35em .7em; border-bottom: 1px solid var(--ar-soft-border); cursor: pointer; }
     .mm-sub:hover { background: var(--ar-soft); }
     .mm-flags { display: flex; gap: .4em; flex-wrap: wrap; padding: .4em .7em; }
     .mm-section { margin-top: 1em; }
-    .mm-log { max-height: 16em; overflow: auto; font-size: .92em; }
+    .mm-log { max-height: 30em; overflow: auto; font-size: .92em; }
     .mm-log div { padding: .25em .6em; border-bottom: 1px solid var(--ar-soft-border); }
     .mm-game-row { padding: .8em 0; border-bottom: 1px solid var(--ar-soft-border); display: flex; flex-direction: column; gap: .5em; }
     .mm-game-row:first-child { padding-top: 0; }
     .mm-game-row:last-child { border-bottom: 0; padding-bottom: 0; }
-    @media (max-width: 900px) { .mm-columns, .mm-players { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 900px) { .mm-columns, .mm-duel { grid-template-columns: minmax(0, 1fr); } .mm-side.mm-right { flex-direction: row; text-align: left; } }
 </style>
 {% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
 
 {% block js_media %}
 <script type="text/javascript" src="{{ ACE_URL }}/ace.js"></script>
@@ -39,27 +44,73 @@
 {{ state|json_script('mm-state') }}
 {{ languages|json_script('mm-languages') }}
 <script type="text/javascript">
+// The page of a battle (2026-11-03): one main button, that of the next step; what went wrong, folded; the rest in
+// tabs.
 $(function () {
     var A = window.Arena, W = window.ArenaWidgets;
     var TEXT = {
-        status: {
-            pending: {{ _('Waiting for players')|tojson }}, ready: {{ _('Ready, not called yet')|tojson }},
-            called: {{ _('In the waiting room')|tojson }}, playing: {{ _('Playing')|tojson }},
-            decided: {{ _('Decided')|tojson }}, cancelled: {{ _('Cancelled')|tojson }}
-        },
         gameStatus: {
             prepared: {{ _('Prepared')|tojson }}, countdown: {{ _('Countdown')|tojson }}, live: {{ _('Live')|tojson }},
-            verifying: {{ _('Waiting for the last verdicts')|tojson }}, finished: {{ _('Finished')|tojson }},
-            tie: {{ _('Tie')|tojson }}, cancelled: {{ _('Cancelled')|tojson }}
+            verifying: {{ _('Waiting for the last verdicts')|tojson }}, finished: {{ _('Ended')|tojson }},
+            tie: {{ _('Tie')|tojson }}, cancelled: {{ _('Called off')|tojson }}
         },
         game: {{ _('Game')|tojson }},
-        connected: {{ _('Has the arena open')|tojson }},
-        disconnected: {{ _('Does not have the arena open')|tojson }},
+        gameN: {{ _('Game %(number)s', number='%(number)s')|tojson }},
+        vs: {{ _('vs')|tojson }},
+        bestOf: {{ _('best of %(count)s', count='%(count)s')|tojson }},
+        quick: {{ _('Quick battle')|tojson }},
+        gamesWon: {{ _('games won')|tojson }},
+        inDuels: {{ _('In Duels')|tojson }},
+        notInDuels: {{ _('Does not have Duels open')|tojson }},
         privileged: {{ _('Staff account: on a club laptop use an account without permissions')|tojson }},
-        call: {{ _('Call to the waiting room')|tojson }},
-        start: {{ _('Start the game')|tojson }},
+        // The main button and what it says next to it.
+        call: {{ _('Send to the waiting room')|tojson }},
+        callHint: {{ _('From there they cannot leave Duels.')|tojson }},
+        start: {{ _('Start game %(number)s', number='%(number)s')|tojson }},
+        oneOut: {{ _('%(name)s does not have Duels open.', name='%(name)s')|tojson }},
+        bothOut: {{ _('Neither has Duels open.')|tojson }},
+        needProblems: {{ _('First choose the problems of game %(number)s.', number='%(number)s')|tojson }},
+        chooseThem: {{ _('Choose them')|tojson }},
+        playing: {{ _('Game %(number)s being played', number='%(number)s')|tojson }},
+        startsIn: {{ _('Game %(number)s starts in', number='%(number)s')|tojson }},
+        verifyingNow: {{ _('Game %(number)s: time is up, waiting for verdicts.', number='%(number)s')|tojson }},
+        finalize: {{ _('Stop waiting')|tojson }},
+        finalizeConfirm: {{ _('Submissions still being judged will count as failed.')|tojson }},
+        tiedNow: {{ _('Game %(number)s ended in a tie: give it to somebody, or play one more.', number='%(number)s')|tojson }},
+        giveGameTo: {{ _('Give the game to %(name)s', name='%(name)s')|tojson }},
+        giveConfirm: {{ _('This game will count as won by this player.')|tojson }},
+        wonPlain: {{ _('%(name)s won', name='%(name)s')|tojson }},
+        wonWalkover: {{ _('%(name)s won without playing on.', name='%(name)s')|tojson }},
+        cancelled: {{ _('Battle cancelled.')|tojson }},
+        seeTournament: {{ _('See the tournament')|tojson }},
+        pendingPlayers: {{ _('The players come from the previous round. You can already choose the problems.')|tojson }},
+        tournamentNotStarted: {{ _('The tournament has not started. You can already choose the problems.')|tojson }},
+        plus1: {{ _('+1 minute')|tojson }},
+        plus5: {{ _('+5 minutes')|tojson }},
         startAnyway: {{ _('Start anyway')|tojson }},
         startTitle: {{ _('Before starting')|tojson }},
+        // «Something went wrong?»
+        cancelGame: {{ _('Void this game')|tojson }},
+        cancelGameConfirm: {{ _('The game counts for nobody and the next one is prepared.')|tojson }},
+        walkover: {{ _('Give the battle to %(name)s', name='%(name)s')|tojson }},
+        walkoverConfirm: {{ _('The whole battle goes to this player without playing on.')|tojson }},
+        cancelMatch: {{ _('Cancel the battle')|tojson }},
+        cancelMatchConfirm: {{ _('The battle is dropped and the players are released.')|tojson }},
+        correct: {{ _('Correct: the winner is %(name)s', name='%(name)s')|tojson }},
+        correctConfirm: {{ _('The bracket moves the other player forward instead.')|tojson }},
+        // Projectors.
+        showsIt: {{ _('%(name)s shows it (%(view)s view)', name='%(name)s', view='%(view)s')|tojson }},
+        showOn: {{ _('Show on a projector')|tojson }},
+        showOnOne: {{ _('Show on %(name)s', name='%(name)s')|tojson }},
+        projectors: {{ _('Projectors')|tojson }},
+        connect: {{ _('Connect a projector')|tojson }},
+        shown: {{ _('Shown on %(name)s.', name='%(name)s')|tojson }},
+        views: {
+            combined: {{ _('Everything')|tojson }}, scoreboard: {{ _('Scoreboard')|tojson }},
+            'code-a': {{ _('Code A')|tojson }}, 'code-b': {{ _('Code B')|tojson }},
+            statements: {{ _('Statements')|tojson }}, bracket: {{ _('Bracket')|tojson }}
+        },
+        // The parts kept from before.
         saveProblems: {{ _('Save problems')|tojson }},
         saved: {{ _('Saved')|tojson }},
         points: {{ _('points')|tojson }},
@@ -68,28 +119,10 @@ $(function () {
         suggest: {{ _('Suggest from the bank')|tojson }},
         suggestTitle: {{ _('Fills the list with problems of the tournament bank that nobody has used yet. Nothing is saved until you press Save problems.')|tojson }},
         suggested: {{ _('Suggested from the bank. Check them and press Save problems.')|tojson }},
-        noProblemsYet: {{ _('This game has no problems yet. Choose them below, in Problems of each game.')|tojson }},
-        fromBank: {{ _('This game will take its problems from the tournament bank when it starts. You can also choose them below.')|tojson }},
+        noProblemsYet: {{ _('This game has no problems yet.')|tojson }},
+        fromBank: {{ _('This game takes its problems from the bank when it starts. You can also choose them.')|tojson }},
         bankEmpty: {{ _('The bank did not have enough unused problems for this game. Choose them by hand.')|tojson }},
-        problemsHintHand: {{ _('Choose the problems of each game before starting it. A game that has not started can still change its problems.')|tojson }},
-        problemsHintBank: {{ _('This tournament takes the problems from its bank by itself when each game is called or started. If you choose some here, yours are used instead.')|tojson }},
-        pendingPlayers: {{ _('The players of this battle are not known yet: they come from the previous round. You can already choose its problems.')|tojson }},
-        tournamentNotStarted: {{ _('The tournament has not started yet. You can already choose the problems; the players are called once it starts.')|tojson }},
-        plus1: {{ _('+1 minute')|tojson }},
-        plus5: {{ _('+5 minutes')|tojson }},
-        cancelGame: {{ _('Void this game')|tojson }},
-        cancelGameConfirm: {{ _('The game counts for nobody and the next one is prepared.')|tojson }},
-        give: {{ _('Give the game to')|tojson }},
-        giveConfirm: {{ _('This game will count as won by this player.')|tojson }},
-        finalize: {{ _('Stop waiting for verdicts')|tojson }},
-        finalizeConfirm: {{ _('Submissions still being judged will count as failed.')|tojson }},
-        tie: {{ _('Tie. Give the game to one player or play a tiebreak game: choose its problems below and start it.')|tojson }},
-        walkover: {{ _('Give the whole battle to')|tojson }},
-        walkoverConfirm: {{ _('The whole battle goes to this player without playing on.')|tojson }},
-        cancelMatch: {{ _('Cancel the battle')|tojson }},
-        cancelMatchConfirm: {{ _('The battle is dropped and the players are released.')|tojson }},
-        correct: {{ _('Correct: the winner is')|tojson }},
-        correctConfirm: {{ _('The bracket moves the other player forward instead.')|tojson }},
+        problemsHintBank: {{ _('The bank gives the problems when the game is called or started. If you choose some here, yours are used.')|tojson }},
         noGame: {{ _('No game yet.')|tojson }},
         noSubs: {{ _('No submissions yet.')|tojson }},
         stuck: {{ _('Waiting too long for a judge')|tojson }},
@@ -99,10 +132,7 @@ $(function () {
         source: {{ _('Source code')|tojson }},
         close: {{ _('Close')|tojson }},
         winner: {{ _('Winner')|tojson }},
-        reason: {{ _('Reason')|tojson }},
-        show: {{ _('Show this battle on')|tojson }},
-        shown: {{ _('Now on the screen')|tojson }},
-        openView: {{ _('Open view')|tojson }},
+        tie: {{ _('Tie. Give the game to one player or play a tiebreak game: choose its problems below and start it.')|tojson }},
         settingsSaved: {{ _('Settings saved')|tojson }},
         reasons: {
             all_solved: {{ _('Solved every problem first')|tojson }},
@@ -112,11 +142,6 @@ $(function () {
             organizer: {{ _('Decided by the organizer')|tojson }},
             walkover: {{ _('Won by walkover')|tojson }},
             games: {{ _('Won the series')|tojson }}, bye: {{ _('Bye')|tojson }}
-        },
-        views: {
-            combined: {{ _('Everything')|tojson }}, scoreboard: {{ _('Scoreboard')|tojson }},
-            'code-a': {{ _('Code A')|tojson }}, 'code-b': {{ _('Code B')|tojson }},
-            statements: {{ _('Statements')|tojson }}, bracket: {{ _('Bracket')|tojson }}
         },
         verdicts: {
             AC: {{ _('Accepted')|tojson }}, WA: {{ _('Wrong answer')|tojson }},
@@ -141,7 +166,7 @@ $(function () {
             bank_empty: {{ _('the bank had no unused problems left')|tojson }}
         },
         organizersSaved: {{ _('Organizers saved')|tojson }},
-        ranking: {pending: {{ _('Not decided yet')|tojson }}, counts: {{ _('Counts')|tojson }},
+        ranking: {pending: {{ _('To review')|tojson }}, counts: {{ _('Counts')|tojson }},
                   excluded: {{ _('Does not count')|tojson }},
                   withTournament: {{ _('As its tournament.')|tojson }},
                   leftOut: {{ _('Left out of the ranking, although its tournament counts.')|tojson }},
@@ -164,6 +189,15 @@ $(function () {
     var editors = {}, codeSeq = {a: 0, b: 0}, codeGame = null;
     // How long a submission has waited, when a player was last seen and how far the code went move by themselves.
     var paint = W.painter(['queued_for', 'seen_ago', 'code_seq']);
+    function fill(text, values) {
+        Object.keys(values).forEach(function (key) { text = text.split('%(' + key + ')s').join(values[key]); });
+        return text;
+    }
+
+    var tabs = W.subTabs(document.getElementById('mm-tabs'), 'live', function (name) {
+        // An editor that was out of sight has no size until it is told.
+        if (name === 'live') Object.keys(editors).forEach(function (slot) { editors[slot].resize(); });
+    });
 
     function current() {
         return state.games.filter(function (g) { return g.id === state.current; })[0] || null;
@@ -189,47 +223,51 @@ $(function () {
         W.confirmBox(title, [line], label, function () { act(data); }, danger);
     }
 
-    // ------------------------------------------------------------ players and header
-    function playerCard(slot) {
+    // ------------------------------------------------------------ the two players and the score
+    function side(slot) {
         var p = state.players[slot];
-        return A.el('div', {'class': 'mm-player mm-' + slot}, [
+        return A.el('div', {'class': 'mm-side' + (slot === 'b' ? ' mm-right' : '')}, [
             p.avatar ? A.el('img', {src: p.avatar, alt: ''}) : null,
             A.el('div', {}, [
-                A.el('div', {'class': 'mm-name', text: p.name}),
+                A.el('div', {'class': 'mm-name am-' + slot, text: p.name}),
                 p.username && p.username !== p.name ? A.el('div', {'class': 'ar-muted', text: p.username}) : null,
-                A.el('div', {}, [A.el('span', {'class': 'ar-dot' + (p.connected ? ' ar-on' : '')}), ' ',
-                                 p.connected ? TEXT.connected : TEXT.disconnected]),
+                p.id ? A.el('div', {'class': 'ar-muted'}, [
+                    A.el('i', {'class': 'fa fa-circle ' + (p.connected ? 'am-dot-ok' : 'am-dot-off'), 'aria-hidden': 'true'}),
+                    ' ' + (p.connected ? TEXT.inDuels : TEXT.notInDuels)]) : null,
                 p.privileged ? W.badge(TEXT.privileged, 'warn') : null
-            ]),
-            A.el('div', {'class': 'mm-wins', text: state.match.wins[slot]})
+            ])
         ]);
     }
 
     function render() {
-        var match = state.match, g = current();
-        paint('players', [state.players, match.wins, match.best_of], function () {
-            var head = A.clear(document.getElementById('mm-players'));
-            head.appendChild(playerCard('a'));
-            head.appendChild(A.el('div', {'class': 'mm-vs'}, ['VS', A.el('div', {'class': 'ar-muted', style: 'font-size: .6em;',
-                text: match.best_of > 1 ? '(' + match.best_of + ')' : ''})]));
-            head.appendChild(playerCard('b'));
+        var match = state.match;
+        paint('players', [state.players, match.wins, match.best_of, match.status], function () {
+            var head = A.clear(document.getElementById('mm-duel'));
+            head.appendChild(side('a'));
+            head.appendChild(A.el('div', {'class': 'mm-mid'}, match.best_of > 1 || match.status === 'decided' ? [
+                A.el('div', {'class': 'mm-big-score', text: match.wins.a + ' – ' + match.wins.b}),
+                A.el('div', {'class': 'ar-muted', text: TEXT.gamesWon})
+            ] : [A.el('div', {'class': 'mm-big-score ar-muted', text: TEXT.vs.toUpperCase()})]));
+            head.appendChild(side('b'));
         });
+        // What the battle is called: its title, or its round; a quick battle without a title, by its players.
         var info = [];
-        if (match.tournament) info.push(match.tournament.name);
-        if (match.round) info.push(match.round);
         if (match.title) info.push(match.title);
+        else if (!match.round) info.push(state.players.a.name + ' ' + TEXT.vs + ' ' + state.players.b.name);
+        if (match.round) info.push(match.round);
+        if (match.best_of > 1) info.push(fill(TEXT.bestOf, {count: match.best_of}));
         $('#mm-info').text(info.join(' · '));
-        $('#mm-status').text(TEXT.status[match.status] || match.status);
-        if (match.status === 'decided' && match.winner) {
-            $('#mm-status').text(TEXT.status.decided + ' · ' + TEXT.winner + ': ' + state.players[match.winner].name +
-                                 ' (' + (TEXT.reasons[match.reason] || match.reason) + ')');
-        }
         $('#mm-released').prop('hidden', !((match.status === 'called' || match.status === 'playing') && !match.held));
+        var g = current();
         paint('game', [g, state.players.a.name, state.players.b.name, match.status, match.draw.auto], renderGame);
-        // A game not started yet leaves the submissions and code of the previous one in view.
+        // A game not started yet leaves the submissions and code of the previous one in view; the verdicts that come
+        // late still arrive (2026-11-04).
         if (g && g.started) {
             paint('submissions', [g.id, g.started_at, g.submissions, g.flags], function () { renderSubmissions(g); });
             setupCode(g);
+        } else {
+            var last = state.games.filter(function (game) { return game.started && game.submissions; }).pop();
+            if (last) paint('submissions', [last.id, last.started_at, last.submissions, last.flags], function () { renderSubmissions(last); });
         }
         renderProblems();
         renderControls();
@@ -248,8 +286,8 @@ $(function () {
             // Filled once, like the settings: a refresh must not undo who is being added.
             var team = state.organizers;
             organizers = W.organizerList(document.getElementById('mm-organizers'), team.creator, team.list, !team.tournament);
-            $('#mm-organizers-quick').prop('hidden', team.tournament);
             $('#mm-organizers-tournament').prop('hidden', !team.tournament);
+            $('#mm-organizers-actions').prop('hidden', team.tournament);
         }
     }
 
@@ -266,6 +304,7 @@ $(function () {
             }
         }
         $('#mm-ranking-link').prop('hidden', !info.decides).attr('href', info.url);
+        $('#mm-ranking-who').prop('hidden', !!info.decides || !!info.never || info.decision !== 'pending');
     }
 
     // ------------------------------------------------------------ the current game
@@ -284,12 +323,8 @@ $(function () {
         if (!g) { box.appendChild(A.el('p', {'class': 'ar-muted', text: TEXT.noGame})); return; }
         box.appendChild(A.el('div', {'class': 'ar-row'}, [
             A.el('b', {text: TEXT.game + ' ' + g.number}),
-            W.badge(TEXT.gameStatus[g.status] || g.status, g.status === 'live' ? 'ok' : (g.status === 'verifying' ? 'warn' : 'none')),
-            A.el('span', {'class': 'ar-grow'}),
-            A.el('span', {'class': 'mm-clock', id: 'mm-clock'})
+            W.badge(TEXT.gameStatus[g.status] || g.status, g.status === 'live' ? 'ok' : (g.status === 'verifying' ? 'warn' : 'none'))
         ]));
-        // Written at once: an empty clock until the next tick is what made the page jump.
-        tickClock();
         if (g.status === 'prepared' && state.match.status !== 'decided' && state.match.status !== 'cancelled') {
             // Only what is about to be played; the problems are chosen in "Problems of each game".
             if (g.problems.length) {
@@ -299,8 +334,11 @@ $(function () {
                         A.el('span', {'class': 'ar-muted', text: p.points + ' ' + TEXT.points})]);
                 })));
             } else {
-                box.appendChild(A.el('div', {'class': 'ar-alert ar-alert-' + (state.match.draw.auto ? 'info' : 'warn') + ' mm-section',
-                    text: state.match.draw.auto ? TEXT.fromBank : TEXT.noProblemsYet}));
+                box.appendChild(A.el('div', {'class': 'ar-alert ar-alert-' + (state.match.draw.auto ? 'info' : 'warn') + ' mm-section'}, [
+                    state.match.draw.auto ? TEXT.fromBank : TEXT.noProblemsYet, ' ',
+                    A.el('a', {href: '#problems', text: TEXT.chooseThem, onclick: function (event) {
+                        event.preventDefault(); tabs.show('problems', true);
+                    }})]));
             }
             return;
         }
@@ -342,7 +380,7 @@ $(function () {
     function renderProblems() {
         var match = state.match, over = match.status === 'decided' || match.status === 'cancelled';
         var box = document.getElementById('mm-problems');
-        $('#mm-problems-hint').text(match.draw.auto ? TEXT.problemsHintBank : TEXT.problemsHintHand);
+        $('#mm-problems-hint').text(match.draw.auto ? TEXT.problemsHintBank : '').prop('hidden', !match.draw.auto);
         var numbers = state.games.map(function (g) { return g.number; });
         var last = Math.max(match.max_games, numbers.length ? Math.max.apply(null, numbers) : 0);
         var seen = {}, index = 0;
@@ -481,7 +519,7 @@ $(function () {
 
     // ------------------------------------------------------------ live code of both players
     function setupCode(g) {
-        $('#mm-code-panel').prop('hidden', !g.started);
+        $('#mm-code-panel, #mm-subs-panel').prop('hidden', !g.started);
         if (!g.started) return;
         if (codeGame !== g.id) {
             codeGame = g.id;
@@ -519,123 +557,172 @@ $(function () {
         }).catch(function () {}).then(function () { setTimeout(pollCode, g.status === 'live' ? 350 : 3000); });
     }
 
-    // ------------------------------------------------------------ controls
+    // ------------------------------------------------------------ the main button
     function button(text, cls, onclick) { return A.el('button', {type: 'button', 'class': 'ar-btn ' + (cls || ''), text: text, onclick: onclick}); }
+    function muted(text) { return A.el('span', {'class': 'ar-muted', text: text}); }
 
     function renderControls() {
         var match = state.match, g = current(), editing = g && problemRows[g.number];
         paint('controls', [match.status, match.quick, match.winner, match.tournament, match.draw.auto, match.tie,
-                           [state.players.a.id, state.players.a.name, state.players.b.id, state.players.b.name],
-                           g && [g.id, g.number, g.status, g.problems.length],
+                           match.wins, match.best_of,
+                           [state.players.a.id, state.players.a.name, state.players.a.connected,
+                            state.players.b.id, state.players.b.name, state.players.b.connected],
+                           g && [g.id, g.number, g.status, g.problems.length, g.standing && [g.standing.a && g.standing.a.score, g.standing.b && g.standing.b.score]],
                            editing && editing.editor ? editing.editor.get().length : 0], drawControls);
+    }
+
+    function startButton(g) {
+        var match = state.match, row = problemRows[g.number];
+        var start = button(fill(TEXT.start, {number: g.number}), 'ar-btn-big ar-btn-green', function () {
+            // Unsaved problems of this game are saved first, so what is on the screen is what gets played.
+            if (row && row.dirty()) {
+                act({action: 'problems', number: g.number, problems: row.editor.get()}, function () {
+                    act({action: 'start', game: g.id});
+                });
+            } else {
+                act({action: 'start', game: g.id});
+            }
+        });
+        start.disabled = !g.problems.length && !match.draw.auto && !(row && row.editor.get().length);
+        return start;
     }
 
     function drawControls() {
         var match = state.match, g = current();
-        var box = A.clear(document.getElementById('mm-controls'));
+        var box = A.clear(document.getElementById('mm-control'));
         var names = {a: state.players.a.name, b: state.players.b.name};
         var waiting = match.tournament && match.tournament.status !== 'running';
-        var bothPlayers = !!(state.players.a.id && state.players.b.id);
-        // Why nothing can be played yet, said where the buttons would be.
+        var open = ['ready', 'called', 'playing'].indexOf(match.status) !== -1;
+        var tied = match.tie ? state.games.filter(function (game) { return game.id === match.tie; })[0] : null;
         if (match.status === 'pending' || (waiting && match.status === 'ready')) {
-            box.appendChild(A.el('div', {'class': 'ar-alert ar-alert-info', style: 'width: 100%;',
-                text: match.status === 'pending' ? TEXT.pendingPlayers : TEXT.tournamentNotStarted}));
-        }
-        if (match.status === 'ready' && !waiting) box.appendChild(button(TEXT.call, 'ar-btn-big', function () { act({action: 'call'}); }));
-        if (g && g.status === 'prepared' && ['ready', 'called', 'playing'].indexOf(match.status) !== -1 && !waiting) {
-            var start = button(TEXT.start, 'ar-btn-big ar-btn-green', function () {
-                // Unsaved problems of this game are saved first, so what is on the screen is what gets played.
-                var row = problemRows[g.number];
-                if (row && row.dirty()) {
-                    act({action: 'problems', number: g.number, problems: row.editor.get()}, function () {
-                        act({action: 'start', game: g.id});
-                    });
-                } else {
-                    act({action: 'start', game: g.id});
-                }
-            });
-            var row = problemRows[g.number];
-            start.disabled = !g.problems.length && !match.draw.auto && !(row && row.editor.get().length);
-            box.appendChild(start);
-        }
-        if (g && (g.status === 'live' || g.status === 'countdown')) {
+            // A tournament being prepared says so first: a battle of the first round can be waiting for a place
+            // without a name yet (2026-11-03), and its players do not come from any previous round.
+            box.appendChild(muted(waiting ? TEXT.tournamentNotStarted : TEXT.pendingPlayers));
+        } else if (match.status === 'ready') {
+            box.appendChild(button(TEXT.call, 'ar-btn-big', function () { act({action: 'call'}); }));
+            box.appendChild(muted(TEXT.callHint));
+        } else if (g && (g.status === 'countdown' || g.status === 'live')) {
+            var standing = g.standing || {};
+            box.appendChild(A.el('span', {'class': 'am-live-dot'}));
+            box.appendChild(A.el('b', {text: fill(g.status === 'countdown' ? TEXT.startsIn : TEXT.playing, {number: g.number})}));
+            box.appendChild(A.el('span', {'class': 'mm-clock', id: 'mm-clock'}));
+            box.appendChild(muted(names.a + ' ' + A.points((standing.a || {}).score || 0) + ' · ' + names.b + ' ' + A.points((standing.b || {}).score || 0)));
+            box.appendChild(A.el('span', {'class': 'ar-grow'}));
             box.appendChild(button(TEXT.plus1, 'ar-btn-plain', function () { act({action: 'extend', game: g.id, minutes: 1}); }));
             box.appendChild(button(TEXT.plus5, 'ar-btn-plain', function () { act({action: 'extend', game: g.id, minutes: 5}); }));
-        }
-        if (g && g.status === 'verifying') {
-            box.appendChild(button(TEXT.finalize, '', function () {
+            tickClock();
+        } else if (g && g.status === 'verifying') {
+            box.appendChild(A.el('b', {text: fill(TEXT.verifyingNow, {number: g.number})}));
+            box.appendChild(button(TEXT.finalize, 'ar-btn-plain', function () {
                 confirmed(TEXT.finalize, TEXT.finalizeConfirm, TEXT.finalize, {action: 'finalize', game: g.id});
             }));
+        } else if (g && g.status === 'prepared' && open && !waiting) {
+            box.appendChild(startButton(g));
+            if (tied && match.status === 'playing') {
+                box.appendChild(muted(fill(TEXT.tiedNow, {number: tied.number})));
+                ['a', 'b'].forEach(function (slot) {
+                    box.appendChild(button(fill(TEXT.giveGameTo, {name: names[slot]}), 'ar-btn-plain', function () {
+                        confirmed(fill(TEXT.giveGameTo, {name: names[slot]}), TEXT.giveConfirm, fill(TEXT.giveGameTo, {name: names[slot]}),
+                                  {action: 'declare', game: tied.id, slot: slot});
+                    }));
+                });
+                // The game to break the tie, without problems yet: the way to choose them, as between other games.
+                if (!g.problems.length && !match.draw.auto && !(problemRows[g.number] && problemRows[g.number].editor.get().length)) {
+                    box.appendChild(A.el('a', {href: '#problems', text: TEXT.chooseThem, onclick: function (event) {
+                        event.preventDefault(); tabs.show('problems', true);
+                    }}));
+                }
+            } else if (!g.problems.length && !match.draw.auto && !(problemRows[g.number] && problemRows[g.number].editor.get().length)) {
+                box.appendChild(muted(fill(TEXT.needProblems, {number: g.number})));
+                box.appendChild(A.el('a', {href: '#problems', text: TEXT.chooseThem, onclick: function (event) {
+                    event.preventDefault(); tabs.show('problems', true);
+                }}));
+            } else {
+                var out = ['a', 'b'].filter(function (slot) { return state.players[slot].id && !state.players[slot].connected; });
+                if (out.length) {
+                    box.appendChild(A.el('span', {'class': 'ar-muted'}, [A.el('i', {'class': 'fa fa-exclamation-triangle am-warn', 'aria-hidden': 'true'}),
+                        ' ' + (out.length === 2 ? TEXT.bothOut : fill(TEXT.oneOut, {name: names[out[0]]}))]));
+                }
+            }
+        } else if (match.status === 'decided' && match.winner) {
+            // The score is right above (2026-11-04): only who won, and how if it was not by playing.
+            var line = match.reason === 'walkover' ? fill(TEXT.wonWalkover, {name: names[match.winner]})
+                : fill(TEXT.wonPlain, {name: names[match.winner]}) + '.';
+            box.appendChild(A.el('b', {text: line}));
+            if (match.reason && match.reason !== 'games' && match.reason !== 'walkover' && TEXT.reasons[match.reason]) {
+                box.appendChild(muted(TEXT.reasons[match.reason]));
+            }
+        } else if (match.status === 'cancelled') {
+            box.appendChild(A.el('b', {text: TEXT.cancelled}));
         }
-        // A tied game while nothing is being played: the panel shows the tiebreak prepared with it, so the tied game
-        // gets its own buttons, as the guide says (duelos-nucleo-v1, 2026-10-28).
-        var tied = match.tie ? state.games.filter(function (game) { return game.id === match.tie; })[0] : null;
-        if (tied && match.status === 'playing' && !(g && g.id === tied.id)) {
-            box.appendChild(A.el('div', {'class': 'ar-alert ar-alert-warn', style: 'width: 100%;',
-                text: TEXT.game + ' ' + tied.number + ': ' + TEXT.tie}));
-            ['a', 'b'].forEach(function (slot) {
-                box.appendChild(button(TEXT.give + ' ' + names[slot], 'ar-btn-plain', function () {
-                    confirmed(TEXT.give + ' ' + names[slot], TEXT.giveConfirm, TEXT.give + ' ' + names[slot],
-                              {action: 'declare', game: tied.id, slot: slot});
-                }));
-            });
+        if (match.tournament && (match.status === 'decided' || match.status === 'cancelled')) {
+            box.appendChild(A.el('span', {'class': 'ar-grow'}));
+            box.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', text: TEXT.seeTournament,
+                                       href: {{ url('arena_manage_tournament', 'x')|tojson }}.replace('/x/', '/' + match.tournament.slug + '/')}));
         }
+        drawProblems();
+    }
+
+    // «Something went wrong?»: what changes the result by hand, out of the way of the main button.
+    function drawProblems() {
+        var match = state.match, g = current();
+        var names = {a: state.players.a.name, b: state.players.b.name};
+        var box = A.clear(document.getElementById('mm-danger'));
+        var bothPlayers = !!(state.players.a.id && state.players.b.id);
         if (g && ['countdown', 'live', 'verifying', 'tie'].indexOf(g.status) !== -1 && match.status === 'playing') {
+            box.appendChild(button(TEXT.cancelGame, 'ar-btn-plain', function () {
+                confirmed(TEXT.cancelGame, TEXT.cancelGameConfirm, TEXT.cancelGame, {action: 'cancel_game', game: g.id}, true);
+            }));
             ['a', 'b'].forEach(function (slot) {
-                box.appendChild(button(TEXT.give + ' ' + names[slot], 'ar-btn-plain', function () {
-                    confirmed(TEXT.give + ' ' + names[slot], TEXT.giveConfirm, TEXT.give + ' ' + names[slot],
+                box.appendChild(button(fill(TEXT.giveGameTo, {name: names[slot]}), 'ar-btn-plain', function () {
+                    confirmed(fill(TEXT.giveGameTo, {name: names[slot]}), TEXT.giveConfirm, fill(TEXT.giveGameTo, {name: names[slot]}),
                               {action: 'declare', game: g.id, slot: slot});
                 }));
             });
-            box.appendChild(button(TEXT.cancelGame, 'ar-btn-red', function () {
-                confirmed(TEXT.cancelGame, TEXT.cancelGameConfirm, TEXT.cancelGame, {action: 'cancel_game', game: g.id}, true);
-            }));
         }
-        var danger = A.clear(document.getElementById('mm-danger'));
         if (match.status !== 'decided' && match.status !== 'cancelled') {
             (bothPlayers ? ['a', 'b'] : []).forEach(function (slot) {
-                danger.appendChild(button(TEXT.walkover + ' ' + names[slot], 'ar-btn-plain', function () {
-                    confirmed(TEXT.walkover + ' ' + names[slot], TEXT.walkoverConfirm, TEXT.walkover + ' ' + names[slot],
+                box.appendChild(button(fill(TEXT.walkover, {name: names[slot]}), 'ar-btn-plain', function () {
+                    confirmed(fill(TEXT.walkover, {name: names[slot]}), TEXT.walkoverConfirm, fill(TEXT.walkover, {name: names[slot]}),
                               {action: 'walkover', slot: slot}, true);
                 }));
             });
-            if (match.quick) danger.appendChild(button(TEXT.cancelMatch, 'ar-btn-red', function () {
+            if (match.quick) box.appendChild(button(TEXT.cancelMatch, 'ar-btn-red', function () {
                 confirmed(TEXT.cancelMatch, TEXT.cancelMatchConfirm, TEXT.cancelMatch, {action: 'cancel'}, true);
             }));
         } else if (match.status === 'decided' && match.tournament && match.winner) {
             var loser = match.winner === 'a' ? 'b' : 'a';
-            danger.appendChild(button(TEXT.correct + ' ' + names[loser], 'ar-btn-plain', function () {
-                confirmed(TEXT.correct + ' ' + names[loser], TEXT.correctConfirm, TEXT.correct + ' ' + names[loser],
+            box.appendChild(button(fill(TEXT.correct, {name: names[loser]}), 'ar-btn-plain', function () {
+                confirmed(fill(TEXT.correct, {name: names[loser]}), TEXT.correctConfirm, fill(TEXT.correct, {name: names[loser]}),
                           {action: 'set_winner', slot: loser}, true);
             }));
         }
-        // A panel with nothing to offer is not shown at all.
-        $(danger).closest('section').prop('hidden', !danger.children.length);
+        // Folded, and not there at all with nothing to offer.
+        $('#mm-wrong').prop('hidden', !box.children.length);
     }
 
-    // ------------------------------------------------------------ screens
-    function screenUrl(token, view) { return {{ url('arena_screen', 'TOKEN')|tojson }}.replace('TOKEN', token) + '?view=' + view; }
-
+    // ------------------------------------------------------------ projectors
     function renderScreens() {
-        var box = A.clear(document.getElementById('mm-screens'));
+        var showing = state.screens.filter(function (s) { return s.mode === 'match' && s.match === state.match.id; });
+        var summary = A.clear(document.getElementById('mm-screen-summary'));
+        summary.appendChild(A.el('i', {'class': 'fa fa-desktop', 'aria-hidden': 'true'}));
+        summary.appendChild(document.createTextNode(' ' + (showing.length ? showing.map(function (s) {
+            return fill(TEXT.showsIt, {name: s.name, view: TEXT.views[s.view] || s.view});
+        }).join(' · ') : TEXT.showOn)));
+        var box = A.clear(document.getElementById('mm-screen-buttons'));
         state.screens.forEach(function (screen) {
-            var showing = screen.mode === 'match' && screen.match === state.match.id;
-            var links = ['combined', 'scoreboard', 'code-a', 'code-b', 'statements'].map(function (view) {
-                return A.el('a', {'class': 'ar-btn ar-btn-plain', href: screenUrl(screen.token, view), target: '_blank', rel: 'noopener',
-                                  text: TEXT.views[view]});
-            });
-            box.appendChild(A.el('div', {'class': 'am-item', style: 'flex-direction: column; align-items: stretch;'}, [
-                A.el('div', {'class': 'ar-row'}, [
-                    A.el('i', {'class': 'fa fa-television'}), A.el('b', {text: screen.name}), A.el('span', {'class': 'ar-grow'}),
-                    showing ? W.badge(TEXT.shown, 'ok') : button(TEXT.show + ' ' + screen.name, '', function () {
-                        A.post({{ url('arena_manage_screen_action')|tojson }}, {action: 'show', screen: screen.id, mode: 'match',
-                                                                                match: state.match.id})
-                            .then(function (data) { state.screens = data.screens; renderScreens(); }).catch(W.fail);
-                    })
-                ]),
-                A.el('div', {'class': 'am-actions'}, [A.el('span', {'class': 'ar-muted', text: TEXT.openView + ':'})].concat(links))
-            ]));
+            if (showing.indexOf(screen) !== -1) return;
+            box.appendChild(button(fill(TEXT.showOnOne, {name: screen.name}), 'ar-btn-plain', function () {
+                A.post({{ url('arena_manage_screen_action')|tojson }}, {action: 'show', screen: screen.id, mode: 'match',
+                                                                        match: state.match.id, version: screen.version})
+                    .then(function (data) {
+                        state.screens = data.screens;
+                        renderScreens();
+                        A.toast(fill(TEXT.shown, {name: screen.name}), 'ok', 2500);
+                    }).catch(W.fail);
+            }));
         });
+        box.appendChild(A.el('a', {href: {{ url('arena_manage_screens')|tojson }}, text: state.screens.length ? TEXT.projectors : TEXT.connect}));
     }
 
     function renderLog() {
@@ -693,121 +780,128 @@ $(function () {
 {% block body %}
 <form id="ar-csrf" hidden>{% csrf_token %}</form>
 <div class="am-page">
-    <p class="ar-row"><a href="{{ url('arena_manage') }}"><i class="fa fa-arrow-left"></i> {{ _('Battle panel') }}</a>
+    {% include "arena/manage/_nav.html" %}
+    <div class="am-head">
+        {% if state.match.tournament %}
+            <a href="{{ url('arena_manage_tournament', state.match.tournament.slug) }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ state.match.tournament.name }}</a>
+        {% else %}
+            <a href="{{ url('arena_manage_quick') }}"><i class="fa fa-arrow-left" aria-hidden="true"></i> {{ _('Quick battles') }}</a>
+        {% endif %}
         <span class="ar-muted" id="mm-info"></span>
-        <span class="ar-grow"></span>
-        <a href="{{ url('arena_manage_guide') }}#batalla" target="_blank" rel="noopener"><i class="fa fa-question-circle"></i> {{ _('How does this page work?') }}</a></p>
-    <div class="mm-players" id="mm-players"></div>
-    <p class="mm-status"><b id="mm-status"></b></p>
-    <div class="ar-alert ar-alert-warn" id="mm-released" hidden>{{ _('The players are no longer kept in the arena: more than %(minutes)s minutes went by without anything happening in this battle. They are kept again when the next game starts.', minutes=state.match.idle_minutes) }}</div>
-    <div class="am-grid">
-        <div class="am-stack">
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-gamepad" aria-hidden="true"></i> {{ _('Current game') }}</h3>
-                <div class="ar-panel-body">
-                    <div id="mm-game"></div>
-                    <div class="am-actions mm-section" id="mm-controls"></div>
-                </div>
-            </section>
-            <section class="ar-panel" id="mm-problems-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-list-ol" aria-hidden="true"></i> {{ _('Problems of each game') }}</h3>
-                <div class="ar-panel-body">
-                    <p class="am-hint" id="mm-problems-hint"></p>
-                    <div id="mm-problems"></div>
-                </div>
-            </section>
-            <section class="ar-panel" id="mm-code-panel" hidden>
-                <h3 class="ar-panel-head"><i class="fa fa-code" aria-hidden="true"></i> {{ _('Live code') }}</h3>
-                <div class="mm-columns">
-                    <div>
-                        <div class="ar-muted" style="padding: .3em .7em;" id="mm-code-label-a"></div>
-                        <div class="mm-code" id="mm-code-a"></div>
-                    </div>
-                    <div>
-                        <div class="ar-muted" style="padding: .3em .7em;" id="mm-code-label-b"></div>
-                        <div class="mm-code" id="mm-code-b"></div>
-                    </div>
-                </div>
-            </section>
+    </div>
+    <section class="ar-panel" style="margin-bottom: 1em;">
+        <div class="mm-duel" id="mm-duel"></div>
+        <div class="mm-control" id="mm-control"></div>
+        <div class="am-line">
+            <details class="am-details am-plain-details">
+                <summary id="mm-screen-summary"></summary>
+                <div class="am-actions am-mt" id="mm-screen-buttons"></div>
+            </details>
+        </div>
+    </section>
+    <div class="ar-alert ar-alert-warn" id="mm-released" hidden style="margin-bottom: 1em;">{{ _('The players are no longer kept in Duels: more than %(minutes)s minutes went by without anything happening in this battle. They are kept again when the next game starts.', minutes=state.match.idle_minutes) }}</div>
+    <div class="tabs am-subtabs" id="mm-tabs">
+        <ul>
+            <li class="tab"><a href="#live" data-tab="live"><i class="tab-icon fa fa-code"></i> {{ _('Live') }}</a></li>
+            <li class="tab"><a href="#problems" data-tab="problems"><i class="tab-icon fa fa-puzzle-piece"></i> {{ _('Problems') }}</a></li>
+            <li class="tab"><a href="#settings" data-tab="settings"><i class="tab-icon fa fa-sliders"></i> {{ _('Settings') }}</a></li>
+            <li class="tab"><a href="#log" data-tab="log"><i class="tab-icon fa fa-history"></i> {{ _('Log') }}</a></li>
+        </ul>
+    </div>
+
+    <div data-pane="live">
+        <section class="ar-panel"><div class="ar-panel-body"><div id="mm-game"></div></div></section>
+        <section class="ar-panel mm-section" id="mm-code-panel" hidden>
             <div class="mm-columns">
+                <div>
+                    <div class="ar-muted" style="padding: .3em .7em;"><span class="am-a">{{ _('Player A') }}</span> · <span id="mm-code-label-a"></span></div>
+                    <div class="mm-code" id="mm-code-a"></div>
+                </div>
+                <div>
+                    <div class="ar-muted" style="padding: .3em .7em;"><span class="am-b">{{ _('Player B') }}</span> · <span id="mm-code-label-b"></span></div>
+                    <div class="mm-code" id="mm-code-b"></div>
+                </div>
+            </div>
+        </section>
+        <div class="mm-columns mm-section" id="mm-subs-panel" hidden>
+            <section class="ar-panel">
+                <h3 class="ar-panel-head">{{ _('Submissions of A') }}</h3>
+                <div class="mm-flags" id="mm-flags-a"></div>
+                <div class="mm-subs" id="mm-subs-a"></div>
+            </section>
+            <section class="ar-panel">
+                <h3 class="ar-panel-head">{{ _('Submissions of B') }}</h3>
+                <div class="mm-flags" id="mm-flags-b"></div>
+                <div class="mm-subs" id="mm-subs-b"></div>
+            </section>
+        </div>
+        <details class="am-details ar-panel mm-section" id="mm-wrong" style="padding: .5em .8em;" hidden>
+            <summary>{{ _('Something went wrong?') }}</summary>
+            <div class="am-actions am-mt" id="mm-danger"></div>
+        </details>
+    </div>
+
+    <div data-pane="problems" hidden>
+        <section class="ar-panel"><div class="ar-panel-body">
+            <p class="am-hint" id="mm-problems-hint"></p>
+            <div id="mm-problems"></div>
+        </div></section>
+    </div>
+
+    <div data-pane="settings" hidden>
+        <div class="am-grid">
+            <section class="ar-panel"><div class="ar-panel-body">
+                <p class="am-hint am-tight" style="margin-bottom: .8em;">{{ _('They apply from the next game on.') }}</p>
+                <div class="am-two">
+                    <div class="am-field">
+                        <label for="mm-best-of">{{ _('Games') }}</label>
+                        <select class="ar-select" id="mm-best-of">
+                            <option value="1">{{ _('A single game') }}</option>
+                            <option value="3">{{ _('Best of 3') }}</option>
+                            <option value="5">{{ _('Best of 5') }}</option>
+                            <option value="7">{{ _('Best of 7') }}</option>
+                            <option value="9">{{ _('Best of 9') }}</option>
+                        </select>
+                    </div>
+                    <div class="am-field">
+                        <label for="mm-title">{{ _('Title (optional)') }}</label>
+                        <input class="ar-input" id="mm-title" maxlength="100">
+                    </div>
+                </div>
+                <div class="am-two" id="mm-display">
+                    <div class="am-field">
+                        <label for="mm-display-a">{{ _('Who sits at A') }}</label>
+                        <input class="ar-input" id="mm-display-a" maxlength="40">
+                    </div>
+                    <div class="am-field">
+                        <label for="mm-display-b">{{ _('Who sits at B') }}</label>
+                        <input class="ar-input" id="mm-display-b" maxlength="40">
+                    </div>
+                </div>
+                <div id="mm-rules"></div>
+                <div class="am-actions am-mt"><button type="button" class="ar-btn" id="mm-save-settings">{{ _('Save') }}</button></div>
+            </div></section>
+            <div class="am-stack">
                 <section class="ar-panel">
-                    <h3 class="ar-panel-head" style="border-top: 4px solid var(--ar-a);">{{ _('Submissions of A') }}</h3>
-                    <div class="mm-flags" id="mm-flags-a"></div>
-                    <div class="mm-subs" id="mm-subs-a"></div>
+                    <h3 class="ar-panel-head"><i class="fa fa-user-plus" aria-hidden="true"></i> {{ _('Organizers') }}</h3>
+                    <div class="ar-panel-body">
+                        <p class="am-hint" id="mm-organizers-tournament" hidden>{{ _('Those of the tournament. They change on its page.') }}</p>
+                        <div id="mm-organizers"></div>
+                        <div class="am-actions am-mt" id="mm-organizers-actions"{% if state.match.tournament %} hidden{% endif %}><button type="button" class="ar-btn" id="mm-save-organizers">{{ _('Save') }}</button></div>
+                    </div>
                 </section>
                 <section class="ar-panel">
-                    <h3 class="ar-panel-head" style="border-top: 4px solid var(--ar-b);">{{ _('Submissions of B') }}</h3>
-                    <div class="mm-flags" id="mm-flags-b"></div>
-                    <div class="mm-subs" id="mm-subs-b"></div>
+                    <h3 class="ar-panel-head"><i class="fa fa-signal" aria-hidden="true"></i> {{ _('Ranking') }}</h3>
+                    <div class="ar-panel-body"><span id="mm-ranking-state"></span>
+                        <span class="am-hint" id="mm-ranking-who">{{ _('Approved by whoever has the permission.') }}</span>
+                        <a class="ar-btn ar-btn-plain" id="mm-ranking-link" hidden>{{ _('Approve results') }}</a></div>
                 </section>
             </div>
         </div>
-        <div class="am-stack">
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-television" aria-hidden="true"></i> {{ _('Screens') }}</h3>
-                <div class="ar-panel-body"><div class="am-list" id="mm-screens"></div></div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-sliders" aria-hidden="true"></i> {{ _('Settings') }}</h3>
-                <div class="ar-panel-body">
-                    <p class="am-hint">{{ _('Changes apply from the next game on; a game already started keeps its rules.') }}</p>
-                    <div class="am-two">
-                        <div class="am-field">
-                            <label for="mm-best-of">{{ _('Games per battle') }}</label>
-                            <select class="ar-select" id="mm-best-of">
-                                <option value="1">{{ _('A single game') }}</option>
-                                <option value="3">{{ _('Best of 3') }}</option>
-                                <option value="5">{{ _('Best of 5') }}</option>
-                                <option value="7">{{ _('Best of 7') }}</option>
-                                <option value="9">{{ _('Best of 9') }}</option>
-                            </select>
-                        </div>
-                        <div class="am-field">
-                            <label for="mm-title">{{ _('Title (optional)') }}</label>
-                            <input class="ar-input" id="mm-title" maxlength="100">
-                        </div>
-                    </div>
-                    <div class="am-two" id="mm-display">
-                        <div class="am-field">
-                            <label for="mm-display-a">{{ _('Name to show for A') }}</label>
-                            <input class="ar-input" id="mm-display-a" maxlength="40">
-                        </div>
-                        <div class="am-field">
-                            <label for="mm-display-b">{{ _('Name to show for B') }}</label>
-                            <input class="ar-input" id="mm-display-b" maxlength="40">
-                        </div>
-                    </div>
-                    <div id="mm-rules"></div>
-                    <div class="am-actions mm-section"><button type="button" class="ar-btn" id="mm-save-settings">{{ _('Save settings') }}</button></div>
-                </div>
-            </section>
-            <section class="ar-panel" id="mm-ranking-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-signal" aria-hidden="true"></i> {{ _('Ranking of the duels') }}</h3>
-                <div class="ar-panel-body">
-                    <p id="mm-ranking-state"></p>
-                    <p class="am-hint">{{ _('Whether its games count for the ranking of the duels is decided by whoever has the permission to decide the ranking, not by whoever organizes. Until then they do not count.') }}</p>
-                    <a class="ar-btn ar-btn-plain" id="mm-ranking-link" hidden><i class="fa fa-gavel" aria-hidden="true"></i> {{ _('Decide what counts') }}</a>
-                </div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-user-plus" aria-hidden="true"></i> {{ _('Organizers') }}</h3>
-                <div class="ar-panel-body">
-                    <p class="am-hint" id="mm-organizers-quick">{{ _('Besides whoever organizes all battles, only these people see and run this battle. Add whoever helps you; they need a permission to organize battles.') }}</p>
-                    <p class="am-hint" id="mm-organizers-tournament" hidden>{{ _('The battles of a tournament are run by the organizers of the tournament. Change them on the page of the tournament.') }}
-                        {% if state.match.tournament %}<a href="{{ url('arena_manage_tournament', state.match.tournament.slug) }}">{{ state.match.tournament.name }}</a>{% endif %}</p>
-                    <div id="mm-organizers"></div>
-                    <div class="am-actions mm-section" id="mm-organizers-actions"{% if state.match.tournament %} hidden{% endif %}><button type="button" class="ar-btn" id="mm-save-organizers">{{ _('Save organizers') }}</button></div>
-                </div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-exclamation-triangle" aria-hidden="true"></i> {{ _('End the battle') }}</h3>
-                <div class="ar-panel-body"><div class="am-actions" id="mm-danger"></div></div>
-            </section>
-            <section class="ar-panel">
-                <h3 class="ar-panel-head"><i class="fa fa-history" aria-hidden="true"></i> {{ _('Log') }}</h3>
-                <div class="mm-log" id="mm-log"></div>
-            </section>
-        </div>
+    </div>
+
+    <div data-pane="log" hidden>
+        <section class="ar-panel"><div class="mm-log" id="mm-log"></div></section>
     </div>
 </div>
 {% endblock %}

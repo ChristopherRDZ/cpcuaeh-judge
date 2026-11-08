@@ -2,11 +2,12 @@
 
 Players get one page, /duelos/, that follows them through the whole battle on its own: waiting room, countdown,
 play and result. It asks the server for its state every second or two; there is no other channel. With no battle it
-shows the tabs of the duels and what the history of the tournaments has (judge/arena/history.py, 2026-10-25); without
-an account, /duelos/ is only that, with a way to sign in, instead of sending to the sign-in page.
+shows the tabs of the duels and says that the battle will open there on its own. Without an account /duelos/ sends to
+the tournaments (2026-11-03): there is nothing to play.
 
 Screens are opened with a secret link and no login. After the first load the token travels in a header, not in
-the URL, so it does not end up in access logs with every poll.
+the URL, so it does not end up in access logs with every poll. Since 2026-11-03 the computer of a projector can also
+open /proyector, which shows a code: an organizer types it in the panel and that page opens the screen.
 """
 import json
 import logging
@@ -15,13 +16,14 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST, require_safe
 
-from judge.arena import access, engine, history, live_code, serialize
+from judge.arena import access, engine, live_code, serialize
 from judge.arena.engine import ArenaError
 from judge.models import ProblemTranslation
 from judge.models.arena import ArenaGame, ArenaGameProblem, ArenaScreen
@@ -43,7 +45,8 @@ def _limit(name, default):
 
 __all__ = ['arena_home', 'arena_state', 'arena_statement', 'arena_submit', 'arena_code', 'arena_code_mine',
            'arena_submission', 'arena_screen', 'arena_screen_state', 'arena_screen_code', 'arena_screen_statement',
-           'json_response', 'json_error', 'read_json', 'can_manage', 'legacy_redirect']
+           'arena_projector', 'arena_projector_state', 'json_response', 'json_error', 'read_json', 'can_manage',
+           'legacy_redirect']
 
 
 class TemporaryRedirect(HttpResponseRedirect):
@@ -115,11 +118,9 @@ def _ace_context():
 @require_safe
 def arena_home(request):
     # GET and HEAD (produccion-datos-docs-2, 2026-10-28): a monitor asking HEAD /duelos/ got a 405.
+    # Without a session there are no battles to play: the tournaments (2026-11-03).
     if not request.user.is_authenticated:
-        return render(request, 'arena/history/list.html', {
-            'title': _('Arena'), 'history_tab': 'home', 'can_manage': False, 'watch_called': False,
-            'sections': history.summary(), 'full': False,
-        })
+        return HttpResponseRedirect(reverse('arena_history'))
     state = serialize.player_state(request.profile, request.LANGUAGE_CODE)
     context = {
         'title': _('Arena'),
@@ -128,7 +129,6 @@ def arena_home(request):
         'ace_theme': request.profile.resolved_ace_theme,
         'default_language_key': request.profile.language.key if request.profile.language_id else '',
         'history_tab': 'home',
-        'sections': history.summary(),
     }
     context.update(_ace_context())
     return render(request, 'arena/play.html', context)
@@ -291,11 +291,14 @@ def arena_screen(request, token):
     if screen is None:
         raise Http404()
     request.no_profile_update = True
+    # With ?view= in its address a tab keeps that view; without it, it shows the one chosen in the panel (2026-11-03).
+    fixed_view = request.GET.get('view') if request.GET.get('view') in engine.SCREEN_VIEWS else ''
     context = {
         'title': screen.name,
         'screen_token': screen.token,
         'state': serialize.screen_state(screen, request.LANGUAGE_CODE),
-        'view': request.GET.get('view', 'combined'),
+        'view': fixed_view or screen.view,
+        'fixed_view': fixed_view,
         'forced_theme': request.GET.get('theme') if request.GET.get('theme') in ('dark', 'light') else '',
     }
     context.update(_ace_context())
@@ -308,6 +311,7 @@ def arena_screen_state(request):
     screen = _screen_from_header(request)
     if not live_code.allow('screen', screen.pk, _limit('CPC_ARENA_SCREEN_PER_SECOND', 30)):
         return json_error(_('Too many requests.'), status=429)
+    engine.mark_screen_seen(screen.pk, request.GET.get('fixed'))
     return _private(json_response(serialize.screen_state(screen, request.LANGUAGE_CODE)))
 
 
@@ -342,3 +346,49 @@ def arena_screen_statement(request, order):
         raise Http404()
     response = render(request, 'arena/statement.html', _statement_context(request, game, order))
     return _private(response)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Connecting a projector with a code (2026-11-03): /proyector
+# ---------------------------------------------------------------------------------------------------------------
+
+PAIR_CODE_HEADER = 'X-Arena-Pair-Code'
+PAIR_SECRET_HEADER = 'X-Arena-Pair-Secret'
+
+
+def _client_ip(request):
+    # Nginx puts the address Cloudflare saw here (CF-Connecting-IP, 2026-10-14).
+    return (request.META.get('REMOTE_ADDR') or '-')[:64]
+
+
+@require_safe
+@never_cache
+def arena_projector(request):
+    """The page to open on the computer of a projector: a code to type in the panel, without a session."""
+    request.no_profile_update = True
+    pairing = None
+    if live_code.allow('pair-new', _client_ip(request), _limit('CPC_ARENA_PAIR_PER_MINUTE', 10), window=60):
+        pairing = engine.new_pairing()
+    context = {
+        'title': _('Projector'),
+        'pair_code': pairing[0] if pairing else '',
+        'pair_secret': pairing[1] if pairing else '',
+    }
+    return _private(render(request, 'arena/projector.html', context))
+
+
+@require_GET
+@never_cache
+def arena_projector_state(request):
+    """For the page /proyector: whether an organizer typed its code yet, and then the address of its screen."""
+    request.no_profile_update = True
+    code = engine.clean_pair_code(request.headers.get(PAIR_CODE_HEADER, ''))
+    secret = request.headers.get(PAIR_SECRET_HEADER, '')
+    if code is None or not secret or len(secret) > 64:
+        return _private(json_response({'status': 'expired'}))
+    if not live_code.allow('pair-state', code, _limit('CPC_ARENA_PAIR_STATE_PER_SECOND', 3)):
+        return json_error(_('Too many requests.'), status=429)
+    found = engine.pairing_token(code, secret)
+    if found in ('waiting', 'expired'):
+        return _private(json_response({'status': found}))
+    return _private(json_response({'status': 'ready', 'url': reverse('arena_screen', args=[found])}))

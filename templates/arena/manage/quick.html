@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block media %}
+{% include "arena/_style.html" %}
+{% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block js_media %}
+{% include "arena/_js.html" %}
+{% include "arena/manage/_widgets.html" %}
+{% endblock %}
+
+{# Quick battles (2026-11-03): the open ones and the finished ones, 20 per page. #}
+{% block body %}
+<div class="am-page">
+    {% include "arena/manage/_nav.html" %}
+    <p class="am-filter">
+        {% for key, label in (('open', _('Open (%(count)s)', count=counts.open)), ('done', _('Ended (%(count)s)', count=counts.done))) %}
+            {% if show == key %}<a class="am-current">{{ label }}</a>
+            {% else %}<a href="?show={{ key }}">{{ label }}</a>{% endif %}
+        {% endfor %}
+    </p>
+    <section class="ar-panel">
+        <table class="am-table">
+            <thead><tr><th>{{ _('Players') }}</th><th>{{ _('Status') }}</th><th>{{ _('Result') }}</th>
+                <th>{{ _('Created') if show == 'open' else _('Ended') }}</th><th></th></tr></thead>
+            <tbody>
+            {% for match in page_obj.object_list %}
+                <tr>
+                    <td><a href="{{ url('arena_manage_match', match.id) }}"><b>{{ match.shown_name('a') }}</b> {{ _('vs') }} <b>{{ match.shown_name('b') }}</b></a>
+                        {% set details = [match.title] if match.title else [] %}
+                        {% set details = details + [_('best of %(count)s', count=match.best_of)] if match.best_of > 1 else details %}
+                        {% set details = details + [_('club laptops')] if match.display_name_a or match.display_name_b else details %}
+                        {% if details %}<span class="am-sub">{{ details|join(' · ') }}</span>{% endif %}</td>
+                    <td>
+                        {% if match.live_game %}<span class="am-live-dot"></span> {{ _('Game %(number)s being played', number=match.live_game) }}
+                        {% elif match.status == 'ready' %}{{ _('Not sent to the waiting room') }}
+                        {% elif match.status == 'called' %}{{ _('In the waiting room') }}
+                        {% elif match.status == 'playing' %}{{ _('Between games') }}
+                        {% elif match.status == 'decided' and match.winner_slot %}{{ _('%(name)s won', name=match.shown_name(match.winner_slot)) }}
+                        {% elif match.status == 'cancelled' %}{{ _('Called off') }}
+                        {% endif %}</td>
+                    <td class="am-score">{% if match.best_of > 1 or match.status == 'decided' %}{{ match.wins_a }}–{{ match.wins_b }}{% endif %}</td>
+                    <td class="ar-muted">{{ (match.created_at if show == 'open' else (match.decided_at or match.created_at))|date(_("M j, Y, G:i")) }}</td>
+                    <td class="am-act" style="text-align: right;"><a class="ar-btn ar-btn-plain" href="{{ url('arena_manage_match', match.id) }}">{{ _('Open') if show == 'open' else _('See') }}</a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5" class="ar-muted">{{ _('No open battles.') if show == 'open' else _('No finished battles yet.') }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="am-pages">
+                <span class="ar-muted">{{ _('%(first)s–%(last)s of %(total)s', first=page_obj.start_index(), last=page_obj.end_index(), total=page_obj.paginator.count) }}</span>
+                {% include "list-pages.html" %}
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{# /proyector (2026-11-03): the page to open on the computer of a projector. It shows a code; an organizer types it
+   in the panel, in Projectors, and this page opens that screen by itself. Nobody passes the secret link around. #}
+{% block title %}{{ title }} - {{ SITE_LONG_NAME }}{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block title_row %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block media %}
+{% include "arena/_style.html" %}
+{% include "arena/_chrome.html" %}
+<style>
+    /* Like a projector screen: nothing of the site but its logo. */
+    #navigation { display: none !important; }
+    html { font-size: clamp(13px, 0.95vw, 22px); }
+    .pj-app { min-height: 100vh; display: flex; flex-direction: column; color: var(--ar-fg); }
+    .pj-top { display: flex; align-items: center; height: 4.2em; padding: 0 1.4em; background: var(--ar-bg);
+              border-bottom: 1px solid var(--ar-border); flex: 0 0 auto; }
+    .pj-top img { height: 3em; width: auto; display: block; }
+    .pj-center { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                 gap: 1em; padding: 2em; text-align: center; }
+    .pj-lead { font-size: 2em; font-weight: 600; }
+    .pj-help { font-size: 1.4em; color: var(--ar-muted); max-width: 32em; margin: 0; }
+    .pj-code { font-size: 6em; font-weight: bold; letter-spacing: .12em; font-variant-numeric: tabular-nums;
+               font-family: Consolas, "DejaVu Sans Mono", "Courier New", monospace; padding: .1em .5em;
+               border: 1px solid var(--ar-border); border-radius: 6px; background: var(--ar-bg); }
+</style>
+{% endblock %}
+
+{% block js_media %}
+{% include "arena/_js.html" %}
+<script type="text/javascript">
+$(function () {
+    var A = window.Arena;
+    var CODE = {{ pair_code|tojson }}, SECRET = {{ pair_secret|tojson }};
+    var STATE = {{ url('arena_projector_state')|tojson }};
+    var TEXT = {opening: {{ _('Connected. Opening...')|tojson }}};
+    // Without a code (too many asked from here, or the cache is down): another try in a minute.
+    if (!CODE) { setTimeout(function () { window.location.reload(); }, 60000); return; }
+    function poll() {
+        A.get(STATE, {'X-Arena-Pair-Code': CODE, 'X-Arena-Pair-Secret': SECRET}).then(function (data) {
+            if (data.status === 'ready' && data.url) {
+                $('#pj-help').text(TEXT.opening);
+                window.location.replace(data.url);
+                return;
+            }
+            // Ten minutes went by: a new code.
+            if (data.status === 'expired') { window.location.reload(); return; }
+            setTimeout(poll, 2000);
+        }).catch(function () { setTimeout(poll, 5000); });
+    }
+    setTimeout(poll, 2000);
+});
+</script>
+{% endblock %}
+
+{% block body %}
+<div class="pj-app ar-page">
+    <header class="pj-top"><img class="site-logo" src="{{ static('icons/logo.png') }}" alt="{{ SITE_NAME }}"></header>
+    <main class="pj-center">
+        <div class="pj-lead">{{ _('Connect this projector') }}</div>
+        {% if pair_code %}
+            <p class="pj-help" id="pj-help">{{ _('In the battle panel, go to Projectors and type this code:') }}</p>
+            <div class="pj-code" id="pj-code">{{ pair_code[:3] }} {{ pair_code[3:] }}</div>
+        {% else %}
+            <p class="pj-help">{{ _('A code could not be shown right now. It tries again in a minute.') }}</p>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

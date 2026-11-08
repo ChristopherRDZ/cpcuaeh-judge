@@ -7,11 +7,17 @@ asks `arena_history_called` every few seconds).
 
 A tournament being played refreshes its page every few seconds. That answer is the same for everybody and is kept
 for a few seconds, so many people watching cost about as much as one; it never moves a game forward.
+
+Since 2026-11-03 the finished tournaments come 20 at a time (?page=), with the pages of the site's lists; what is
+being played and what comes next, only on the first page. The ranking and the page to decide what counts use the
+same pages (`paginate`, `page_links`).
 """
 import hashlib
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.core.paginator import InvalidPage
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -21,9 +27,11 @@ from django.views.decorators.http import require_GET, require_POST, require_safe
 from judge.arena import access, history, lock, serialize, tournament as arena_tournament
 from judge.arena.engine import ArenaError
 from judge.models.arena import ArenaTournament
+from judge.utils.diggpaginator import DiggPaginator
 from judge.views.arena import json_error, json_response, read_json
 
-__all__ = ['history_list', 'history_tournament', 'history_tournament_state', 'history_called', 'history_visibility']
+__all__ = ['history_list', 'history_tournament', 'history_tournament_state', 'history_called', 'history_visibility',
+           'paginate', 'page_links']
 
 STATE_SECONDS = 4
 POLL_MS = 8000
@@ -33,6 +41,34 @@ CALLED_POLL_MS = 5000
 def _held(request):
     profile = getattr(request, 'profile', None)
     return profile is not None and lock.is_held(profile.pk)
+
+
+def paginate(items, per_page, number, clamp=False):
+    """Page `number` of `items` (a list or an ordered queryset), with the paginator of the site's lists
+    (DiggPaginatorMixin, list-pages.html). `number` as it came in the address; none is the first page. One that is
+    not a whole number, below 1 or past the end is a 404, as on the lists of problems and users; with `clamp`, one
+    past the end is the last page instead (the page to decide loads itself again after every decision, and its last
+    page can empty)."""
+    paginator = DiggPaginator(items, per_page, body=6, padding=2)
+    try:
+        number = int(number or 1)
+    except (TypeError, ValueError):
+        raise Http404()
+    if clamp:
+        number = min(number, paginator.num_pages)
+    try:
+        return paginator.page(number)
+    except InvalidPage:
+        raise Http404()
+
+
+def page_links(path, name='page', keep=(), anchor=''):
+    """page_prefix, page_suffix and first_page_href for list-pages.html: `path`, the pairs of `keep` that have a
+    value (a filter, the page of another list) and `name` with the number last, then `anchor`."""
+    query = urlencode([(key, value) for key, value in keep if value])
+    first = '%s?%s' % (path, query) if query else path
+    return {'page_prefix': '%s%s%s=' % (first, '&' if query else '?', name), 'page_suffix': anchor,
+            'first_page_href': first + anchor}
 
 
 def _base_context(request, tab):
@@ -46,8 +82,10 @@ def _base_context(request, tab):
 def history_list(request):
     if _held(request):
         return HttpResponseRedirect(lock.HOME)
+    finished = paginate(history.finished(), history.FINISHED_PER_PAGE, request.GET.get('page'))
     context = _base_context(request, 'tournaments')
-    context.update({'title': _('Duel tournaments'), 'sections': history.listing(request.user), 'full': True})
+    context.update({'title': _('Duel tournaments'), 'sections': history.listing(request.user, finished), 'full': True,
+                    'finished_links': page_links(request.path)})
     return render(request, 'arena/history/list.html', context)
 
 

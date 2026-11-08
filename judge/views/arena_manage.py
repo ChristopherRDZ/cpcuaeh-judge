@@ -10,7 +10,8 @@ import logging
 from datetime import datetime
 from functools import wraps
 
-from django.db.models import Q
+from django.core.paginator import InvalidPage
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -24,6 +25,7 @@ from judge.jinja2.gravatar import gravatar
 from judge.models import Language, Profile, Submission
 from judge.models.arena import ArenaBankProblem, ArenaGame, ArenaMatch, ArenaProblemBank, ArenaScreen, \
     ArenaTournament, RANKING_PENDING, SLOT_A, SLOT_B
+from judge.utils.diggpaginator import DiggPaginator
 from judge.views.arena import _ace_context, can_manage, json_error, json_response, read_json
 
 logger = logging.getLogger('judge.arena')
@@ -34,7 +36,9 @@ MAX_ORGANIZERS = 20
 __all__ = ['manage_guide', 'manage_dashboard', 'manage_overview', 'manage_duel_create', 'manage_match', 'manage_match_state',
            'manage_match_action', 'manage_game_code', 'manage_submission_source', 'manage_problem_search',
            'manage_user_search', 'manage_tournament_create', 'manage_tournament', 'manage_tournament_state',
-           'manage_tournament_action', 'manage_banks', 'manage_bank_action', 'manage_screen_action', 'manage_draw']
+           'manage_tournament_action', 'manage_banks', 'manage_bank_action', 'manage_screen_action', 'manage_draw',
+           'manage_quick', 'manage_quick_new', 'manage_tournaments', 'manage_tournament_new', 'manage_screens',
+           'manage_screens_state']
 
 
 def _languages():
@@ -199,16 +203,12 @@ def _set_organizers(actor, obj, profiles, **where):
 @manager_required
 @require_GET
 def manage_dashboard(request):
-    # A plain read: the first screen is created with the first battle or tournament, which are POSTs.
-    return render(request, 'arena/manage/dashboard.html', {
+    # «Now», the first tab (2026-11-03): what waits for the organizer and what is being played. A plain read: the
+    # first screen is created with the first battle or tournament, which are POSTs.
+    return render(request, 'arena/manage/dashboard.html', _panel(request, 'now', {
         'title': _('Battle panel'),
         'state': serialize.overview(user=request.user),
-        'defaults': arena_rules.DEFAULTS,
-        'languages': _languages(),
-        'banks': _bank_choices(request.user),
-        'sees_all': access.manages_all(request.user),
-        'decides_ranking': access.decides_ranking(request.user),
-    })
+    }))
 
 
 @manager_required
@@ -229,26 +229,29 @@ def manage_match(request, match):
         'languages': _languages(),
     }
     context.update(_ace_context())
-    return render(request, 'arena/manage/match.html', context)
+    return render(request, 'arena/manage/match.html',
+                  _panel(request, 'tournaments' if match.tournament_id else 'quick', context))
 
 
 @manager_required
 @require_GET
 def manage_tournament(request, slug):
     tournament = _own_tournament(request, slug, page=True)
-    return render(request, 'arena/manage/tournament.html', {
+    return render(request, 'arena/manage/tournament.html', _panel(request, 'tournaments', {
         'title': _('Tournament: %(name)s') % {'name': tournament.name},
         'state': serialize.tournament_state(tournament, request.LANGUAGE_CODE, user=request.user),
         'defaults': arena_rules.DEFAULTS,
         'languages': _languages(),
         'banks': _bank_choices(request.user, tournament.bank_id),
-    })
+        'min_places': arena_tournament.MIN_PARTICIPANTS,
+        'max_places': arena_tournament.MAX_PARTICIPANTS,
+    }))
 
 
 @manager_required
 @require_GET
 def manage_guide(request):
-    return render(request, 'arena/manage/guide.html', {'title': _('Guide for organizers')})
+    return render(request, 'arena/manage/guide.html', _panel(request, 'guide', {'title': _('Guide for organizers')}))
 
 
 @manager_required
@@ -274,14 +277,150 @@ def manage_banks(request):
         entries = [{'id': e.problem_id, 'code': e.problem.code, 'name': e.problem.name, 'level': e.level,
                     'note': e.note, 'public': e.problem.is_public} for e in rows if e.problem_id in visible]
         hidden = len(rows) - len(entries)
-    return render(request, 'arena/manage/bank.html', {
+    return render(request, 'arena/manage/bank.html', _panel(request, 'banks', {
         'title': _('Problem banks'),
         'banks': banks,
         'selected': selected,
         'entries': entries,
         'hidden': hidden,
-        'sees_all': access.manages_all(request.user),
-    })
+    }))
+
+
+# The panel in tabs (2026-11-03): Now, Quick battles, Tournaments, Projectors and Problem banks, one page each.
+
+PAGE_SIZE = 20
+OPEN_MATCH = (ArenaMatch.READY, ArenaMatch.CALLED, ArenaMatch.PLAYING)
+TOURNAMENT_GROUPS = {'active': (ArenaTournament.DRAFT, ArenaTournament.RUNNING),
+                     'finished': (ArenaTournament.FINISHED,), 'archived': (ArenaTournament.ARCHIVED,)}
+
+
+def _panel(request, tab, context):
+    context.update({'panel_tab': tab, 'sees_all': access.manages_all(request.user)})
+    return context
+
+
+def _paginate(request, items, size=PAGE_SIZE):
+    """A page of `items` with the pagination of the site (list-pages.html). A page past the last one shows the last;
+    anything but a number is a page that does not exist."""
+    value = request.GET.get('page', '1')
+    if not (value.isascii() and value.isdecimal()):
+        raise Http404()
+    paginator = DiggPaginator(items, size, body=6, padding=2)
+    try:
+        page = paginator.page(int(value), softlimit=True)
+    except InvalidPage:
+        raise Http404()
+    query = request.GET.copy()
+    query.pop('page', None)
+    return {'page_obj': page, 'page_prefix': '?' + (query.urlencode() + '&' if query else '') + 'page=',
+            'page_suffix': '', 'first_page_href': None}
+
+
+def _listed_matches(user):
+    """The battles the panel lists to `user`: what they organize, but not what they are playing (serialize.overview)."""
+    profile = user.profile
+    return access.matches_for(user).exclude(Q(player_a=profile) | Q(player_b=profile), status__in=OPEN_MATCH)
+
+
+def _listed_tournaments(user):
+    return access.tournaments_for(user).exclude(id__in=access.contended_tournaments(user).values('id'))
+
+
+@manager_required
+@require_GET
+def manage_quick(request):
+    show = 'done' if request.GET.get('show') == 'done' else 'open'
+    quick = _listed_matches(request.user).filter(tournament__isnull=True)
+    groups = {'open': quick.filter(status__in=OPEN_MATCH),
+              'done': quick.filter(status__in=(ArenaMatch.DECIDED, ArenaMatch.CANCELLED))}
+    live = ArenaGame.objects.filter(match=OuterRef('pk'), status__in=ArenaGame.ACTIVE_STATUSES).values('number')[:1]
+    rows = groups[show].select_related('player_a__user', 'player_b__user').annotate(live_game=Subquery(live))
+    rows = rows.order_by('-created_at', '-id') if show == 'open' else rows.order_by('-decided_at', '-id')
+    context = _paginate(request, rows)
+    context.update({'title': _('Quick battles'), 'show': show,
+                    'counts': {key: queryset.count() for key, queryset in groups.items()}})
+    return render(request, 'arena/manage/quick.html', _panel(request, 'quick', context))
+
+
+@manager_required
+@require_GET
+def manage_quick_new(request):
+    return render(request, 'arena/manage/quick_new.html', _panel(request, 'quick', {
+        'title': _('New quick battle'),
+        'defaults': arena_rules.DEFAULTS,
+        'languages': _languages(),
+        'decides_ranking': access.decides_ranking(request.user),
+    }))
+
+
+@manager_required
+@require_GET
+def manage_tournaments(request):
+    show = request.GET.get('show') if request.GET.get('show') in TOURNAMENT_GROUPS else 'active'
+    tournaments = _listed_tournaments(request.user)
+    counts = {key: tournaments.filter(status__in=statuses).count() for key, statuses in TOURNAMENT_GROUPS.items()}
+    rows = tournaments.filter(status__in=TOURNAMENT_GROUPS[show]).annotate(
+        n_participants=Count('participants', distinct=True),
+        n_live=Count('matches', filter=Q(matches__status=ArenaMatch.PLAYING), distinct=True))
+    rows = rows.order_by('-finished_at', '-id') if show == 'finished' else rows.order_by('-created_at', '-id')
+    context = _paginate(request, rows)
+    context.update({'title': _('Tournaments'), 'show': show, 'counts': counts})
+    return render(request, 'arena/manage/tournaments.html', _panel(request, 'tournaments', context))
+
+
+@manager_required
+@require_GET
+def manage_tournament_new(request):
+    return render(request, 'arena/manage/tournament_new.html', _panel(request, 'tournaments', {
+        'title': _('New tournament'),
+        'min_places': arena_tournament.MIN_PARTICIPANTS,
+        'max_places': arena_tournament.MAX_PARTICIPANTS,
+    }))
+
+
+def _screen_choices(user, screens):
+    """What a projector can be given to show: the battles open now and the tournaments not archived, and whatever a
+    projector of theirs already shows, so its list never loses it."""
+    shown_matches = [screen['match'] for screen in screens if screen['match']]
+    shown_tournaments = [screen['tournament'] for screen in screens if screen['tournament']]
+    # The page asks for this every 3 seconds: the rounds of each tournament in the same query (n_rounds).
+    matches = serialize.with_round_count(_listed_matches(user).filter(
+        Q(status__in=OPEN_MATCH, tournament__isnull=True) |
+        Q(status__in=OPEN_MATCH, tournament__status=ArenaTournament.RUNNING) | Q(id__in=shown_matches))
+        .select_related('player_a__user', 'player_b__user', 'tournament', 'round')).order_by('-id')[:60]
+    tournaments = _listed_tournaments(user).filter(
+        Q(status__in=(ArenaTournament.DRAFT, ArenaTournament.RUNNING, ArenaTournament.FINISHED)) |
+        Q(id__in=shown_tournaments)).order_by('-created_at', '-id')[:40]
+    return {
+        'matches': [{'id': match.pk, 'name': '%s vs %s' % (match.shown_name(SLOT_A), match.shown_name(SLOT_B)),
+                     'tournament': match.tournament.name if match.tournament_id else '',
+                     'round': serialize.round_label(match) if match.tournament_id else '',
+                     'open': match.status in OPEN_MATCH} for match in matches],
+        'tournaments': [{'id': tournament.pk, 'name': tournament.name, 'status': tournament.status}
+                        for tournament in tournaments],
+    }
+
+
+def _screens_state(user):
+    screens = serialize.screens_overview(user)
+    return dict(_screen_choices(user, screens), screens=screens)
+
+
+@manager_required
+@require_GET
+def manage_screens(request):
+    return render(request, 'arena/manage/screens.html', _panel(request, 'screens', {
+        'title': _('Projectors'),
+        'state': _screens_state(request.user),
+        'projector_url': request.build_absolute_uri(reverse('arena_projector')),
+    }))
+
+
+@manager_required
+@require_GET
+def manage_screens_state(request):
+    request.no_profile_update = True
+    return json_response(_screens_state(request.user))
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -456,9 +595,10 @@ def manage_user_search(request):
     ids = [profile.pk for profile in profiles]
     busy = engine.busy_profile_ids(ids)
     organizers = set(access.eligible_organizers().filter(pk__in=ids).values_list('pk', flat=True))
+    duel = serialize.duel_rating_map(ids)
     return json_response({'results': [{
         'id': profile.pk, 'username': profile.username, 'name': profile.display_name,
-        'avatar': gravatar(profile, 48), 'rating': profile.rating,
+        'avatar': gravatar(profile, 48), 'rating': profile.rating, 'duel_rating': duel.get(profile.pk),
         'privileged': bool(profile.user.is_staff or profile.user.is_superuser or profile.pk in organizers),
         'busy': profile.pk in busy,
     } for profile in profiles]})
@@ -497,11 +637,15 @@ def _refuse_closed_bank(user, bank_id):
         raise ArenaError(_('That bank does not exist.'), status=404)
 
 
-def _profiles(values):
+def _profiles(values, empty=False):
+    """The participants sent by a page. With `empty`, a null is a place without a name yet (2026-11-03)."""
     if not isinstance(values, list) or len(values) > arena_tournament.MAX_PARTICIPANTS * 2:
         raise ArenaError(_('Invalid list of participants.'))
     profiles = []
     for value in values:
+        if empty and value is None:
+            profiles.append(None)
+            continue
         profile = _profile(value)
         if profile is None:
             raise ArenaError(_('One of the participants does not exist.'))
@@ -520,7 +664,7 @@ def manage_tournament_create(request):
         rules=data.get('rules') or {}, description=data.get('description', ''),
         bank=_bank(data.get('bank'), request.user),
         show_in_history=_history_box(data.get('show_in_history'), True), planned_at=_planned(data.get('planned_at')),
-        ranking=_ranking(request, data.get('ranking')),
+        ranking=_ranking(request, data.get('ranking')), places=data.get('places'),
     )
     return json_response({'slug': tournament.slug,
                           'url': reverse('arena_manage_tournament', args=[tournament.slug])})
@@ -553,8 +697,12 @@ def manage_tournament_action(request, slug):
             show_in_history=_history_box(data.get('show_in_history')),
             planned_at=_planned(data['planned_at']) if 'planned_at' in data else False)
     elif action == 'participants':
-        arena_tournament.set_participants(actor, tournament.pk, _profiles(data.get('participants') or []),
-                                          seeding=data.get('seeding'), version=version)
+        changed = arena_tournament.set_participants(
+            actor, tournament.pk, _profiles(data.get('participants') or [], empty=True), seeding=data.get('seeding'),
+            version=version, places=data.get('places'))
+        result['lost_problems'] = changed.lost_problems
+    elif action == 'rounds':
+        arena_tournament.set_rounds(actor, tournament.pk, data.get('rounds'), version=version)
     elif action == 'round':
         number = data.get('number')
         if isinstance(number, bool) or not isinstance(number, int):
@@ -565,7 +713,7 @@ def manage_tournament_action(request, slug):
     elif action == 'generate':
         arena_tournament.generate_bracket(actor, tournament.pk, version)
     elif action == 'start':
-        arena_tournament.start_tournament(actor, tournament.pk, version)
+        arena_tournament.start_tournament(actor, tournament.pk, version, shrink=data.get('shrink') is True)
     elif action == 'archive':
         arena_tournament.archive_tournament(actor, tournament.pk, version)
     elif action == 'fill':
@@ -655,6 +803,16 @@ def manage_screen_action(request):
     data = read_json(request)
     action = data.get('action')
     actor = request.profile
+    result = {}
+    # Connecting a projector with its code as a new one (2026-11-03): the code is checked before creating it.
+    if action == 'pair' and data.get('screen') == 'new':
+        if not engine.pairing_open(data.get('code')):
+            raise ArenaError(_('That code does not exist or has expired. Check the code on the projector.'))
+        mine = access.screens_for(request.user).count()
+        screen = engine.create_screen(actor, _('Projector %(number)s') % {'number': mine + 1})
+        engine.pair_screen(actor, data.get('code'), screen)
+        result.update({'screens': serialize.screens_overview(request.user), 'paired': screen.name})
+        return json_response(result)
     if action != 'create':
         screen_id = _id(data.get('screen'), True)
         if not access.screens_for(request.user).filter(pk=screen_id).exists():
@@ -662,14 +820,19 @@ def manage_screen_action(request):
     if action == 'create':
         engine.create_screen(actor, data.get('name'))
     elif action == 'show':
+        view = data.get('view')
         engine.show_on_screen(actor, screen_id, data.get('mode'), match=_match_arg(data.get('match'), request.user),
                               tournament=_tournament_arg(data.get('tournament'), request.user),
                               message=data.get('message', ''), follow_live=data.get('follow_live'),
-                              version=data.get('version'))
+                              version=data.get('version'), view=view if isinstance(view, str) else None)
+    elif action == 'pair':
+        screen = engine.pair_screen(actor, data.get('code'), ArenaScreen.objects.get(pk=screen_id))
+        result['paired'] = screen.name
     elif action == 'rename':
         engine.rename_screen(actor, screen_id, data.get('name'))
     elif action == 'regenerate':
         engine.regenerate_screen_token(actor, screen_id)
     else:
         raise ArenaError(_('Unknown action.'))
-    return json_response({'screens': serialize.screens_overview(request.user)})
+    result['screens'] = serialize.screens_overview(request.user)
+    return json_response(result)

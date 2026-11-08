@@ -50,6 +50,59 @@
     .am-live-dot { display: inline-block; width: .65em; height: .65em; border-radius: 50%; background: var(--ar-bad-solid);
                    animation: am-pulse 1.4s infinite; }
     @keyframes am-pulse { 50% { opacity: .3; } }
+
+    /* The panel in tabs (2026-11-03), from the mockups the owner chose: the site's tabs, a little smaller. */
+    .tabs.am-subtabs { margin: -4px 0 14px; align-items: flex-end; }
+    .tabs.am-subtabs > ul > li > a { padding: 7px 13px; font-size: .95em; cursor: pointer; }
+    .tabs.am-subtabs .am-tabs-right { display: flex; gap: .5em; align-items: center; padding-bottom: 6px; }
+    .tabs.am-subtabs .am-tabs-right a { white-space: nowrap; }
+    .am-head { display: flex; align-items: center; gap: .7em; flex-wrap: wrap; margin: 0 0 .8em; }
+    .am-head h3 { margin: 0; font-size: 1.45em; font-weight: 600; }
+    .am-rows { width: 100%; border-collapse: collapse; }
+    .am-rows td { padding: .55em .7em; border-bottom: 1px solid var(--ar-soft-border); vertical-align: middle; }
+    .am-rows tr:last-child td { border-bottom: 0; }
+    .am-rows .am-act { text-align: right; white-space: nowrap; width: 1%; }
+    .am-rows .am-what { color: var(--ar-muted); white-space: nowrap; }
+    .am-rows .am-empty-row td { color: var(--ar-muted); }
+    .am-sub { display: block; color: var(--ar-muted); font-size: .88em; margin-top: .1em; }
+    .am-group td { background: var(--ar-soft); color: var(--ar-muted); font-size: .82em; font-weight: 600;
+                   text-transform: uppercase; letter-spacing: .03em; padding: .35em .7em; }
+    .am-person { display: inline-flex; align-items: center; gap: .4em; vertical-align: middle; }
+    .am-person img { width: 1.6em; height: 1.6em; border-radius: 3px; }
+    .am-a { color: var(--ar-a); font-weight: 600; }
+    .am-b { color: var(--ar-b); font-weight: 600; }
+    .am-dot-ok { color: var(--ar-ok-solid); }
+    .am-dot-off { color: #888; }
+    .am-check { color: var(--ar-ok-solid); }
+    .am-warn { color: var(--ar-warn-solid); }
+    .am-score { font-weight: bold; font-variant-numeric: tabular-nums; }
+    .am-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .am-pages { display: flex; align-items: center; justify-content: space-between; gap: 1em; padding: .6em .7em;
+                border-top: 1px solid var(--ar-soft-border); flex-wrap: wrap; }
+    .am-pages .ar-muted { font-size: .9em; }
+    .am-pages ul.pagination { margin: 0; }
+    .am-pages ul.pagination::after { content: ''; display: table; clear: both; }
+    .am-filter { display: flex; gap: 1.2em; flex-wrap: wrap; margin: 0 0 .7em; }
+    .am-filter a.am-current { font-weight: 700; color: var(--ar-fg); text-decoration: none; cursor: default; }
+    .am-seg { display: inline-flex; flex-wrap: wrap; }
+    .am-seg .ar-btn { border-radius: 0; margin-left: -1px; }
+    .am-seg .ar-btn:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+    .am-seg .ar-btn:last-child { border-radius: 0 4px 4px 0; }
+    .am-strip { display: flex; align-items: center; gap: 1.3em; flex-wrap: wrap; padding: .6em .9em; }
+    .am-strip a { cursor: pointer; }
+    .am-line { display: flex; align-items: center; gap: .5em; flex-wrap: wrap; padding: .55em 1em;
+               border-top: 1px solid var(--ar-soft-border); }
+    .am-tight { margin: 0; }
+    .am-mt { margin-top: 1em; }
+    .am-w-num { width: 5em; }
+    .am-steps { margin: 0; padding-left: 1.2em; line-height: 1.8; }
+    .tm-choice { display: flex; gap: .6em; align-items: flex-start; padding: .6em .7em; border: 1px solid var(--ar-soft-border);
+                 border-radius: 4px; margin-bottom: .5em; cursor: pointer; }
+    .tm-choice.tm-chosen { border-color: var(--ar-blue); background: var(--ar-info-bg); }
+    .tm-choice input { margin-top: .25em; }
+    .tm-choice b { display: block; }
+    details.am-plain-details { border: 0; background: none; padding: 0; }
+    details.am-plain-details > summary { font-weight: 400; }
     @media (max-width: 900px) { .am-grid, .am-two { grid-template-columns: minmax(0, 1fr); } }
 </style>
 <script type="text/javascript">
@@ -88,6 +141,16 @@ window.ArenaWidgets = (function () {
             show_rival: {{ _('Players see the progress of the rival')|tojson }},
             screen_code: {{ _('Show the code on the screens')|tojson }},
             languages: {{ _('Languages (none checked = whatever each problem allows)')|tojson }}
+        },
+        summary: {
+            countdown: {{ _('countdown %(seconds)s s', seconds='%(seconds)s')|tojson }},
+            penalty: {{ _('%(minutes)s min per failed attempt', minutes='%(minutes)s')|tojson }},
+            noPenalty: {{ _('no penalty')|tojson }},
+            attempts: {{ _('at most %(count)s attempts', count='%(count)s')|tojson }},
+            noLimit: {{ _('no limit of attempts')|tojson }},
+            partial: {{ _('partial points')|tojson }},
+            paste: {{ _('pasting blocked')|tojson }},
+            screen: {{ _('code on the projector')|tojson }}
         }
     };
 
@@ -124,6 +187,10 @@ window.ArenaWidgets = (function () {
                     node.classList.add('am-result');
                     node.addEventListener('mousedown', function (event) {
                         event.preventDefault();
+                        // A search still on its way must not open the list again over the page (2026-11-03): picked
+                        // before it answered, the list came back by itself and the next click landed on it.
+                        clearTimeout(timer);
+                        serial++;
                         options.pick(row);
                         input.value = '';
                         close();
@@ -327,12 +394,19 @@ window.ArenaWidgets = (function () {
         };
     };
 
-    // Rules editor. `values` are the effective rules, `languages` [{key, name}].
-    W.rulesEditor = function (container, values, languages) {
+    // Rules editor. `values` are the effective rules, `languages` [{key, name}]. `options.outside` gives inputs that
+    // live elsewhere on the page ({duration: input}); `options.onChange` is told of every change.
+    W.rulesEditor = function (container, values, languages, options) {
+        options = options || {};
         var T = W.TEXT.rules;
         var inputs = {};
         var grid = A.el('div', {'class': 'am-rules'});
         function number(name, min, max) {
+            if (options.outside && options.outside[name]) {
+                inputs[name] = options.outside[name];
+                inputs[name].value = values[name];
+                return;
+            }
             var input = A.el('input', {'class': 'ar-input', type: 'number', min: min, max: max, value: values[name]});
             inputs[name] = input;
             grid.appendChild(A.el('label', {}, [input, A.el('span', {text: T[name]})]));
@@ -364,6 +438,10 @@ window.ArenaWidgets = (function () {
             });
             container.appendChild(wrap);
         }
+        if (options.onChange) {
+            container.addEventListener('input', options.onChange);
+            container.addEventListener('change', options.onChange);
+        }
         return {
             get: function () {
                 var rules = {};
@@ -393,7 +471,7 @@ window.ArenaWidgets = (function () {
         body.appendChild(A.el('div', {'class': 'am-actions'}, [
             A.el('button', {type: 'button', 'class': 'ar-btn' + (danger ? ' ar-btn-red' : ''), text: confirmLabel,
                             onclick: function () { close(); onConfirm(); }}),
-            A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: {{ _('Cancel')|tojson }}, onclick: close})
+            A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: {{ _('Go back')|tojson }}, onclick: close})
         ]));
         back.appendChild(A.el('div', {'class': 'ar-modal', style: 'width: min(560px, 100%);'},
                               [A.el('h3', {'class': 'ar-panel-head', text: title}), body]));
@@ -401,7 +479,97 @@ window.ArenaWidgets = (function () {
         document.body.appendChild(back);
     };
 
+    // A name written in a window of the site, not the one of the browser (2026-11-04). `onSave(name)` returns a promise:
+    // the window closes when it is saved and stays open, with what was written, when it fails.
+    W.nameBox = function (title, value, saveLabel, onSave) {
+        var back = A.el('div', {'class': 'ar-modal-back'});
+        var close = function () { if (back.parentNode) back.parentNode.removeChild(back); };
+        var input = A.el('input', {'class': 'ar-input', maxlength: 60, value: value || '', 'aria-label': title,
+                                   style: 'width: 100%;'});
+        var save = A.el('button', {type: 'button', 'class': 'ar-btn', text: saveLabel});
+        var busy = false;
+        function update() { save.disabled = busy || !input.value.trim(); }
+        function submit() {
+            if (save.disabled) return;
+            busy = true;
+            update();
+            onSave(input.value.trim()).then(close, function () { busy = false; update(); input.focus(); });
+        }
+        input.addEventListener('input', update);
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') submit();
+            if (event.key === 'Escape') close();
+        });
+        save.addEventListener('click', submit);
+        back.appendChild(A.el('div', {'class': 'ar-modal', style: 'width: min(420px, 100%);'}, [
+            A.el('h3', {'class': 'ar-panel-head', text: title}),
+            A.el('div', {'class': 'ar-panel-body'}, [input, A.el('div', {'class': 'am-actions'}, [
+                save, A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: {{ _('Go back')|tojson }}, onclick: close})
+            ])])
+        ]));
+        back.addEventListener('click', function (event) { if (event.target === back) close(); });
+        document.body.appendChild(back);
+        update();
+        input.focus();
+        input.select();
+    };
+
     W.fail = function (error) { A.toast(error.message || String(error), 'bad', 7000); };
+
+    // Tabs inside a page (a tournament, a battle): links with data-tab in a .tabs list, and blocks with data-pane.
+    // The open one goes in the address (#problems), so a reload or a link opens it. `onShow(name)` after each change.
+    W.subTabs = function (root, fallback, onShow) {
+        var links = Array.prototype.slice.call(root.querySelectorAll('[data-tab]'));
+        var names = links.map(function (link) { return link.getAttribute('data-tab'); });
+        var current = null;
+        function show(name, remember) {
+            if (names.indexOf(name) === -1) name = fallback;
+            current = name;
+            links.forEach(function (link) {
+                var on = link.getAttribute('data-tab') === name;
+                var item = link.closest('li');
+                if (item) item.classList.toggle('active', on);
+            });
+            document.querySelectorAll('[data-pane]').forEach(function (pane) {
+                pane.hidden = pane.getAttribute('data-pane') !== name;
+            });
+            if (remember && window.history.replaceState) window.history.replaceState(null, '', '#' + name);
+            if (onShow) onShow(name);
+        }
+        links.forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                show(link.getAttribute('data-tab'), true);
+            });
+        });
+        window.addEventListener('hashchange', function () { show(window.location.hash.slice(1), false); });
+        show(window.location.hash.slice(1) || fallback, false);
+        return {show: show, current: function () { return current; }};
+    };
+
+    // Two or more buttons of which one is chosen: the chosen one is the site's blue button, the others the plain one.
+    // The one already chosen can be pressed too: on a projector it sends that view again, to a tab where somebody
+    // changed it with the keys.
+    W.segmented = function (box, options, value, onPick) {
+        A.clear(box);
+        options.forEach(function (option) {
+            box.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn' + (option.value === value ? '' : ' ar-btn-plain'),
+                                            text: option.label, 'aria-pressed': option.value === value ? 'true' : 'false',
+                                            onclick: function () { onPick(option.value); }}));
+        });
+    };
+
+    // Words for the rules that differ from nothing: «countdown 10 s · paste blocked · ...», next to «More rules».
+    W.rulesSummary = function (rules) {
+        var T = W.TEXT.summary, parts = [];
+        parts.push(T.countdown.replace('%(seconds)s', rules.countdown));
+        parts.push(rules.penalty ? T.penalty.replace('%(minutes)s', rules.penalty) : T.noPenalty);
+        parts.push(rules.max_attempts ? T.attempts.replace('%(count)s', rules.max_attempts) : T.noLimit);
+        if (rules.partial) parts.push(T.partial);
+        if (rules.block_paste) parts.push(T.paste);
+        if (rules.screen_code) parts.push(T.screen);
+        return parts.join(' · ');
+    };
 
     // The panels refresh by themselves every few seconds. Redrawing a part of the page that did not change made the
     // clock blink and the page jump, closed a list someone was choosing from and could swallow a click, so each

@@ -398,20 +398,14 @@ $(function () {
         cancelled: {{ _('The organizer cancelled this battle.')|tojson }},
         nextGame: {{ _('Waiting for the next game...')|tojson }},
         tieNext: {{ _('The organizer will decide or start a tiebreak game.')|tojson }},
-        canLeave: {{ _('The battle is over. You can leave the arena.')|tojson }},
         // The ranking of the duels (judge/arena/rating.py, 2026-10-26), under the result of a battle.
         ranking: {
             change: {{ _('Ranking of the duels: %(rating)s (%(change)s).', rating='{rating}', change='{change}')|tojson }},
-            provisional: {{ _('It counts for the ranking of the duels. Your number appears after %(needed)s games that count; you have %(games)s.', needed='{needed}', games='{games}')|tojson }},
-            nothing: {{ _('It counts for the ranking of the duels, but no game ended with a winner.')|tojson }},
-            pending: {{ _('Whether this battle counts for the ranking of the duels is not decided yet. If it counts, your change shows in Duels → Ranking.')|tojson }},
-            excluded: {{ _('This battle does not count for the ranking of the duels.')|tojson }},
-            never: {
-                cancelled: {{ _('Cancelled: it never counts.')|tojson }},
-                bye: {{ _('A bye, nobody to play against: it never counts.')|tojson }},
-                walkover: {{ _('Won without playing on: it never counts.')|tojson }},
-                guest: {{ _('Played on a club laptop with a typed name: it never counts.')|tojson }}
-            }
+            provisional: {{ _('Your rating appears after %(needed)s games that count; you have %(games)s.', needed='{needed}', games='{games}')|tojson }},
+            nothing: {{ _('No game ended with a winner: the ranking does not change.')|tojson }},
+            pending: {{ _('Whether it counts for the ranking is decided later.')|tojson }},
+            // Excluded by the organizer, or one that never counts: why is already said above (2026-11-04).
+            none: {{ _('It does not count for the ranking.')|tojson }}
         },
         close: {{ _('Close')|tojson }},
         verifying: {{ _('Time is up. Waiting for the last verdicts...')|tojson }},
@@ -480,8 +474,8 @@ $(function () {
         seriesExplain: {{ _('Best of %(best)s: the first to win %(needed)s games wins the battle.', best='{best}', needed='{needed}')|tojson }},
         tieShort: {{ _('Tie.')|tojson }},
         voidShort: {{ _('Voided by the organizer.')|tojson }},
-        reviewFoot: {{ _('The battle is over. You can stay to look over your code and your submissions; nothing counts anymore. Leave whenever you want.')|tojson }},
-        reviewBetween: {{ _('Meanwhile you can look over this game.')|tojson }},
+        reviewBanner: {{ _('Review mode: nothing is submitted anymore.')|tojson }},
+        reviewBetweenBanner: {{ _('Review: the next game starts when the organizer starts it.')|tojson }},
         reviewGame: {{ _('Review the game')|tojson }},
         leave: {{ _('Leave the arena')|tojson }},
         backToSite: {{ _('Back to the site')|tojson }},
@@ -530,7 +524,7 @@ $(function () {
         window.addEventListener('resize', measure);
     })();
     var state = JSON.parse(document.getElementById('ar-initial').textContent);
-    var pollTimer = null, failures = 0, countdownFired = false;
+    var pollTimer = null, failures = 0, countdownFired = false, timeUpFor = null;
 
     var game = null;            // the game whose editor and statements are set up
     var sessions = {};          // order -> Ace EditSession
@@ -543,6 +537,7 @@ $(function () {
     var copied = [];            // what the player copied or cut in the editor during this game (see ownCode)
     var dirty = false, lastSent = 0, sendTimer = null, sendReason = '', sending = false, held = null;
     var resultShownFor = null, resultDismissed = null;
+    var clubCleared = null;     // the battle whose final result was closed on a club laptop (see render)
     var reviewing = false;      // the battle is over and the player stays to look it over (own account only)
 
     var editor = ace.edit('ar-editor');
@@ -746,7 +741,10 @@ $(function () {
     // club laptop (a name typed by the organizer) the game is cleared at once, as before, for the next guest.
     function editorWritable() { return state.phase === 'live' || reviewing; }
 
-    function startReview() {
+    function startReview(phase) {
+        // Between the games of a series the battle goes on (2026-11-03): no way out, and it says what comes next.
+        $('#ar-review-text').text(phase === 'between' ? TEXT.reviewBetweenBanner : TEXT.reviewBanner);
+        $('#ar-review-leave').prop('hidden', phase === 'between');
         if (reviewing) return;
         reviewing = true;
         $('#ar-review').prop('hidden', false);
@@ -833,10 +831,13 @@ $(function () {
         state = data;
         header(data);
         var phase = data.phase;
+        // A club laptop whose final result was closed goes back to the waiting screen, for whoever sits there next
+        // (2026-11-04).
+        var cleared = phase === 'decided' && !data.review && !!data.match && clubCleared === data.match.id;
         document.documentElement.classList.toggle('ar-locked', !!data.locked);
-        $('#ar-top').prop('hidden', phase === 'idle' || phase === 'cancelled');
+        $('#ar-top').prop('hidden', phase === 'idle' || phase === 'cancelled' || cleared);
         var g = data.game;
-        if (phase === 'idle') {
+        if (phase === 'idle' || cleared) {
             show('ar-idle');
             hideResult();
         } else if (phase === 'cancelled') {
@@ -857,9 +858,9 @@ $(function () {
         // A finished battle leaves nothing behind on a club laptop for whoever sits there next. A player on their
         // own account keeps the drafts of this game while reviewing it.
         if (phase === 'idle' || phase === 'cancelled' || (phase === 'decided' && !data.review)) forgetOtherGames(null);
-        if (g && g.started && g.problems) {
+        if (!cleared && g && g.started && g.problems) {
             setupGame(g);
-            if (data.review && (phase === 'decided' || phase === 'between')) startReview();
+            if (data.review && (phase === 'decided' || phase === 'between')) startReview(phase);
             scores(data, g);
             submissions(g.submissions || []);
             var open = phase === 'live';
@@ -868,7 +869,7 @@ $(function () {
             $('#ar-verifying').prop('hidden', phase !== 'verifying');
             $('#ar-closed').prop('hidden', open || reviewing || phase === 'verifying' || phase === 'lobby');
         }
-        result(data);
+        if (!cleared) result(data);
         firstRender = false;
     }
 
@@ -1251,7 +1252,6 @@ $(function () {
                 reason = texts ? fill(won ? texts.win : texts.lose, {rival: data.rival.name, mine: count.me, theirs: count.rival})
                     : (TEXT.reasons[data.match.reason] || '');
             }
-            foot = data.review ? TEXT.reviewFoot : TEXT.canLeave;
             ranking = rankingText(data.ranking);
         } else if (phase === 'between' && g) {
             key = 'g' + g.id;
@@ -1263,7 +1263,6 @@ $(function () {
                 reason = gameOutcome(data, g);
                 foot = TEXT.nextGame;
             }
-            if (data.review) foot += ' ' + TEXT.reviewBetween;
         }
         if (!key) { hideResult(); return; }
         if (resultDismissed === key) return;
@@ -1272,8 +1271,10 @@ $(function () {
         $('#ar-result-title').text(title);
         $('#ar-result-reason').text(reason);
         $('#ar-result-series').text(isSeries ? seriesText(data) : '');
-        $('#ar-result-explain').text(isSeries ? fill(TEXT.seriesExplain, {best: series.best_of, needed: series.needed}) : '');
-        // In a series, every game so far and how it went, so "won the series" says what it means.
+        // The rule of the series only while it goes on; at the end the buttons and the score say enough (2026-11-04).
+        $('#ar-result-explain').text(isSeries && phase === 'between' ? fill(TEXT.seriesExplain, {best: series.best_of, needed: series.needed}) : '');
+        // In a series, every game so far and how it went, so "won the series" says what it means; with only one, the
+        // line above already says it.
         var list = A.clear(document.getElementById('ar-result-games'));
         if (isSeries) {
             (series.games || []).filter(function (row) { return row.status !== 'prepared'; }).forEach(function (row) {
@@ -1281,8 +1282,8 @@ $(function () {
                                       [A.el('b', {text: TEXT.game + ' ' + row.number + ': '}), gameOutcome(data, row)]));
             });
         }
-        list.hidden = !list.children.length;
-        $('#ar-result-foot').text(foot);
+        list.hidden = list.children.length < 2;
+        $('#ar-result-foot').text(foot).prop('hidden', !foot);
         $('#ar-result-rating').text(ranking).prop('hidden', !ranking);
         // Over: review it (own account) or leave. A club laptop keeps the plain close and back to the site.
         $('#ar-result-close').text(data.review ? TEXT.reviewGame : TEXT.close).toggleClass('ar-btn-plain', !data.review);
@@ -1296,9 +1297,8 @@ $(function () {
     // battle is saved, so it can appear one refresh after the result.
     function rankingText(info) {
         if (!info) return '';
-        if (info.status === 'never') return TEXT.ranking.never[info.reason] || '';
+        if (info.status === 'never' || info.status === 'excluded') return TEXT.ranking.none;
         if (info.status === 'pending') return TEXT.ranking.pending;
-        if (info.status === 'excluded') return TEXT.ranking.excluded;
         if (info.change === null || info.change === undefined) return TEXT.ranking.nothing;
         if (info.provisional) return fill(TEXT.ranking.provisional, {needed: info.needed, games: info.games});
         return fill(TEXT.ranking.change, {rating: info.rating, change: (info.change > 0 ? '+' : '') + info.change});
@@ -1312,6 +1312,10 @@ $(function () {
     $('#ar-result-close').on('click', function () {
         resultDismissed = resultShownFor;
         hideResult();
+        if (state.phase === 'decided' && !state.review && state.match) {
+            clubCleared = state.match.id;
+            render(state);
+        }
     });
     $('#ar-result-home').on('click', function (event) { if (state.review) leaveArena(event); });
 
@@ -1330,7 +1334,9 @@ $(function () {
             timer.text(A.clock(rest)).toggleClass('ar-low', rest < 60);
             navBattle.timer.textContent = A.clock(rest);
             navBattle.timer.classList.toggle('ar-low', rest < 60);
-            if (rest <= 0) schedule(300);
+            // Once per game (2026-11-03): asked again every 200 ms, the question was put off for ever and the page
+            // stayed at 0:00 until it was reloaded.
+            if (rest <= 0 && timeUpFor !== g.id + ':' + g.ends_at) { timeUpFor = g.id + ':' + g.ends_at; schedule(300); }
         } else {
             timer.text('').removeClass('ar-low');
             navBattle.timer.textContent = '';
@@ -1546,19 +1552,15 @@ $(function () {
 
     <section class="ar-center ar-idle" id="ar-idle" hidden>
         <i class="fa fa-bolt ar-big-icon" aria-hidden="true"></i>
-        <div class="ar-lead">{{ _('Your battle will appear here when you are called.') }}</div>
-        <div class="ar-help">{{ _('Keep this page open. When the organizer calls you, it moves on by itself to the waiting room and then to the countdown.') }}</div>
-        {% if can_manage %}
-            <a class="ar-btn" href="{{ url('arena_manage') }}"><i class="fa fa-cogs"></i> {{ _('Open the battle panel') }}</a>
-        {% endif %}
-        <a class="ar-muted" href="{{ url('home') }}">{{ _('Back to the site') }}</a>
-        {% include "arena/history/_summary.html" %}
+        {# Without the buttons to the panel and to the site, and without the finished tournaments (2026-11-03): the tabs
+           above lead there. #}
+        <div class="ar-lead">{{ _('Here you will play your battles.') }}</div>
+        <div class="ar-help">{{ _('When it is your turn to play, the battle opens by itself on this page. Leave it open.') }}</div>
     </section>
 
     <section class="ar-center" id="ar-lobby" hidden>
         <div class="ar-versus" id="ar-lobby-versus"></div>
         <div class="ar-lead">{{ _('Waiting for the organizer to start the game.') }}</div>
-        <div class="ar-help">{{ _('The problems will appear when the countdown ends. You will write and submit your code here, with the editor of the platform.') }}</div>
         <div class="ar-rules" id="ar-lobby-rules"></div>
     </section>
 
@@ -1582,7 +1584,7 @@ $(function () {
         <div class="ar-banner" id="ar-verifying" hidden>{{ _('Time is up. Waiting for the last verdicts...') }}</div>
         <div class="ar-banner" id="ar-closed" hidden>{{ _('Submissions are closed.') }}</div>
         <div class="ar-banner ar-review-banner" id="ar-review" hidden>
-            <span><i class="fa fa-search" aria-hidden="true"></i> {{ _('Review mode: you can edit your code and run it with your input. Nothing is submitted anymore.') }}</span>
+            <span><i class="fa fa-search" aria-hidden="true"></i> <span id="ar-review-text">{{ _('Review mode: nothing is submitted anymore.') }}</span></span>
             <a class="ar-btn ar-btn-plain" id="ar-review-leave" href="{{ url('home') }}">{{ _('Leave the arena') }}</a>
         </div>
         <div class="ar-grid" id="ar-grid">

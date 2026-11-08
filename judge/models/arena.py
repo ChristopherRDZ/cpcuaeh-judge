@@ -126,10 +126,21 @@ class ArenaTournament(models.Model):
     # before this field.
     ranking = models.CharField(verbose_name=_('ranking of the duels'), max_length=10, choices=RANKING,
                                default=RANKING_PENDING, db_default=RANKING_PENDING)
+    # How many places the bracket has (2026-11-03): a draft can be prepared, problems included, before the names are
+    # known, and its places are filled later. NULL (every tournament before this field) means one place per
+    # participant, as it always was.
+    places = models.PositiveSmallIntegerField(verbose_name=_('places'), null=True, blank=True)
     version = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return self.name
+
+    def place_count(self, participants=None):
+        """The places of the bracket: `places`, or one per participant for a tournament from before it. Never fewer
+        than `participants`: names added with the code from before `places` existed must not be hidden."""
+        if self.places:
+            return max(self.places, participants or 0)
+        return participants if participants is not None else self.participants.count()
 
     class Meta:
         ordering = ('-created_at', '-id')
@@ -397,6 +408,19 @@ class ArenaScreen(models.Model):
     match = models.ForeignKey(ArenaMatch, verbose_name=_('match'), null=True, blank=True,
                               on_delete=models.SET_NULL, related_name='+')
     follow_live = models.BooleanField(verbose_name=_('follow the match being played'), default=True)
+    # How it is shown (2026-11-03): chosen from the panel, so nobody has to touch the computer of the projector. A tab
+    # opened with ?view= in its address keeps that view; the keys 1 to 6 change it until the panel changes it again.
+    # A default in the database too, for the code before this field.
+    VIEWS = (
+        ('combined', _('Everything')),
+        ('scoreboard', _('Scoreboard')),
+        ('code-a', _('Code A')),
+        ('code-b', _('Code B')),
+        ('statements', _('Statements')),
+        ('bracket', _('Bracket')),
+    )
+    view = models.CharField(verbose_name=_('view'), max_length=12, choices=VIEWS, default='combined',
+                            db_default='combined')
     message = models.CharField(verbose_name=_('message'), max_length=200, blank=True)
     created_by = models.ForeignKey(Profile, verbose_name=_('created by'), null=True, blank=True,
                                    on_delete=models.SET_NULL, related_name='+')

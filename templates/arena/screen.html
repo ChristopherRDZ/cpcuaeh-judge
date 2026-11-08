@@ -195,6 +195,7 @@ $(function () {
     };
     var TEXT = {
         waiting: {{ _('The battle starts soon')|tojson }},
+        idle: {{ _('The battles will show here.')|tojson }},
         nextGame: {{ _('Next: game')|tojson }},
         game: {{ _('Game')|tojson }},
         bestOf: {{ _('Best of')|tojson }},
@@ -239,10 +240,14 @@ $(function () {
     };
     var VIEWS = ['combined', 'scoreboard', 'code-a', 'code-b', 'statements', 'bracket'];
     var A = window.Arena;
-    var params = new URLSearchParams(window.location.search);
-    var view = VIEWS.indexOf(params.get('view')) !== -1 ? params.get('view') : 'combined';
+    // With ?view= in the address a tab keeps its own view; without it, it shows the one chosen in the panel. The keys
+    // 1 to 6 change it here until the panel does something with this projector again (its version changes), even
+    // choosing the same view once more: the last change wins (2026-11-03).
+    var fixed = {{ fixed_view|tojson }};
+    var view = {{ view|tojson }};
     var theme = {{ forced_theme|tojson }} || (localStorage.getItem('arena-screen-theme') || '');
     var state = JSON.parse(document.getElementById('sc-initial').textContent);
+    var panelView = state.view, panelVersion = state.screen.version;
     var codeSeq = {a: 0, b: 0}, codeGame = null;
     var editors = {};
     var fontSize = parseInt(localStorage.getItem('arena-screen-font') || '20', 10);
@@ -280,10 +285,15 @@ $(function () {
     // ---------------------------------------------------------------- polling
     var revoked = false;
     function pollState() {
-        A.get(URLS.state, HEADERS).then(function (data) {
+        A.get(URLS.state + (fixed ? '?fixed=' + encodeURIComponent(fixed) : ''), HEADERS).then(function (data) {
             failures = 0;
             $('#ar-offline').prop('hidden', true);
             state = data;
+            if (!fixed && data.view && (data.view !== panelView || data.screen.version !== panelVersion)) {
+                panelView = data.view;
+                panelVersion = data.screen.version;
+                setView(data.view);
+            }
             render();
         }).catch(function (error) {
             // The organizer made a new link for this screen: this one will never work again, so say so and stop.
@@ -326,9 +336,11 @@ $(function () {
 
     // ---------------------------------------------------------------- rendering helpers
     function header() {
+        // On the waiting screen or a message the name of what it showed before goes too (2026-11-03).
+        var showing = state.mode === 'match' || state.mode === 'bracket';
         var parts = [];
-        if (state.tournament) parts.push(state.tournament);
-        var match = state.match;
+        if (showing && state.tournament) parts.push(state.tournament);
+        var match = showing ? state.match : null;
         if (match) {
             if (match.round) parts.push(match.round);
             if (match.title) parts.push(match.title);
@@ -499,7 +511,8 @@ $(function () {
                 main.appendChild(A.el('div', {'class': 'sc-center'}, [
                     A.el('img', {'class': 'site-logo', src: {{ static('icons/logo.png')|tojson }}, alt: '', style: 'height: 10em; width: auto;'}),
                     A.el('div', {'class': 'sc-huge', text: {{ SITE_NAME|tojson }}}),
-                    A.el('div', {'class': 'sc-muted', text: TEXT.waiting})
+                    // Nothing given to it yet: not «the battle starts soon» (2026-11-03), there may be none.
+                    A.el('div', {'class': 'sc-muted', text: TEXT.idle})
                 ]));
             });
         }
@@ -685,7 +698,12 @@ $(function () {
             var href = URLS.page + '?view=' + name + (theme ? '&theme=' + theme : '');
             menu.appendChild(A.el('div', {'class': 'sc-menu-row' + (name === view ? ' sc-current' : '')}, [
                 A.el('kbd', {text: String(index + 1)}),
-                A.el('a', {href: href, 'class': 'ar-grow', text: TEXT.views[name]}),
+                // Here, as the keys do (a tab that follows the panel goes on following it); in a new tab, its own.
+                A.el('a', {href: href, 'class': 'ar-grow', text: TEXT.views[name], onclick: function (event) {
+                    event.preventDefault();
+                    setView(name);
+                    $('#sc-menu').prop('hidden', true);
+                }}),
                 A.el('a', {href: href, target: '_blank', rel: 'noopener', title: TEXT.newTab}, [A.el('i', {'class': 'fa fa-external-link'})])
             ]));
         });
@@ -701,7 +719,11 @@ $(function () {
         built = null;
         statementsFor = null;
         showOverlay(false);
-        history.replaceState(null, '', URLS.page + '?view=' + name + (theme ? '&theme=' + theme : ''));
+        // Only a tab with its own view keeps it in the address: one that follows the panel goes on following it.
+        if (fixed) {
+            fixed = name;
+            history.replaceState(null, '', URLS.page + '?view=' + name + (theme ? '&theme=' + theme : ''));
+        }
         buildMenu();
         render();
     }

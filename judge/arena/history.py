@@ -41,6 +41,9 @@ OVER = (ArenaTournament.FINISHED, ArenaTournament.ARCHIVED)
 UPCOMING_GRACE = timedelta(hours=12)
 SUMMARY_FINISHED = 5
 SUMMARY_RANKING = 5
+# /duelos/torneos/ (2026-11-03): the finished tournaments, this many per page. The ones left out of the history
+# are still at most LIST_LIMIT, on the first page.
+FINISHED_PER_PAGE = 20
 LIST_LIMIT = 200
 AVATAR = 64
 
@@ -159,24 +162,30 @@ def summary(now=None):
     }
 
 
-def listing(user, now=None):
-    """Everything for /duelos/torneos/, plus the started tournaments left out of the history that `user` still
-    sees, apart and marked. Drafts are looked after from the battle panel.
+def listing(user, finished_page, now=None):
+    """Everything for /duelos/torneos/: `finished_page`, one page of finished() (FINISHED_PER_PAGE of them; the
+    view pages it, 2026-11-03), and only on the first page what is being played, what comes next and the started
+    tournaments left out of the history that `user` still sees, apart and marked. Drafts are looked after from the
+    battle panel.
 
     Never, among those, one `user` still plays (2026-10-28, round 2 of the adversarial review), as the battle panel
     leaves it out (access.contended_tournaments): its organizers do not run it while they play it, so its link led
     them to a page that does not exist."""
+    sections = {'live': [], 'upcoming': [], 'hidden': [], 'finished': rows(finished_page.object_list),
+                'page_obj': finished_page}
+    if finished_page.number != 1:
+        return sections
     now = now or timezone.now()
     hidden = access.history_hidden_for(user).filter(status__in=STARTED)
     if user is not None and user.is_authenticated:
         hidden = hidden.exclude(id__in=access.contended_tournaments(user).values('id'))
     hidden = hidden.order_by('-created_at', '-id')
-    return {
+    sections.update({
         'live': rows(live()),
         'upcoming': rows(upcoming(now)),
-        'finished': rows(finished()[:LIST_LIMIT]),
         'hidden': rows(hidden[:LIST_LIMIT]),
-    }
+    })
+    return sections
 
 
 # ---------------------------------------------------------------------------------------------------------------

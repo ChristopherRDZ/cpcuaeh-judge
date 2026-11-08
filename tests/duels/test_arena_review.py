@@ -186,7 +186,11 @@ class ScreenFollowsNewBattleTests(ReviewTestCase):
     def test_the_next_battle_replaces_one_that_is_over(self):
         first = self.duel()
         engine.walkover(self.organizer.profile, first.pk, 'a')
-        second = self.duel(self.carol, self.dave)
+        self.duel(self.carol, self.dave)
+        self.assertEqual(ArenaScreen.objects.get().match_id, first.pk)
+        ArenaScreen.objects.update(updated_at=timezone.now() - timedelta(minutes=31))
+        ArenaMatch.objects.filter(pk=first.pk).update(decided_at=timezone.now() - timedelta(minutes=31))
+        second = self.duel(self.eve, self.frank)
         self.assertEqual(ArenaScreen.objects.get().match_id, second.pk)
 
     def test_a_battle_still_going_keeps_its_screen(self):

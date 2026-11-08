@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block media %}
+{% include "arena/_style.html" %}
+{% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block js_media %}
+{% include "arena/_js.html" %}
+{% include "arena/manage/_widgets.html" %}
+{{ defaults|json_script('am-defaults') }}
+{{ languages|json_script('am-languages') }}
+<script type="text/javascript">
+// A new quick battle (2026-11-03, on the first page of the panel until then): the players, how many games, the
+// problems of the first one, and the rest of the rules folded.
+$(function () {
+    var A = window.Arena, W = window.ArenaWidgets;
+    var TEXT = {
+        game: {{ _('Game %(number)s', number='%(number)s')|tojson }},
+        chooseLater: {{ _('Choose those of games %(numbers)s', numbers='%(numbers)s')|tojson }},
+        and: {{ _('and')|tojson }},
+        needPlayers: {{ _('Choose both players.')|tojson }},
+        needProblems: {{ _('Choose the problems of game 1.')|tojson }},
+        created: {{ _('Battle created. Opening it...')|tojson }}
+    };
+    var defaults = JSON.parse(document.getElementById('am-defaults').textContent);
+    var languages = JSON.parse(document.getElementById('am-languages').textContent);
+    var players = {a: null, b: null};
+    W.userPicker(document.getElementById('am-player-a'), function (u) { players.a = u; });
+    W.userPicker(document.getElementById('am-player-b'), function (u) { players.b = u; });
+    var summary = document.getElementById('am-rules-summary');
+    var rules = W.rulesEditor(document.getElementById('am-rules'), defaults, languages, {
+        outside: {duration: document.getElementById('am-duration')},
+        onChange: function () { summary.textContent = W.rulesSummary(rules.get()); }
+    });
+    summary.textContent = W.rulesSummary(rules.get());
+
+    $('#am-club').on('change', function () { $('#am-club-names').prop('hidden', !this.checked); });
+
+    // One list per game: the first in view, the rest folded under «Choose those of games 2 and 3».
+    function context() { return {a: players.a && players.a.id, b: players.b && players.b.id}; }
+    var first = W.problemList(document.getElementById('am-game-1'), {context: context});
+    var later = [];
+    function numbers(count) {
+        var list = [];
+        for (var n = 2; n <= count; n++) list.push(String(n));
+        return list.length > 1 ? list.slice(0, -1).join(', ') + ' ' + TEXT.and + ' ' + list[list.length - 1] : list[0];
+    }
+    function drawGames() {
+        var bestOf = parseInt($('#am-best-of').val(), 10) || 1;
+        var box = document.getElementById('am-later-games');
+        while (later.length < bestOf - 1) {
+            var field = A.el('div', {'class': 'am-field am-mt'});
+            var title = A.el('span', {'class': 'am-label'});
+            field.appendChild(title);
+            box.appendChild(field);
+            later.push({node: field, title: title, list: W.problemList(field, {context: context})});
+        }
+        later.forEach(function (game, index) {
+            game.node.hidden = index >= bestOf - 1;
+            game.title.textContent = TEXT.game.replace('%(number)s', index + 2);
+        });
+        $('#am-later').prop('hidden', bestOf < 2);
+        $('#am-later-summary').text(TEXT.chooseLater.replace('%(numbers)s', numbers(bestOf)));
+    }
+    $('#am-best-of').on('change', drawGames);
+    drawGames();
+
+    function create(call) {
+        if (!players.a || !players.b) { A.toast(TEXT.needPlayers, 'warn'); return; }
+        var bestOf = parseInt($('#am-best-of').val(), 10) || 1;
+        var lists = [first.get()].concat(later.slice(0, bestOf - 1).map(function (game) { return game.list.get(); }));
+        while (lists.length > 1 && !lists[lists.length - 1].length) lists.pop();
+        if (!lists[0].length) { A.toast(TEXT.needProblems, 'warn'); return; }
+        var club = $('#am-club').prop('checked');
+        $('.am-create').prop('disabled', true);
+        A.post({{ url('arena_manage_duel_create')|tojson }}, {
+            player_a: players.a.id, player_b: players.b.id,
+            display_a: club ? $('#am-display-a').val() : '', display_b: club ? $('#am-display-b').val() : '',
+            title: $('#am-title').val(), best_of: bestOf, rules: rules.get(), games: lists, call: call,
+            ranking: $('#am-ranking').val() || 'pending'
+        }).then(function (data) {
+            A.toast(TEXT.created, 'ok');
+            window.location.href = data.url;
+        }).catch(function (error) {
+            W.fail(error);
+            $('.am-create').prop('disabled', false);
+        });
+    }
+    $('#am-create-call').on('click', function () { create(true); });
+    $('#am-create-later').on('click', function () { create(false); });
+});
+</script>
+{% endblock %}
+
+{% block body %}
+<form id="ar-csrf" hidden>{% csrf_token %}</form>
+<div class="am-page">
+    {% include "arena/manage/_nav.html" %}
+    <div class="am-grid">
+        <section class="ar-panel">
+            <h3 class="ar-panel-head"><i class="fa fa-bolt" aria-hidden="true"></i> {{ _('New quick battle') }}</h3>
+            <div class="ar-panel-body">
+                <div class="am-two">
+                    <div class="am-field"><span class="am-label" style="color: var(--ar-a);">{{ _('Player A') }}</span><div id="am-player-a"></div></div>
+                    <div class="am-field"><span class="am-label" style="color: var(--ar-b);">{{ _('Player B') }}</span><div id="am-player-b"></div></div>
+                </div>
+                <label><input type="checkbox" id="am-club"> {{ _('They play on the club laptops') }}</label>
+                <div class="am-two am-mt" id="am-club-names" hidden>
+                    <div class="am-field"><label for="am-display-a">{{ _('Who sits at A') }}</label><input class="ar-input" id="am-display-a" maxlength="40" placeholder="{{ _('Name') }}"></div>
+                    <div class="am-field"><label for="am-display-b">{{ _('Who sits at B') }}</label><input class="ar-input" id="am-display-b" maxlength="40" placeholder="{{ _('Name') }}"></div>
+                </div>
+
+                <div class="am-two am-mt">
+                    <div class="am-field">
+                        <label for="am-best-of">{{ _('Games') }}</label>
+                        <select class="ar-select" id="am-best-of">
+                            <option value="1">{{ _('A single game') }}</option>
+                            <option value="3">{{ _('Best of 3') }}</option>
+                            <option value="5">{{ _('Best of 5') }}</option>
+                            <option value="7">{{ _('Best of 7') }}</option>
+                        </select>
+                    </div>
+                    <div class="am-field">
+                        <label for="am-duration">{{ _('Minutes per game') }}</label>
+                        <input class="ar-input am-w-num" type="number" min="1" max="300" id="am-duration">
+                    </div>
+                </div>
+
+                <div class="am-field" id="am-game-1"><span class="am-label">{{ _('Problems of game 1') }}</span></div>
+                <details class="am-details" id="am-later" hidden>
+                    <summary id="am-later-summary"></summary>
+                    <div id="am-later-games"></div>
+                </details>
+
+                <details class="am-details">
+                    <summary>{{ _('More rules') }} <span class="am-hint" style="font-weight: 400;">· <span id="am-rules-summary"></span></span></summary>
+                    <div id="am-rules" class="am-mt"></div>
+                    <div class="am-field am-mt"><label for="am-title">{{ _('Title (optional)') }}</label>
+                        <input class="ar-input" id="am-title" maxlength="100" placeholder="{{ _('For example: Club final') }}"></div>
+                </details>
+
+                {% if decides_ranking %}
+                    <div class="am-field am-mt">
+                        <label for="am-ranking">{{ _('Does it count for the ranking?') }}</label>
+                        <select class="ar-select" id="am-ranking" style="max-width: 22em;">
+                            <option value="pending" selected>{{ _('To review') }}</option>
+                            <option value="counts">{{ _('Yes, it counts') }}</option>
+                            <option value="excluded">{{ _('No, it is a test') }}</option>
+                        </select>
+                    </div>
+                {% endif %}
+
+                <div class="am-actions am-mt">
+                    <button type="button" class="ar-btn ar-btn-big am-create" id="am-create-call"><i class="fa fa-sign-in" aria-hidden="true"></i> {{ _('Create and send to the waiting room') }}</button>
+                    <button type="button" class="ar-btn ar-btn-plain am-create" id="am-create-later">{{ _('Only create') }}</button>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

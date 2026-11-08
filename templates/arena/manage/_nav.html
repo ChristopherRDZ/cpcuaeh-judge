@@ -1,0 +1,21 @@
+{# The tabs of the battle panel (2026-11-03): the site's tabs, a little smaller, under those of the duels. `panel_tab`
+   says which one is open. On the right, the two things an organizer starts most, and the guide. #}
+<div class="tabs am-subtabs">
+    <ul>
+        <li class="tab{% if panel_tab == 'now' %} active{% endif %}"><a href="{{ url('arena_manage') }}">
+            <i class="tab-icon fa fa-play-circle"></i> {{ _('Now') }}</a></li>
+        <li class="tab{% if panel_tab == 'quick' %} active{% endif %}"><a href="{{ url('arena_manage_quick') }}">
+            <i class="tab-icon fa fa-bolt"></i> {{ _('Quick battles') }}</a></li>
+        <li class="tab{% if panel_tab == 'tournaments' %} active{% endif %}"><a href="{{ url('arena_manage_tournaments') }}">
+            <i class="tab-icon fa fa-sitemap"></i> {{ _('Tournaments') }}</a></li>
+        <li class="tab{% if panel_tab == 'screens' %} active{% endif %}"><a href="{{ url('arena_manage_screens') }}">
+            <i class="tab-icon fa fa-desktop"></i> {{ _('Projectors') }}</a></li>
+        <li class="tab{% if panel_tab == 'banks' %} active{% endif %}"><a href="{{ url('arena_manage_banks') }}">
+            <i class="tab-icon fa fa-book"></i> {{ _('Problem banks') }}</a></li>
+    </ul>
+    <span class="am-tabs-right">
+        <a class="ar-btn" href="{{ url('arena_manage_quick_new') }}"><i class="fa fa-plus" aria-hidden="true"></i> {{ _('Quick battle') }}</a>
+        <a class="ar-btn ar-btn-plain" href="{{ url('arena_manage_tournament_new') }}"><i class="fa fa-plus" aria-hidden="true"></i> {{ _('Tournament') }}</a>
+        <a href="{{ url('arena_manage_guide') }}"{% if panel_tab == 'guide' %} class="am-current"{% endif %}><i class="fa fa-question-circle" aria-hidden="true"></i> {{ _('Guide') }}</a>
+    </span>
+</div>

@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block media %}
+{% include "arena/_style.html" %}
+<style>
+    .sp-grid { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: .7em 1em; align-items: center; }
+    .sp-grid > .am-label { margin: 0; }
+    .sp-code { width: 7em; font-size: 1.2em; letter-spacing: .15em; text-transform: uppercase;
+               font-family: Consolas, "DejaVu Sans Mono", "Courier New", monospace; }
+</style>
+{% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block js_media %}
+{% include "arena/_js.html" %}
+{% include "arena/manage/_widgets.html" %}
+{{ state|json_script('sp-state') }}
+<script type="text/javascript">
+// Projectors (2026-11-03): what each one shows and how, whether some computer has it open, and how to connect one
+// with the code of /proyector instead of passing its link around.
+$(function () {
+    var A = window.Arena, W = window.ArenaWidgets;
+    var TEXT = {
+        modes: {idle: {{ _('Waiting screen')|tojson }}, match: {{ _('A battle')|tojson }},
+                bracket: {{ _('A tournament')|tojson }}, message: {{ _('A message')|tojson }}},
+        views: {
+            combined: {{ _('Everything')|tojson }}, scoreboard: {{ _('Scoreboard')|tojson }},
+            'code-a': {{ _('Code A')|tojson }}, 'code-b': {{ _('Code B')|tojson }},
+            statements: {{ _('Statements')|tojson }}, bracket: {{ _('Bracket')|tojson }}
+        },
+        shows: {{ _('Shows')|tojson }},
+        view: {{ _('View')|tojson }},
+        battleView: {{ _('View of the battle')|tojson }},
+        link: {{ _('Link')|tojson }},
+        isOpen: {{ _('Is open')|tojson }},
+        isClosed: {{ _('Nobody has it open')|tojson }},
+        fixed: {{ _('Tabs with a view of their own: %(views)s.', views='%(views)s')|tojson }},
+        follow: {{ _('Move to the battle being played by itself')|tojson }},
+        noBattles: {{ _('No battles open')|tojson }},
+        noTournaments: {{ _('No tournaments')|tojson }},
+        vs: {{ _('vs')|tojson }},
+        messagePlaceholder: {{ _('For example: Break of 10 minutes')|tojson }},
+        showMessage: {{ _('Show')|tojson }},
+        copy: {{ _('Copy link')|tojson }},
+        copied: {{ _('Link copied.')|tojson }},
+        openHere: {{ _('Open here')|tojson }},
+        more: {{ _('More')|tojson }},
+        rename: {{ _('Rename')|tojson }},
+        newName: {{ _('Name of the projector')|tojson }},
+        save: {{ _('Save')|tojson }},
+        add: {{ _('Add projector')|tojson }},
+        newLink: {{ _('Change the link')|tojson }},
+        newLinkHint: {{ _('Changing the link disconnects the open tabs.')|tojson }},
+        newLinkConfirm: {{ _('The current link stops working. Every open tab will need the new one.')|tojson }},
+        asOne: {{ _('As %(name)s', name='%(name)s')|tojson }},
+        asNew: {{ _('As a new one')|tojson }},
+        needCode: {{ _('Type the code the projector shows.')|tojson }},
+        paired: {{ _('Done: %(name)s opened on that projector.', name='%(name)s')|tojson }},
+        none: {{ _('No projectors yet. Connect the first one with its code.')|tojson }}
+    };
+    var state = JSON.parse(document.getElementById('sp-state').textContent);
+    var ACTION = {{ url('arena_manage_screen_action')|tojson }};
+    var STATE = {{ url('arena_manage_screens_state')|tojson }};
+    var paint = W.painter();
+    var cards = {};
+    function fill(text, values) {
+        Object.keys(values).forEach(function (key) { text = text.split('%(' + key + ')s').join(values[key]); });
+        return text;
+    }
+
+    function act(data) {
+        return A.post(ACTION, data).then(function (result) {
+            state.screens = result.screens;
+            draw();
+            return result;
+        }).catch(function (error) { W.fail(error); refresh(); throw error; });
+    }
+
+    // Only what the mode needs is sent: a battle no longer offered must not stop the projector going to the waiting
+    // screen.
+    function show(screen, changes) {
+        var mode = changes.mode || screen.mode;
+        var data = {action: 'show', screen: screen.id, version: screen.version, mode: mode};
+        if (mode === 'match') data.match = changes.match || screen.match;
+        if (mode === 'bracket') {
+            data.tournament = changes.tournament || screen.tournament;
+            data.follow_live = 'follow_live' in changes ? changes.follow_live : screen.follow_live;
+        }
+        if (mode === 'message') data.message = 'message' in changes ? changes.message : screen.message;
+        if (changes.view) data.view = changes.view;
+        return act(data).catch(function () {});
+    }
+
+    function select(options, value, onChange, empty) {
+        var node = A.el('select', {'class': 'ar-select'});
+        if (!options.length) node.appendChild(A.el('option', {value: '', text: empty}));
+        options.forEach(function (option) {
+            var item = A.el('option', {value: String(option.value), text: option.label});
+            if (String(option.value) === String(value)) item.selected = true;
+            node.appendChild(item);
+        });
+        node.disabled = !options.length;
+        node.addEventListener('change', function () { onChange(node.value); });
+        return node;
+    }
+
+    function battleOptions() {
+        return state.matches.map(function (m) {
+            return {value: m.id, label: m.name + (m.tournament ? ' · ' + m.tournament + (m.round ? ', ' + m.round : '') : '')};
+        });
+    }
+    function tournamentOptions() { return state.tournaments.map(function (t) { return {value: t.id, label: t.name}; }); }
+
+    // What a projector shows, and how.
+    function body(screen) {
+        var grid = A.el('div', {'class': 'ar-panel-body sp-grid'});
+        var row = A.el('span', {'class': 'ar-row'});
+        var writing = cards[screen.id] && cards[screen.id].writing;
+        row.appendChild(select(['idle', 'match', 'bracket', 'message'].map(function (mode) {
+            return {value: mode, label: TEXT.modes[mode]};
+        }), writing ? 'message' : screen.mode, function (mode) {
+            cards[screen.id].writing = false;
+            if (mode === 'idle') show(screen, {mode: 'idle'});
+            else if (mode === 'match') {
+                var match = screen.match || (state.matches[0] && state.matches[0].id);
+                if (match) show(screen, {mode: 'match', match: match}); else { A.toast(TEXT.noBattles, 'warn'); draw(true); }
+            } else if (mode === 'bracket') {
+                var tournament = screen.tournament || (state.tournaments[0] && state.tournaments[0].id);
+                if (tournament) show(screen, {mode: 'bracket', tournament: tournament, follow_live: true}); else { A.toast(TEXT.noTournaments, 'warn'); draw(true); }
+            } else {
+                // A message is shown with its button, once it is written.
+                cards[screen.id].writing = true;
+                cards[screen.id].draft = null;
+                draw(true);
+            }
+        }));
+        if (screen.mode === 'match' && !writing) {
+            row.appendChild(select(battleOptions(), screen.match, function (value) { show(screen, {match: parseInt(value, 10)}); }, TEXT.noBattles));
+        } else if (screen.mode === 'bracket' && !writing) {
+            row.appendChild(select(tournamentOptions(), screen.tournament, function (value) {
+                show(screen, {tournament: parseInt(value, 10)});
+            }, TEXT.noTournaments));
+            var follow = A.el('input', {type: 'checkbox'});
+            follow.checked = screen.follow_live;
+            follow.addEventListener('change', function () { show(screen, {follow_live: follow.checked}); });
+            row.appendChild(A.el('label', {}, [follow, ' ' + TEXT.follow]));
+        } else if (screen.mode === 'message' || writing) {
+            // What is being typed is kept apart (2026-11-03): the card is redrawn when something else changes, and
+            // the text must not go with it.
+            var draft = cards[screen.id] && cards[screen.id].draft;
+            var text = A.el('input', {'class': 'ar-input', maxlength: 200,
+                                      value: draft != null ? draft : (screen.mode === 'message' && !writing ? screen.message : ''),
+                                      placeholder: TEXT.messagePlaceholder, style: 'min-width: 16em;'});
+            text.addEventListener('input', function () { cards[screen.id].draft = text.value; });
+            row.appendChild(text);
+            row.appendChild(A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.showMessage, onclick: function () {
+                cards[screen.id].writing = false;
+                cards[screen.id].draft = null;
+                show(screen, {mode: 'message', message: text.value});
+            }}));
+        }
+        grid.appendChild(A.el('span', {'class': 'am-label', text: TEXT.shows}));
+        grid.appendChild(row);
+
+        // How: only for a battle, or for the battle a tournament moves to.
+        var battle = screen.mode === 'match' && !writing;
+        if (battle || (screen.mode === 'bracket' && screen.follow_live && !writing)) {
+            var names = ['combined', 'scoreboard', 'code-a', 'code-b', 'statements'];
+            var shown = battle && state.matches.filter(function (m) { return m.id === screen.match; })[0];
+            if (battle && shown && shown.tournament) names.push('bracket');
+            var seg = A.el('span', {'class': 'am-seg'});
+            W.segmented(seg, names.map(function (name) { return {value: name, label: TEXT.views[name]}; }), screen.view,
+                        function (value) { show(screen, {view: value}); });
+            grid.appendChild(A.el('span', {'class': 'am-label', text: battle ? TEXT.view : TEXT.battleView}));
+            grid.appendChild(seg);
+        }
+
+        // Its link: copied, or opened here.
+        var url = window.location.origin + screen.url;
+        var more = A.el('details', {'class': 'am-details am-plain-details'}, [
+            A.el('summary', {text: TEXT.more}),
+            A.el('span', {'class': 'ar-row am-mt'}, [
+                A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.rename, onclick: function () {
+                    W.nameBox(TEXT.newName, screen.name, TEXT.save, function (name) {
+                        return act({action: 'rename', screen: screen.id, name: name});
+                    });
+                }}),
+                A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', text: TEXT.newLink, onclick: function () {
+                    W.confirmBox(TEXT.newLink, [TEXT.newLinkConfirm], TEXT.newLink, function () {
+                        act({action: 'regenerate', screen: screen.id}).catch(function () {});
+                    }, true);
+                }})
+            ]),
+            A.el('span', {'class': 'am-hint', text: TEXT.newLinkHint})
+        ]);
+        grid.appendChild(A.el('span', {'class': 'am-label', text: TEXT.link}));
+        grid.appendChild(A.el('span', {'class': 'ar-row'}, [
+            A.el('button', {type: 'button', 'class': 'ar-btn ar-btn-plain', onclick: function () { copy(url); }}, [
+                A.el('i', {'class': 'fa fa-clipboard', 'aria-hidden': 'true'}), ' ' + TEXT.copy]),
+            A.el('a', {'class': 'ar-btn ar-btn-plain', href: url, target: '_blank', rel: 'noopener'}, [
+                A.el('i', {'class': 'fa fa-external-link', 'aria-hidden': 'true'}), ' ' + TEXT.openHere]),
+            more
+        ]));
+        return grid;
+    }
+
+    function copy(text) {
+        function done() { A.toast(TEXT.copied, 'ok', 2000); }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done).catch(function () { fallback(text); done(); });
+        } else { fallback(text); done(); }
+    }
+    function fallback(text) {
+        var area = A.el('textarea', {style: 'position: fixed; left: -1000px; top: 0;'});
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (err) {}
+        document.body.removeChild(area);
+    }
+
+    function head(screen) {
+        var status = A.el('span', {}, [A.el('i', {'class': 'fa fa-circle ' + (screen.open ? 'am-dot-ok' : 'am-dot-off'), 'aria-hidden': 'true'}),
+                                       ' ' + (screen.open ? TEXT.isOpen : TEXT.isClosed)]);
+        var parts = [A.el('i', {'class': 'fa fa-desktop', 'aria-hidden': 'true'}), ' ' + screen.name, A.el('span', {'class': 'ar-spacer'}), status];
+        return A.el('h3', {'class': 'ar-panel-head'}, parts);
+    }
+
+    // Each card is redrawn only when what it shows changes, its head only when who has it open changes: a list
+    // must not close under the mouse.
+    // A redraw asked for on purpose (choosing «A message») counts once: the refresh that comes after must not redraw
+    // the card again, or what is being typed in it would go.
+    var forced = 0;
+    function draw(force) {
+        if (force) forced++;
+        var box = document.getElementById('sp-screens');
+        var ids = state.screens.map(function (s) { return s.id; });
+        Object.keys(cards).forEach(function (id) {
+            if (ids.indexOf(parseInt(id, 10)) === -1) { box.removeChild(cards[id].node); delete cards[id]; }
+        });
+        $('#sp-none').prop('hidden', !!state.screens.length);
+        state.screens.forEach(function (screen, index) {
+            var card = cards[screen.id];
+            if (!card) {
+                card = cards[screen.id] = {node: A.el('section', {'class': 'ar-panel'}), head: null, body: null, fixed: null, writing: false};
+                card.head = A.el('div'); card.body = A.el('div'); card.fixed = A.el('p', {'class': 'am-hint', style: 'margin: 0 1em .8em;'});
+                card.node.appendChild(card.head); card.node.appendChild(card.body); card.node.appendChild(card.fixed);
+            }
+            if (box.children[index] !== card.node) box.insertBefore(card.node, box.children[index] || null);
+            paint('head-' + screen.id, [screen.name, screen.open], function () { A.clear(card.head).appendChild(head(screen)); });
+            paint('fixed-' + screen.id, screen.fixed, function () {
+                card.fixed.hidden = !screen.fixed.length;
+                card.fixed.textContent = fill(TEXT.fixed, {views: screen.fixed.map(function (v) { return TEXT.views[v]; }).join(', ')});
+            });
+            var look = [screen.mode, screen.match, screen.tournament, screen.follow_live, screen.message, screen.view, screen.token,
+                        screen.name, screen.version, state.matches, state.tournaments, card.writing, forced];
+            paint('body-' + screen.id, look, function () { A.clear(card.body).appendChild(body(screen)); });
+        });
+        paint('pair', state.screens.map(function (s) { return [s.id, s.name, s.open]; }), drawPairTargets);
+    }
+
+    // ------------------------------------------------------------ connecting a projector with its code
+    function drawPairTargets() {
+        var target = document.getElementById('sp-target'), chosen = target.value;
+        A.clear(target);
+        var free = state.screens.filter(function (s) { return !s.open; })[0];
+        state.screens.forEach(function (screen) {
+            target.appendChild(A.el('option', {value: String(screen.id), text: fill(TEXT.asOne, {name: screen.name})}));
+        });
+        target.appendChild(A.el('option', {value: 'new', text: TEXT.asNew}));
+        // A projector nobody has open is the one most likely being connected; without one, a new one.
+        target.value = chosen && target.querySelector('option[value="' + chosen + '"]') ? chosen : (free ? String(free.id) : 'new');
+    }
+    $('#sp-pair').on('click', function () {
+        var code = $('#sp-code').val().replace(/[\s-]/g, '').toUpperCase();
+        if (code.length !== 6) { A.toast(TEXT.needCode, 'warn'); return; }
+        var target = $('#sp-target').val();
+        var button = $(this).prop('disabled', true);
+        act({action: 'pair', code: code, screen: target === 'new' ? 'new' : parseInt(target, 10)}).then(function (result) {
+            $('#sp-code').val('');
+            A.toast(fill(TEXT.paired, {name: result.paired}), 'ok', 5000);
+            refresh();
+        }).catch(function () {}).then(function () { button.prop('disabled', false); });
+    });
+    $('#sp-code').on('keydown', function (event) { if (event.key === 'Enter') $('#sp-pair').click(); });
+    $('#sp-new').on('click', function () {
+        W.nameBox(TEXT.newName, '', TEXT.add, function (name) { return act({action: 'create', name: name}); });
+    });
+
+    function refresh() {
+        return A.get(STATE).then(function (data) { state = data; draw(); }).catch(function () {});
+    }
+    draw();
+    setInterval(function () { if (!document.hidden) refresh(); }, 3000);
+});
+</script>
+{% endblock %}
+
+{% block body %}
+<form id="ar-csrf" hidden>{% csrf_token %}</form>
+<div class="am-page">
+    {% include "arena/manage/_nav.html" %}
+    <div class="am-grid">
+        <div class="am-stack">
+            <p class="ar-muted am-tight" id="sp-none" hidden>{{ _('No projectors yet. Connect the first one with its code.') }}</p>
+            <div class="am-stack" id="sp-screens"></div>
+        </div>
+        <div class="am-stack">
+            <section class="ar-panel">
+                <h3 class="ar-panel-head"><i class="fa fa-plug" aria-hidden="true"></i> {{ _('Connect a projector') }}</h3>
+                <div class="ar-panel-body">
+                    <ol class="am-steps">
+                        <li>{{ _('On the computer of the projector open') }} <b>{{ projector_url.split('://', 1)[-1] }}</b></li>
+                        <li>{{ _('Type the code that appears there:') }}</li>
+                    </ol>
+                    <div class="ar-row am-mt">
+                        <input class="ar-input sp-code" id="sp-code" maxlength="7" autocomplete="off" spellcheck="false" placeholder="A3F7KM" aria-label="{{ _('Code') }}">
+                        <select class="ar-select" id="sp-target" aria-label="{{ _('Projector') }}"></select>
+                        <button type="button" class="ar-btn" id="sp-pair">{{ _('Connect') }}</button>
+                    </div>
+                </div>
+            </section>
+            <button type="button" class="ar-btn ar-btn-plain" id="sp-new" style="align-self: flex-start;"><i class="fa fa-plus" aria-hidden="true"></i> {{ _('Add projector') }}</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

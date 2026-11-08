@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block media %}
+{% include "arena/_style.html" %}
+{% endblock %}
+
+{% block title_row %}{% set history_tab = 'panel' %}{% set can_manage = True %}{% include "arena/history/_tabs.html" %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block js_media %}
+{% include "arena/_js.html" %}
+{% include "arena/manage/_widgets.html" %}
+{% endblock %}
+
+{# The tournaments of the panel (2026-11-03): active (being prepared or played), finished and archived, 20 per page. #}
+{% block body %}
+<div class="am-page">
+    {% include "arena/manage/_nav.html" %}
+    <p class="am-filter">
+        {% for key, label in (('active', _('Active (%(count)s)', count=counts.active)), ('finished', _('Finished (%(count)s)', count=counts.finished)), ('archived', _('Archived (%(count)s)', count=counts.archived))) %}
+            {% if show == key %}<a class="am-current">{{ label }}</a>
+            {% else %}<a href="?show={{ key }}">{{ label }}</a>{% endif %}
+        {% endfor %}
+    </p>
+    <section class="ar-panel">
+        <table class="am-table">
+            <thead><tr><th>{{ _('Tournament') }}</th><th>{{ _('Status') }}</th><th>{{ _('Participants') }}</th><th>{{ _('Date') }}</th><th></th></tr></thead>
+            <tbody>
+            {% for t in page_obj.object_list %}
+                {% set places = t.place_count(t.n_participants) %}
+                <tr>
+                    <td><a href="{{ url('arena_manage_tournament', t.slug) }}"><b>{{ t.name }}</b></a></td>
+                    <td>
+                        {% if t.status == 'draft' %}{{ _('Being prepared') }}
+                        {% elif t.status == 'running' %}{% if t.n_live %}<span class="am-live-dot"></span> {% endif %}{{ _('Being played') }}{% if t.n_live %} · {{ _('battles being played: %(count)s', count=t.n_live) }}{% endif %}
+                        {% elif t.status == 'finished' %}{{ _('Finished') }}
+                        {% else %}{{ _('Archived') }}{% endif %}</td>
+                    <td>{% if t.status == 'draft' and places > t.n_participants %}{{ _('%(named)s of %(places)s', named=t.n_participants, places=places) }}{% else %}{{ t.n_participants }}{% endif %}</td>
+                    {% set moment = t.finished_at if t.status in ('finished', 'archived') and t.finished_at else (t.started_at or t.planned_at or t.created_at) %}
+                    <td class="ar-muted">{{ moment|date(_("M j, Y, G:i")) }}</td>
+                    <td style="text-align: right; white-space: nowrap;"><a class="ar-btn ar-btn-plain" href="{{ url('arena_manage_tournament', t.slug) }}">{{ _('Open') }}</a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5" class="ar-muted">{{ _('No tournaments here.') }}
+                    {% if show == 'active' %}<a href="{{ url('arena_manage_tournament_new') }}">{{ _('Create one') }}</a>{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="am-pages">
+                <span class="ar-muted">{{ _('%(first)s–%(last)s of %(total)s', first=page_obj.start_index(), last=page_obj.end_index(), total=page_obj.paginator.count) }}</span>
+                {% include "list-pages.html" %}
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

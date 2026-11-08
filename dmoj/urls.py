@@ -112,6 +112,9 @@ urlpatterns = [
     # The duels (judge/arena), «arena» until 2026-10-19. Links from before, such as the screen of a projector, keep
     # working: anything under /arena/ is sent to the same place under /duelos/ (arena.legacy_redirect).
     re_path(r'^arena(?P<rest>/.*)?$', arena.legacy_redirect),
+    # The page to open on the computer of a projector (2026-11-03): it shows a code to type in the battle panel.
+    re_path(r'^proyector/?$', arena.arena_projector, name='arena_projector'),
+    path('proyector/estado', arena.arena_projector_state, name='arena_projector_state'),
     path('duelos/', include([
         path('', arena.arena_home, name='arena_home'),
         path('state', arena.arena_state, name='arena_state'),
@@ -138,6 +141,13 @@ urlpatterns = [
         path('manage/', include([
             path('', arena_manage.manage_dashboard, name='arena_manage'),
             path('overview', arena_manage.manage_overview, name='arena_manage_overview'),
+            # The tabs of the panel (2026-11-03).
+            path('quick/', arena_manage.manage_quick, name='arena_manage_quick'),
+            path('quick/new', arena_manage.manage_quick_new, name='arena_manage_quick_new'),
+            path('tournaments/', arena_manage.manage_tournaments, name='arena_manage_tournaments'),
+            path('tournaments/new', arena_manage.manage_tournament_new, name='arena_manage_tournament_new'),
+            path('screens/', arena_manage.manage_screens, name='arena_manage_screens'),
+            path('screens/state', arena_manage.manage_screens_state, name='arena_manage_screens_state'),
             path('duel/new', arena_manage.manage_duel_create, name='arena_manage_duel_create'),
             path('match/<int:match>/', arena_manage.manage_match, name='arena_manage_match'),
             path('match/<int:match>/state', arena_manage.manage_match_state, name='arena_manage_match_state'),
