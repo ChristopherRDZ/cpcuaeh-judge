@@ -141,23 +141,30 @@ Register for a contest before it starts, from the contest list or its page; the
 access code is asked once. At the start, a short prompt on any page asks whoever
 registered whether to enter now, and a pill in the navigation bar counts down
 and then shows the time left. Whoever did not register joins as always.
+Organizers can also register accounts and teams themselves, until the contest
+ends, without the access code.
 
 ### On site and online
 
 Run one contest on site and online at once, with Global, On site and Online
 standings. Organizers assign people from the Registered tab, even before they
 register; balloons go to those on site, and the reveal ceremony presents each
-view.
+view. Each contest chooses whether everybody, only those on site or only those
+online get a rating.
 
 ## Duels
 
 First-to-solve battles between two players, alone or as best-of-N series, and
-knockout tournaments with a bracket that builds itself. Organizers call the
-players, pick the problems by hand or from a problem bank, and start each game
-from a panel. Players stay on the duel page and submit from it until the battle is
-decided; a projector shows both players' code live, the scoreboard, the
-statements and the bracket. Organizers manage their own battles and the ones they
-are added to as co-organizers; one permission gives every battle.
+knockout tournaments of up to 64 places with a bracket that builds itself.
+Organizers call the players, pick the problems by hand or from a problem bank,
+and start each game from a panel that always shows the next step. Each round can
+start its games with a C++ template already written. Players stay on the duel
+page and submit from it until the battle is decided; a projector, paired with a
+code, shows both players' code live, the scoreboard, the statements and the
+bracket. Tournaments have public pages, and a Glicko-2 ranking counts the battles
+that someone with the permission approves. Organizers manage their own battles
+and the ones they are added to as co-organizers; one permission gives every
+battle.
 
 ![A player during a duel: statement, editor, custom input and submissions](docs/screenshots/duels-player.png)
 
@@ -275,8 +282,10 @@ to everyone with a confirmed email, to those matching filters (contests,
 organizations, groups, recent activity, sign-up dates, solved problems, rating) or
 to people chosen by name. Preview it as a desktop and a phone would show it, send
 yourself a test, confirm by typing the number of recipients, send now or schedule
-it, and read the delivery figures afterwards. Unsubscribes are honoured; writers
-manage their own emails, and one permission gives all of them.
+it, and read the delivery figures afterwards. Whoever writes asks for approval,
+and an approver reviews, corrects and sends. Choose the sender among addresses of
+the site's domain, add addresses pasted from a form, and show your social
+networks at the foot of every email. Unsubscribes are honoured.
 
 ![An email to users in the preview, as a desktop and a phone would show it](docs/screenshots/mass-email-preview.png)
 

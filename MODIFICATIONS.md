@@ -1,6 +1,12 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-11-01, this source includes registration before a contest starts,
+As of 2026-11-08, this source includes a C++ template per round of a duel
+tournament, cancelling a duel tournament, a duel panel organized around the next
+step with tournaments by number of places and projectors paired with a code, a
+public history and a ranking of duels, approval before emails to users are sent,
+with senders of the site's domain, social links and pasted addresses,
+organizers who register people and teams in a contest, rating by attendance,
+registration before a contest starts,
 contests on site and online with separate standings, contest announcements that
 pop up right away, emails to many users sent through
 Resend, permissions for one's own and for all duels and emails with duel
@@ -40,6 +46,81 @@ GNU Affero General Public License version 3.
 - Authentication using either a username or an email address.
 - A signed-in custom code testing workflow and its judge bridge support.
 - Minor registration and presentation adjustments.
+
+## A C++ template per round in duel tournaments — 2026-11-08
+
+- Rounds and problems has a Template column: with it ticked, the games of that
+  round open the editor in C++ with a minimal program and the cursor inside
+  `main`, in the player's own C++ or the newest one the problem allows. Changing
+  language before typing removes it. Quick battles have it under More rules.
+- The settings of a battle save only what was changed in them, so a battle keeps
+  following its tournament and round; chosen languages show ticked; a started
+  round locks its games per battle; with 17 to 64 places the first rounds are
+  Round of 32 and Round of 64.
+- No migration: the template is a rule (`starter_code`) in the JSON rules of a
+  round or a quick battle. Details in [docs/duels.md](docs/duels.md).
+
+## Cancelling a duel tournament — 2026-11-06
+
+- Something went wrong? → Cancel the tournament, in preparation or in play: the
+  game in play is voided, prepared games are deleted and players are free at once;
+  what was decided stays. A cancelled tournament leaves Duels → Tournaments, can
+  be shown again without a podium, and never counts for the ranking.
+- A projector following a tournament stays on a battle between its games and 30
+  seconds after it is decided, then goes back to the bracket.
+- Migration `0166` only adds the cancelled status (no change to the table).
+
+## Approval for emails to users, senders and pasted addresses — 2026-11-05
+
+- Writing is not sending: `judge.send_mass_email` writes one's own emails and asks
+  for approval; the new `judge.approve_mass_email` reviews, corrects, sends back
+  with a note, sends or schedules them. What is sent is what was reviewed.
+  Approvers see an envelope with the count in the navigation bar.
+- Senders chosen from a list of the site's domain, and links to social networks
+  with their icons at the foot of every email, both kept in a new admin page.
+- Addresses pasted from a form are added to the audience, sent without a name and
+  never revealed to whoever only writes. `DMOJ_RESEND_CONTACT_LIMIT` caps the
+  contacts kept in Resend.
+- Migration `0165`. Guide in [docs/mass-email.md](docs/mass-email.md). The social
+  network icons in `resources/icons/redes/` are from
+  [Simple Icons](https://simpleicons.org/) (CC0 1.0), recolored grey.
+
+## Organizers register people, rating by attendance — 2026-11-05
+
+- The Registered tab of every contest registers accounts and teams ahead, also
+  after the start and until the end, without the access code; the registration
+  opens a private contest or one of organizations to them while it lasts. Teams go
+  through a page with their members, within the contest's sizes. Organizers remove
+  registrations that have not entered.
+- On site and online contests choose who gets a rating: everybody, on site only or
+  online only.
+- Migration `0164` (two columns with database defaults). Details in the
+  [contest guide](docs/contest-tools.md).
+
+## Duel panel, tournaments by places, paired projectors — 2026-11-04
+
+- The organizer panel has tabs (Now, Quick battles, Tournaments, Projectors,
+  Problem banks), and each battle shows a single button with its next step.
+- Tournaments are created with a number of places, from 2 to 64; problems go in
+  before the names.
+- A projector opens `/proyector` and shows a code that the organizer types in the
+  panel; keys 1 to 6 switch its view. What ended stays on a projector for 30
+  minutes before a new battle or tournament takes it.
+- Without an account, `/duelos/` opens the tournaments; Approve results counts
+  what is pending. Fixes found while using it are in the commit message.
+- Migration `0163`. Details in [docs/duels.md](docs/duels.md).
+
+## Duel history and ranking — 2026-10-26 and 2026-10-27
+
+- Public pages for duel tournaments at `/duelos/torneos/`: started tournaments
+  shown in the history, with their bracket, live while they are played, and
+  upcoming ones announced with a date. Code, submissions and screens are never
+  public. Migration `0160`, with the `hide_arena_history` permission.
+- A Glicko-2 ranking at `/duelos/ranking/`. Everything starts as pending; only
+  someone with the new `judge.decide_arena_ranking` permission decides what
+  counts, also when creating it. Byes, walkovers, cancelled battles and battles
+  with typed names never count. The ranking is recalculated on each change.
+  Migration `0161` and the `rate_duels` command.
 
 ## Contest announcements and the Registered tab — 2026-11-01
 

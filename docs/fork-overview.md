@@ -20,6 +20,8 @@ presents them, with the date each one was added.
 | On site and online | Global, on-site and online standings; a Registered tab to assign people, with an on-site list for those not registered yet; balloons only on site and the reveal per view. Migration `0162`. 2026-10-31 |
 | Contest clock in the navigation bar | A pill on Contests counts down to a contest you registered for and shows the time left inside one; the floating timer box is gone. 2026-10-31 |
 | Announcements right away | Inside a contest, announcements and answers pop up at once through a text-free ring of the event daemon, titled with the contest's name. Authors and curators post them from the Clarifications tab and no longer ask questions. 2026-11-01 |
+| Registering others | The Registered tab of every contest registers accounts and teams ahead, also after the start, without the access code; teams through a page of their members. Organizers remove registrations that have not entered. Migration `0164`. 2026-11-05 |
+| Rating by attendance | On site and online contests choose who gets a rating: everybody, on site only or online only. Migration `0164`. 2026-11-05 |
 
 ## Duels
 
@@ -32,6 +34,13 @@ presents them, with the date each one was added.
 | Projector screens | Secret, revocable links with combined, scoreboard, live code, statements and bracket views. 2026-10-17 |
 | Duel contests out of the lists | The hidden contest behind each game stays out of `/contests/` and the admin's contest lists, and is deleted with its game. 2026-10-19 |
 | Own and all | `manage_arena` now covers one's own battles and the ones where one is a co-organizer; `manage_all_arena` covers every battle. Co-organizers per tournament and quick battle, screens and problem banks per organizer. Migration `0159`. 2026-10-23 |
+| Public history | Pages for started and upcoming tournaments at `/duelos/torneos/`, live while they are played; code, submissions and screens stay private. Migration `0160`. 2026-10-26 |
+| Ranking | Glicko-2 at `/duelos/ranking/`; only `decide_arena_ranking` decides what counts. Migration `0161`. 2026-10-27 |
+| Panel by next step | Tabs Now, Quick battles, Tournaments, Projectors and Problem banks; each battle shows one button with its next step. 2026-11-04 |
+| Tournaments by places | Created with a number of places, from 2 to 64; problems before names. Migration `0163`. 2026-11-04 |
+| Paired projectors | A projector opens `/proyector` and the organizer types its code; keys 1 to 6 switch the view; what ended stays 30 minutes. Migration `0163`. 2026-11-04 |
+| Cancel a tournament | Voids what was not decided, frees the players, leaves the history and never counts. Projectors stay on a battle between its games. Migration `0166`. 2026-11-06 |
+| C++ template per round | A Template column in Rounds and problems, and a box in quick battles; the editor opens in C++ with a minimal program. Battle settings save only what changed. 2026-11-08 |
 
 ## Teams
 
@@ -72,6 +81,9 @@ presents them, with the date each one was added.
 | Emails to users | A section of the admin to write one email for many accounts and send it through Resend Broadcasts, never through the site's SMTP: drafts, desktop and phone preview, a test to oneself, confirmation by typing the number of recipients, sending now or scheduled, delivery figures and unsubscribes. Migration `0158`. 2026-10-21 |
 | Audiences | Everyone with a confirmed email, those matching filters (contests, organizations, groups, activity, sign-up dates, solved problems, rating), or people chosen by name; "never include" always wins. 2026-10-23 |
 | Own and all | `send_mass_email` covers one's own emails, `edit_all_mass_email` all of them. Unsubscribed addresses are masked for non-superusers. 2026-10-23 |
+| Approval | Whoever writes asks for approval; `approve_mass_email` reviews, corrects, sends back or sends. Migration `0165`. 2026-11-05 |
+| Senders and networks | Senders of the site's domain chosen per email, and social links with icons at the foot of every email. 2026-11-05 |
+| Pasted addresses | Addresses from a form added to the audience, without a name and never revealed to whoever only writes; a cap on the contacts kept in Resend. Migration `0165`. 2026-11-05 |
 
 ## Accounts
 

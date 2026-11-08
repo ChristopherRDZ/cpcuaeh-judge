@@ -32,13 +32,53 @@ Whoever did not register joins as always, also after the start.
 
 A registration is a participation with `virtual = -2`. Until it enters, it stays
 out of the rankings, the API, the reveal, balloons, rating, statistics and the
-contest's user count. The access code, the private participants and the
-organizations allowed to join are checked when registering and not again at the
-start, so set them up before people register.
+contest's user count. When people register themselves, the access code, the
+private participants and the organizations allowed to join are checked then and
+not again at the start, so set them up before people register.
 
 In the navigation bar, a pill on **Contests** counts down the last hour before a
 contest you registered for, and then shows the time left while you are in a
 contest, in red in the last five minutes. It replaces the floating timer box.
+
+## The Registered tab
+
+The **Registered** tab (`/contest/<key>/registrations`) is open to whoever can
+edit the contest, in every contest, also before the start. It shows how many
+registered and how many already entered, with a search, a filter by state and
+pages of 100.
+
+The field above the table, **Register** (one per modality in an on site and
+online contest, see below), registers accounts and teams ahead, also after the
+start and until the contest ends. It searches usernames and teams like
+the testers field of the admin, and also takes a pasted list of usernames and
+team names; a team that is not registered is suggested only when its whole name
+is typed. Individual contests offer no teams, and the search only shows
+usernames. The notice says who was registered, why the others were not, who does
+not exist and which name is ambiguous.
+
+Whoever registers people from this tab answers for them: no access code is
+asked, and the registration opens a private contest, or one limited to
+organizations, to them while it lasts. A hidden contest stays hidden until it is
+made visible; the notice says so. The rest is still checked: an active account,
+no ban from the contest, not being one of its authors, curators or testers, and
+one registration per person.
+
+Teams go through a second page that lists their members, all ticked; whoever
+cannot compete is left unticked, with the reason. Each team must stay within the
+contest's minimum and maximum size, and a team with nobody ticked is not
+registered. The registration stands under the team's owner if they compete, or
+else under the member who joined the team first: they can **Cancel
+registration**, and the others can **Withdraw from the roster**.
+
+Nobody registered this way enters by themselves either: at the start they get
+the same prompt as everybody. Their contest page and registration page say **The
+organizers registered you.** No email is sent. In the table, their registration
+is marked **by the organizers**.
+
+Tick rows and **Remove registration** to take away registrations that have not
+entered, after a confirmation. Those who entered stay, and the notice says how
+many. Whoever was removed can register again, with the access code if there is
+one. Every registration and removal is written to the site's log.
 
 ## On site and online
 
@@ -47,19 +87,18 @@ contest created before this option is online only. Only **On site and online**
 changes anything: it splits the standings and the balloons. In the other two,
 everybody competes together.
 
-The **Registered** tab (`/contest/<key>/registrations`) is open to whoever can
-edit the contest, also before the start. It shows how many registered, how many
-already entered and how many are on site and online, with **Online** and **On
-site** tabs (it opens on Online), a search, filters and pages of 100. Tick rows
-and move them to the other tab, after a confirmation. **Add on site** searches
-usernames and teams like the testers field of the admin, and also takes a pasted
-list of usernames, team names or members; the notice says who was moved, who does
-not exist and which name is ambiguous. Individual contests offer no teams, and
-the search only shows usernames.
+In these contests the Registered tab has **Online** and **On site** tabs, each
+with its count (it opens on Online). The field of each tab, **Add online** or
+**Add on site**, registers in that modality whoever is not registered yet and
+moves there whoever is; once the contest has ended, it only moves. A registered
+team also goes by the username of anyone on its roster. Tick rows and move them
+to the other tab, after a confirmation. The notice says who was moved.
 
-Someone added on site who has not registered yet stays on the contest's **on-site
-list** and enters on site as soon as they register or join, also after the start.
-Moving them online takes them off it. Every move is written to the site's log.
+The contest keeps an **on-site list** that follows every move: whoever is on it
+starts on site when they register or join, also after the start. Those on it
+without a registration, such as someone who cancelled theirs, show under the
+field as **Not registered yet**; × takes them off the list. Every move is
+written to the site's log.
 
 The ranking shows **Global**, **On site** and **Online** above the table. Each
 view numbers its rows from 1 and shows the global place in grey, frozen or not.
@@ -79,6 +118,14 @@ Someone moved online by mistake stops getting balloons; the ones already
 delivered stay on the desk marked **No longer on site**, to undo or keep. Once a
 contest has started with people inside, it can no longer drop **On site and
 online**; it can still be turned on.
+
+**Rated participants**, in the Rating part of the contest form, chooses who of an
+on site and online contest gets a rating: **All** (the default), **On site only**
+or **Online only**. Other contests rate everybody, and the form refuses the other
+two choices there. When it is not All, the contest page says so in its details,
+which show only with **show short form settings display** ticked. If it changes
+after the contest was rated, the form reminds you to rate it again. Without the
+**Rate contests** permission the field is read-only.
 
 ## Frozen scoreboard
 
@@ -229,9 +276,11 @@ bar while they are in the contest.
 ## Applying the migrations
 
 The tools need migrations `0150` to `0155`, and registration and on site and
-online contests need `0162`, which only adds three columns. Back up the database
-before running them, compile the translation catalogs, and rebuild the offline
-compression manifest if you use it. See the [setup guide](setup-guide.md).
+online contests need `0162`, which only adds three columns. Registering others
+from the Registered tab and **Rated participants** need `0164`, which adds two.
+Back up the database before running them, compile the translation catalogs, and
+rebuild the offline compression manifest if you use it. See the
+[setup guide](setup-guide.md).
 
 Regression tests for the freeze, reveal and balloon code are in
 [tests/contest_features](../tests/contest_features/README.md).
