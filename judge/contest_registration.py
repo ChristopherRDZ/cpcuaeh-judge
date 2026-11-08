@@ -124,8 +124,14 @@ def _entry_blocker(contest, entry, actor):
     """Why `actor` cannot enter with this registration now, or None. What is personal (a ban, a disabled account,
     organizing or testing the contest, access); for whoever made the registration, also what they carried for the
     rest of the roster when registering (the organizations allowed), which may have changed since; and whether a
-    private contest still authorizes the team."""
+    private contest still authorizes the team. A registration that whoever organizes made answers for the privacy and
+    the organisations (2026-11-04): only what is personal, and that the contest opens, which it does unless hidden."""
     from judge.contest_teams import _access_blocker, _roster_blocker
+    if entry.by_organizer:
+        blocker = _roster_blocker(contest, actor)
+        if blocker is None and not contest.is_accessible_by(actor.user):
+            blocker = _('No tienes acceso a este concurso.')
+        return blocker
     if actor.pk == entry.user_id:
         blocker = _access_blocker(contest, actor)
     else:
@@ -275,6 +281,175 @@ def registration_hint(request, profile):
     except Exception:
         logger.exception('Could not read the registrations of %s', getattr(profile, 'username', profile))
         request.registration_pill, request.registration_prompts = None, []
+
+
+def _registrant(team, members):
+    """Whom a team registered by whoever organizes stands under (2026-11-04): its owner, if they compete, or else
+    whoever on the roster joined the team first. They can cancel it, as whoever registers a team themselves; the rest
+    can take themselves off the roster."""
+    from judge.models import TeamMembership
+    for member in members:
+        if member.pk == team.owner_id:
+            return member
+    joined = dict(TeamMembership.objects.filter(team=team, profile__in=members).values_list('profile_id', 'joined'))
+    return min(members, key=lambda member: (joined.get(member.pk) is None, joined.get(member.pk), member.pk))
+
+
+@transaction.atomic
+def register_for(contest_id, organizer, profile_ids=(), teams=(), onsite=False):
+    """Register people and teams ahead, by whoever organizes the contest (2026-11-04), from the tab «Registrados»:
+    also once it started, until it ends. They answer for them (by_organizer): neither the access code, nor the
+    privacy, nor the organisations of the contest are asked. What is personal still is: an active account, not banned
+    from the contest, not organizing or testing it, and one official registration per person. A team goes with the
+    members picked, `teams` being [(team id, [profile ids])], within the sizes of the contest. In a contest on site
+    and online they start where `onsite` says, and the list of who competes on site follows. Nobody enters: at the
+    start they are asked, as everybody (the owner, 2026-11-04).
+
+    Returns (registered, refused, created): the names registered, why each of the others was not, in a sentence that
+    names it, and the participations created. Raises ValidationError when the contest takes nobody. The contest row
+    first, as join_attempt locks it; then the teams and the profiles, each by id."""
+    from judge.contest_teams import _require_presentable_name, _roster_blocker
+    from judge.models import Team
+    from judge.models.arena import ArenaGame
+    from judge.models.team import ContestTeamMember
+    from judge.team_services import require_teams_enabled
+    contest = Contest.objects.select_for_update().get(pk=contest_id)
+    if contest.ended:
+        raise ValidationError(_('El concurso ya terminó.'))
+    if ArenaGame.objects.filter(contest_id=contest.pk).exists():
+        raise ValidationError(_('This contest belongs to an arena battle.'))
+    onsite = bool(onsite) and contest.is_hybrid
+    people = list(dict.fromkeys(profile_ids))
+    teams = [(team_id, list(dict.fromkeys(members))) for team_id, members in dict(teams).items()]
+
+    official = contest.users.official()
+    taken = set(official.filter(team__isnull=True).values_list('user_id', flat=True))
+    taken |= set(ContestTeamMember.objects.filter(participation__in=official).values_list('profile_id', flat=True))
+    taken_teams = set(official.filter(team__isnull=False).values_list('team_id', flat=True))
+
+    locked = {team.pk: team for team in
+              Team.objects.select_for_update().filter(pk__in=[team_id for team_id, _members in teams]).order_by('pk')}
+    everybody = set(people) | {pk for _team, members in teams for pk in members}
+    # Locked alone and read after: with select_related MariaDB would lock the accounts too.
+    list(Profile.objects.select_for_update().filter(pk__in=everybody).order_by('pk').values_list('pk', flat=True))
+    profiles = Profile.objects.filter(pk__in=everybody).select_related('user').in_bulk()
+
+    registered, refused, created = [], [], []
+    now = timezone.now()
+    if people and contest.participation_mode == Contest.TEAM:
+        refused += [_('%(user)s: este concurso sólo admite equipos.') % {'user': profiles[pk].username}
+                    for pk in people if pk in profiles]
+        people = []
+    for pk in people:
+        profile = profiles.get(pk)
+        if profile is None:
+            continue
+        blocker = _roster_blocker(contest, profile)
+        if blocker is None and pk in taken:
+            blocker = _('%(user)s ya está inscrito en otra participación de este concurso.') % {
+                'user': profile.username}
+        if blocker:
+            refused.append(blocker)
+            continue
+        created.append(ContestParticipation.objects.create(
+            contest=contest, user=profile, virtual=ContestParticipation.REGISTERED, real_start=now, onsite=onsite,
+            by_organizer=True))
+        taken.add(pk)
+        registered.append(profile.username)
+
+    for team_id, member_ids in teams:
+        team = locked.get(team_id)
+        if team is None or not team.is_active:
+            refused.append(_('Uno de los equipos ya no está activo.') if team is None else
+                           _('El equipo %(team)s ya no está activo.') % {'team': team.name})
+            continue
+        if contest.participation_mode == Contest.INDIVIDUAL:
+            refused.append(_('%(team)s: este concurso sólo admite participaciones individuales.') % {'team': team.name})
+            continue
+        if team.pk in taken_teams:
+            refused.append(_('El equipo %(team)s ya está registrado en este concurso.') % {'team': team.name})
+            continue
+        current = set(team.members.values_list('pk', flat=True))
+        gone = [profiles[pk].username for pk in member_ids if pk in profiles and pk not in current]
+        if gone or any(pk not in profiles for pk in member_ids):
+            refused.append(_('El equipo %(team)s cambió de integrantes: vuelve a elegirlos.') % {'team': team.name})
+            continue
+        members = sorted((profiles[pk] for pk in member_ids), key=lambda member: member.pk)
+        # The sizes of the contest, checked here whatever the page let through (the owner, 2026-11-04).
+        if not contest.team_min_size <= len(members) <= contest.team_max_size:
+            refused.append(_('El equipo %(team)s debe tener entre %(minimum)s y %(maximum)s integrantes y elegiste '
+                             '%(count)s.') % {'team': team.name, 'minimum': contest.team_min_size,
+                                              'maximum': contest.team_max_size, 'count': len(members)})
+            continue
+        try:
+            require_teams_enabled()
+            _require_presentable_name(contest, team)
+        except ValidationError as exc:
+            refused.append(' '.join(exc.messages))
+            continue
+        blockers = [_roster_blocker(contest, member) for member in members]
+        blockers += [_('%(user)s ya está inscrito en otra participación de este concurso.') % {'user': member.username}
+                     for member in members if member.pk in taken]
+        blockers = [blocker for blocker in blockers if blocker]
+        if blockers:
+            refused.append(_('El equipo %(team)s no se registró: %(why)s') % {'team': team.name,
+                                                                              'why': ' '.join(blockers)})
+            continue
+        entry = ContestParticipation.objects.create(
+            contest=contest, user=_registrant(team, members), team=team, team_name=team.name,
+            virtual=ContestParticipation.REGISTERED, real_start=now, onsite=onsite, by_organizer=True)
+        ContestTeamMember.objects.bulk_create([
+            ContestTeamMember(participation=entry, profile=member, username=member.username) for member in members])
+        created.append(entry)
+        taken |= {member.pk for member in members}
+        taken_teams.add(team.pk)
+        registered.append(team.name)
+
+    if created:
+        alone = {entry.user_id for entry in created if not entry.team_id}
+        rosters = {pk for entry in created if entry.team_id for pk in _members(entry)}
+        on_teams = {entry.team_id for entry in created if entry.team_id}
+        if contest.is_hybrid and onsite:
+            contest.change_onsite_list(add_profiles=alone, add_teams=on_teams)
+        elif contest.is_hybrid:
+            contest.change_onsite_list(remove_profiles=alone | rosters, remove_teams=on_teams)
+        forget_hints_on_commit(alone | rosters)
+        logger.info('Contest %s: %s registered %d %s: %s', contest.key, organizer.username, len(created),
+                    'on site' if onsite else 'online' if contest.is_hybrid else 'participations',
+                    ' '.join(str(entry.pk) for entry in created))
+    return registered, refused, created
+
+
+@transaction.atomic
+def remove_registrations(contest_id, organizer, participation_ids):
+    """Take away registrations that have not entered, by whoever organizes the contest (2026-11-04, the owner: «sí
+    podría quitar el registro»): the ones they made and the ones made by whoever registered. Gone as if cancelled:
+    whoever was on them can register again, with the code if there is one, and they leave the list of who competes on
+    site. Returns (the names taken away, how many of the ones asked had entered already). The contest row first, as
+    cancel_registration locks it, then the participations."""
+    from judge.models.team import ContestTeamMember
+    contest = Contest.objects.select_for_update().get(pk=contest_id)
+    rows = list(contest.users.select_for_update().filter(pk__in=list(participation_ids),
+                                                         virtual__in=ContestParticipation.OFFICIAL)
+                .order_by('pk').values_list('pk', 'virtual', 'user_id', 'team_id', 'team_name'))
+    waiting = [row for row in rows if row[1] == ContestParticipation.REGISTERED]
+    entered = len(rows) - len(waiting)
+    if not waiting:
+        return [], entered
+    ids = [pk for pk, _virtual, _user, _team, _name in waiting]
+    roster = set(ContestTeamMember.objects.filter(participation_id__in=ids).values_list('profile_id', flat=True))
+    alone = {user for _pk, _virtual, user, team, _name in waiting if not team}
+    on_teams = {team for _pk, _virtual, _user, team, _name in waiting if team}
+    names = dict(Profile.objects.filter(pk__in=alone).values_list('id', 'user__username'))
+    removed = [name if team else names.get(user, '') for _pk, _virtual, user, team, name in waiting]
+    ContestTeamMember.objects.filter(participation_id__in=ids).delete()
+    ContestParticipation.objects.filter(pk__in=ids).delete()
+    if contest.is_hybrid:
+        contest.change_onsite_list(remove_profiles=alone | roster, remove_teams=on_teams)
+    forget_hints_on_commit(alone | roster)
+    logger.info('Contest %s: %s took away %d registrations: %s', contest.key, organizer.username, len(ids),
+                ' '.join(str(pk) for pk in ids))
+    return removed, entered
 
 
 @transaction.atomic

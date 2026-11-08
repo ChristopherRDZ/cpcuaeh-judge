@@ -225,6 +225,13 @@ class Contest(models.Model):
                                    default=False)
     rate_exclude = models.ManyToManyField(Profile, verbose_name=_('exclude from ratings'), blank=True,
                                           related_name='rate_exclude+')
+    # Who of a contest on site and online at once gets a rating (2026-11-04): everybody, as always, or only one of
+    # the two. Anywhere else everybody does (clean). The value in the database is for the code from before.
+    RATE_EVERYBODY = 'all'
+    rating_modality = models.CharField(
+        _('Cuentan para el rating'), max_length=10, default=RATE_EVERYBODY, db_default=RATE_EVERYBODY,
+        choices=((RATE_EVERYBODY, _('Todos')), (ONSITE, _('Sólo presencial')), (ONLINE, _('Sólo en línea'))),
+        help_text=_('Sólo en concursos «Presencial y en línea». En los demás cuentan todos.'))
     is_private = models.BooleanField(verbose_name=_('private to specific users'), default=False)
     private_teams = models.ManyToManyField('Team', blank=True, related_name='private_contests',
                                           verbose_name=_('Equipos autorizados'),
@@ -325,6 +332,10 @@ class Contest(models.Model):
             raise ValidationError({'team_max_size': _('El máximo debe ser mayor o igual al mínimo.')})
         if self.participation_mode == self.TEAM and self.is_rated:
             raise ValidationError({'is_rated': _('Los concursos exclusivos de equipos no pueden ser calificados.')})
+        # Not on the field: whoever cannot rate sees it read-only, and an error on a field the form lacks is a 500.
+        if self.rating_modality != self.RATE_EVERYBODY and self.attendance_mode != self.HYBRID:
+            raise ValidationError(_('«Cuentan para el rating» sólo puede ser «Sólo presencial» o «Sólo en línea» en '
+                                    'un concurso «Presencial y en línea».'))
         if self.pk:
             previous = type(self).objects.filter(pk=self.pk).values('participation_mode', 'attendance_mode',
                                                                     'start_time').first()
@@ -708,12 +719,16 @@ class Contest(models.Model):
         # too (teams.md, 2026-09-19). Until 2026-10-29 (equipos-globos-1) the organisation was asked again of every
         # member, so a teammate from outside it stayed on the roster without being able to open the contest.
         in_roster = self.users.filter(team__isnull=False, team_roster__profile=user.profile).exists()
+        # And whoever organizes it answers for whoever they register (2026-11-04, the owner: «sí les da acceso si es
+        # privado», also when it is limited to organisations), while the registration lasts.
+        vouched = in_roster or self.users.filter(team__isnull=True, user=user.profile, by_organizer=True,
+                                                 virtual__in=ContestParticipation.OFFICIAL).exists()
         in_users = (self.private_contestants.filter(id=user.profile.id).exists() or
                     self.private_teams.filter(is_active=True, members=user.profile).exists() or
-                    in_roster)
+                    vouched)
 
         if not self.is_private and self.is_organization_private:
-            if in_org or in_roster:
+            if in_org or vouched:
                 return
             raise self.PrivateContest()
 
@@ -723,7 +738,7 @@ class Contest(models.Model):
             raise self.PrivateContest()
 
         if self.is_private and self.is_organization_private:
-            if (in_org and in_users) or in_roster:
+            if (in_org and in_users) or vouched:
                 return
             raise self.PrivateContest()
 
@@ -839,6 +854,11 @@ class Contest(models.Model):
             q |= (Q(is_visible=True, is_private=True) & Q(Exists(authorized_team)) &
                   (Q(is_organization_private=False) | org_check))
             q |= Q(is_visible=True) & Q(Exists(on_roster))
+            # Registered by whoever organizes it (2026-11-04), as access_check lets them in.
+            vouched = ContestParticipation.objects.filter(contest_id=OuterRef('pk'), user=user.profile,
+                                                          team__isnull=True, by_organizer=True,
+                                                          virtual__in=ContestParticipation.OFFICIAL)
+            q |= Q(is_visible=True) & Q(Exists(vouched))
             queryset = queryset.filter(q)
         return queryset.distinct()
 
@@ -1020,6 +1040,11 @@ class ContestParticipation(models.Model):
     # On site, in a contest that is both (Contest.HYBRID); only whoever organizes changes it. The value in the database
     # is for the code from before, between migrating and installing.
     onsite = models.BooleanField(_('Presencial'), default=False, db_default=False)
+    # Registered by whoever organizes the contest, from the tab «Registrados» (2026-11-04): they answer for it, so
+    # neither the access code, nor the privacy, nor the organisations of the contest are asked of it, when registering
+    # or when entering, and the registration itself opens the contest (Contest.access_check). Whoever it is for can
+    # still cancel it. The value in the database is for the code from before.
+    by_organizer = models.BooleanField(_('Registrado por la organización'), default=False, db_default=False)
 
     @cached_property
     def freeze_starts_at(self):

@@ -22,10 +22,14 @@
                 {% if contest.is_hybrid %}
                     <p>{{ _('Modalidad') }}: <strong>{{ _('Presencial') if entry.onsite else _('En línea') }}</strong></p>
                 {% endif %}
+                {# Made by whoever organizes (2026-11-04): who made it is not the person it stands under. #}
+                {% if entry.by_organizer %}
+                    <p class="team-note">{{ _('Te registró la organización.') }}</p>
+                {% endif %}
                 {% if entry.user_id == own_id %}
                     <input type="hidden" name="cancel_registration" value="{{ entry.pk }}">
                     <div class="team-actions"><button type="submit" class="team-btn-danger">{{ _('Cancelar registro') }}</button></div>
-                {% else %}
+                {% elif not entry.by_organizer %}
                     <p class="team-note">{{ _('Te registró %(user)s.', user=entry.user.username) }}</p>
                 {% endif %}
             </form>

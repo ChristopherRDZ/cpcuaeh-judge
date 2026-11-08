@@ -8080,3 +8080,209 @@ msgstr "These names match more than one registration, account or team: pick the 
 #: cpc 2026-11-01
 msgid "El concurso ya terminó."
 msgstr "The contest has already ended."
+
+#: cpc 2026-11-04
+msgid "Registrar"
+msgstr "Register"
+
+#: cpc 2026-11-04
+msgid "Agregar"
+msgstr "Add"
+
+#: cpc 2026-11-04
+msgid "Agregar a en línea"
+msgstr "Add online"
+
+#: cpc 2026-11-04
+msgid "¿Agregar a presencial?"
+msgstr "Add on site?"
+
+#: cpc 2026-11-04
+msgid "¿Agregar a en línea?"
+msgstr "Add online?"
+
+#: cpc 2026-11-04
+msgid "¿Registrarlos?"
+msgstr "Register them?"
+
+#: cpc 2026-11-04
+msgid "Quitar registro"
+msgstr "Remove registration"
+
+#: cpc 2026-11-04
+msgid "¿Quitar el registro?"
+msgstr "Remove the registration?"
+
+#: cpc 2026-11-04
+msgid "Tendrán que registrarse de nuevo."
+msgstr "They will have to register again."
+
+#: cpc 2026-11-04
+msgid "por la organización"
+msgstr "by the organizers"
+
+#: cpc 2026-11-04
+#, python-format
+msgid "No se registraron: %(reasons)s"
+msgstr "Not registered: %(reasons)s"
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(user)s: este concurso sólo admite equipos."
+msgstr "%(user)s: this contest only takes teams."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(team)s: este concurso sólo admite participaciones individuales."
+msgstr "%(team)s: this contest only takes individual participants."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "El equipo %(team)s ya no está activo."
+msgstr "Team %(team)s is no longer active."
+
+#: cpc 2026-11-04
+msgid "Uno de los equipos ya no está activo."
+msgstr "One of the teams is no longer active."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "El equipo %(team)s ya está registrado en este concurso."
+msgstr "Team %(team)s is already registered in this contest."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "El equipo %(team)s cambió de integrantes: vuelve a elegirlos."
+msgstr "The members of team %(team)s changed: pick them again."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "El equipo %(team)s debe tener entre %(minimum)s y %(maximum)s integrantes y elegiste %(count)s."
+msgstr "Team %(team)s must have between %(minimum)s and %(maximum)s members, and you picked %(count)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "El equipo %(team)s no se registró: %(why)s"
+msgstr "Team %(team)s was not registered: %(why)s"
+
+#: cpc 2026-11-04
+msgid "El concurso ya terminó: ya no se puede registrar a nadie."
+msgstr "The contest has ended: nobody can be registered anymore."
+
+#: cpc 2026-11-04
+msgid "El concurso no es visible: no lo verán hasta que lo hagas visible."
+msgstr "The contest is not visible: they will not see it until you make it visible."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "Entre %(minimum)s y %(maximum)s integrantes por equipo."
+msgstr "Between %(minimum)s and %(maximum)s members per team."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "Marcados: %(count)s"
+msgstr "Ticked: %(count)s"
+
+#: cpc 2026-11-04
+msgid "Sin nadie marcado, el equipo no se registra."
+msgstr "With nobody ticked, the team is not registered."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "También: %(names)s."
+msgstr "Also: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "Pasan a presencial: %(names)s."
+msgstr "Moving on site: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "Pasan a en línea: %(names)s."
+msgstr "Moving online: %(names)s."
+
+#: cpc 2026-11-04
+msgid "Esta página caducó: vuelve a agregarlos."
+msgstr "This page expired: add them again."
+
+#: cpc 2026-11-04
+msgid "Te registró la organización."
+msgstr "The organizers registered you."
+
+#: cpc 2026-11-04
+msgid "Registrado por la organización"
+msgstr "Registered by the organizers"
+
+#: cpc 2026-11-04
+msgid "Cuentan para el rating"
+msgstr "Rated participants"
+
+#: cpc 2026-11-04
+msgid "Sólo en concursos «Presencial y en línea». En los demás cuentan todos."
+msgstr "Only in «On site and online» contests. In the others everybody counts."
+
+#: cpc 2026-11-04
+msgid "«Cuentan para el rating» sólo puede ser «Sólo presencial» o «Sólo en línea» en un concurso «Presencial y en línea»."
+msgstr "«Rated participants» can only be «On site only» or «Online only» in an «On site and online» contest."
+
+#: cpc 2026-11-04
+msgid "Cambió quién cuenta para el rating de este concurso, que ya tenía rating: vuelve a calificarlo."
+msgstr "Who counts for the rating of this contest changed after it was rated: rate it again."
+
+#: cpc 2026-11-04
+msgid "Sólo cuentan quienes compiten en **presencial**."
+msgstr "Only those competing **on site** count."
+
+#: cpc 2026-11-04
+msgid "Sólo cuentan quienes compiten **en línea**."
+msgstr "Only those competing **online** count."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d registrado: %(names)s."
+msgid_plural "%(count)d registrados: %(names)s."
+msgstr[0] "%(count)d registered: %(names)s."
+msgstr[1] "%(count)d registered: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d registrado en presencial: %(names)s."
+msgid_plural "%(count)d registrados en presencial: %(names)s."
+msgstr[0] "%(count)d registered on site: %(names)s."
+msgstr[1] "%(count)d registered on site: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d registrado en línea: %(names)s."
+msgid_plural "%(count)d registrados en línea: %(names)s."
+msgstr[0] "%(count)d registered online: %(names)s."
+msgstr[1] "%(count)d registered online: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d ya estaba registrado."
+msgid_plural "%(count)d ya estaban registrados."
+msgstr[0] "%(count)d was already registered."
+msgstr[1] "%(count)d were already registered."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d registro quitado: %(names)s."
+msgid_plural "%(count)d registros quitados: %(names)s."
+msgstr[0] "%(count)d registration removed: %(names)s."
+msgstr[1] "%(count)d registrations removed: %(names)s."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "%(count)d ya entró al concurso: no se le quita."
+msgid_plural "%(count)d ya entraron al concurso: no se les quita."
+msgstr[0] "%(count)d already entered the contest: it stays."
+msgstr[1] "%(count)d already entered the contest: they stay."
+
+#: cpc 2026-11-04
+#, python-format
+msgid "Y %(count)d más."
+msgid_plural "Y %(count)d más."
+msgstr[0] "And %(count)d more."
+msgstr[1] "And %(count)d more."

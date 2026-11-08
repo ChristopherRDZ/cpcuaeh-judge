@@ -1,0 +1,161 @@
+{% extends "common-content.html" %}
+
+{% block title_ruler %}{% endblock %}
+
+{% block title_row %}
+    {% set title = contest.name %}
+    {% include "contest/contest-tabs.html" %}
+{% endblock %}
+
+{% block content_media %}
+    {# Picking the members of the teams that whoever organizes registers (2026-11-04, the owner: «siempre, todos
+       marcados», within the sizes of the contest). The palette and the boxes of «Registrados». #}
+    <style>
+        :root {
+            --reg-soft: #f8f8f8;
+            --reg-muted: #666;
+            --reg-border: #ccc;
+            --reg-warning: #a52b21;
+        }
+        {% macro dark_palette() %}
+        :root {
+            --reg-soft: #111;
+            --reg-muted: #aaa;
+            --reg-border: #3b3b3b;
+            --reg-warning: #ffaaa1;
+        }
+        {% endmacro %}
+        {% if PREFERRED_STYLE_CSS == DARK_STYLE_CSS %}
+            {{ dark_palette() }}
+        {% elif PREFERRED_STYLE_CSS is none %}
+            @media (prefers-color-scheme: dark) { {{ dark_palette() }} }
+        {% endif %}
+        .reg-note {
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+            padding: 0.6em 0.9em;
+            margin-bottom: 0.8em;
+        }
+
+        .reg-note.reg-errors {
+            border-color: #d9534f;
+            color: var(--reg-warning);
+        }
+
+        .reg-muted {
+            color: var(--reg-muted);
+        }
+
+        .reg-team {
+            border: 1px solid var(--reg-border);
+            border-radius: 4px;
+            background: var(--reg-soft);
+            padding: 0.5em 0.9em 0.7em;
+            margin: 0 0 0.9em;
+            min-width: 0;
+        }
+
+        .reg-team legend {
+            font-weight: bold;
+            padding: 0 0.3em;
+            overflow-wrap: anywhere;
+        }
+
+        .reg-team.reg-out legend, .reg-team.reg-out .reg-team-count {
+            color: var(--reg-warning);
+        }
+
+        .reg-member {
+            display: block;
+            padding: 0.15em 0;
+            overflow-wrap: anywhere;
+        }
+
+        .reg-member input {
+            margin-right: 0.4em;
+        }
+
+        .reg-member .reg-muted {
+            font-size: 0.9em;
+        }
+
+        .reg-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.9em;
+            align-items: center;
+            margin-top: 1em;
+        }
+    </style>
+{% endblock %}
+
+{% block content_js_media %}
+    <script type="text/javascript">
+        $(function () {
+            // How many each team takes, and the button only while every team is within the sizes, or has nobody
+            // ticked (it is left out): the server checks it again either way. Without this script the page works the
+            // same.
+            var COUNT = {{ _('Marcados: %(count)s', count='{count}')|htmltojs }};
+            var $teams = $('.reg-team'), $send = $('#reg-send');
+
+            function paint() {
+                var fine = true;
+                $teams.each(function () {
+                    var $team = $(this), ticked = $team.find('input[name="member"]:checked').length;
+                    var out = ticked > 0 && (ticked < +$team.data('min') || ticked > +$team.data('max'));
+                    $team.toggleClass('reg-out', out).find('.reg-team-count').text(COUNT.replace('{count}', ticked));
+                    fine = fine && !out;
+                });
+                $send.prop('disabled', !fine).toggleClass('disabled', !fine);
+            }
+
+            $teams.on('change', 'input[name="member"]', paint);
+            paint();
+        });
+    </script>
+{% endblock %}
+
+{% block body %}
+    {% for error in errors %}
+        <div class="reg-note reg-errors" role="alert">{{ error }}</div>
+    {% endfor %}
+
+    <form method="post" action="{{ url('contest_registrations_move', contest.key) }}{{ query }}">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="members">
+        <input type="hidden" name="target" value="{{ target }}">
+        <input type="hidden" name="teams" value="{{ signed }}">
+        {% for pk in rows %}<input type="hidden" name="row" value="{{ pk }}">{% endfor %}
+        {% for pk, _name in people %}<input type="hidden" name="person" value="{{ pk }}">{% endfor %}
+
+        <p>{{ _('Entre %(minimum)s y %(maximum)s integrantes por equipo.', minimum=contest.team_min_size, maximum=contest.team_max_size) }}
+            <span class="reg-muted">{{ _('Sin nadie marcado, el equipo no se registra.') }}</span></p>
+        {% for team in teams %}
+            <fieldset class="reg-team" data-min="{{ contest.team_min_size }}" data-max="{{ contest.team_max_size }}">
+                <legend>{{ team.name }}</legend>
+                {% for member in team.members %}
+                    <label class="reg-member">
+                        <input type="checkbox" name="member" value="{{ team.pk }}:{{ member.pk }}"
+                               {%- if member.why %} disabled{% else %} checked{% endif %}>
+                        {{- member.name -}}
+                        {% if member.why %} <span class="reg-muted">· {{ member.why }}</span>{% endif %}
+                    </label>
+                {% endfor %}
+                <span class="reg-team-count reg-muted" aria-live="polite"></span>
+            </fieldset>
+        {% endfor %}
+
+        {% if people %}
+            <p>{{ _('También: %(names)s.', names=people|map('last')|join(', ')) }}</p>
+        {% endif %}
+        {% if moved and target != 'register' %}
+            <p>{{ (_('Pasan a presencial: %(names)s.', names=moved|join(', ')) if target == 'onsite' else _('Pasan a en línea: %(names)s.', names=moved|join(', '))) }}</p>
+        {% endif %}
+
+        <div class="reg-actions">
+            <button type="submit" class="button" id="reg-send">{{ _('Registrar') }}</button>
+            <a href="{{ back }}">{{ _('Cancelar') }}</a>
+        </div>
+    </form>
+{% endblock %}

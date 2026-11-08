@@ -1,4 +1,5 @@
-"""Whoever registered for a contest, and placing them on site or online (2026-10-31).
+"""Whoever registered for a contest, and placing them on site or online (2026-10-31); registering others, and taking
+registrations away, by whoever organizes it (2026-11-04).
 
 For whoever can edit the contest (is_editable_by), as the reveal and the seats of the balloons; everybody else is told
 the page does not exist. It lists the official participations of the contest, the ones registered ahead and the ones
@@ -6,8 +7,14 @@ that entered (also without registering, once started), without whoever organizes
 is on site and online at once it moves people between the two, ticking their boxes or pasting a list of names;
 anywhere else it is only the list.
 
-The list of who competes on site (Contest.onsite_list) follows every move, and keeps whoever is pasted before they
-register or join, so that they start on site when they do (the owner, 2026-10-31). Moving is idempotent and locks the
+Since 2026-11-04 the same field registers whoever is not registered yet, in the modality of the tab (anywhere else, as
+participants), until the contest ends (contest_registration.register_for): neither the access code, nor the privacy,
+nor the organisations are asked of them. A team goes through a second page that picks its members, every one ticked,
+within the sizes of the contest. The table also takes away the registrations that have not entered.
+
+The list of who competes on site (Contest.onsite_list) follows every move, and keeps whoever was named before they
+registered or joined, so that they start on site when they do (the owner, 2026-10-31; since 2026-11-04 the field
+registers them instead, and the list only keeps the ones named before). Moving is idempotent and locks the
 contest and then the rows, as join_attempt locks the contest before reading the list; recompute_results reads `onsite`
 from the locked row, so a score saved at the same moment keeps the move. Only whoever organizes moves anybody: the
 participant never chooses. Each move goes to the journal, with who made it, and the result says what it does to the
@@ -17,6 +24,7 @@ import logging
 import re
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
@@ -58,6 +66,9 @@ WAITING = re.compile(r'^([pt])(\d{1,10})$')
 # The suggestions of the field that adds to the list of who competes on site (2026-11-01), of each kind.
 SUGGESTIONS = 10
 MAX_TERM = 100
+# What the second step of registering teams signs (2026-11-04): the teams the first step named, for an hour.
+MEMBERS_SALT = 'judge.contest_registrations.members'
+MEMBERS_MAX_AGE = 3600
 
 
 def _contest(request, key):
@@ -383,6 +394,10 @@ def contest_registrations(request, contest):
         'previous_query': page_query(page.previous_page_number()) if page.has_previous() else '',
         'next_query': page_query(page.next_page_number()) if page.has_next() else '',
         'max_paste': MAX_PASTE,
+        # The field over the table registers (2026-11-04): in the modality of the tab, or anywhere else until the
+        # end; once ended, only a contest on site and online keeps it, to move whoever is named.
+        'box_target': _box(contest, modality),
+        'show_box': contest.is_hybrid or not contest.ended,
         'waiting': waiting_on_site(contest) if contest.is_hybrid else [],
         'registration_errors': kept.get('errors', []),
         'registration_notices': kept.get('notices', []),
@@ -507,21 +522,168 @@ def _balloon_notices(contest, onsite, changed, names):
     return notices
 
 
+def _ints(values, bound):
+    found = []
+    for value in values[:bound]:
+        try:
+            found.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return found
+
+
+def _tabs(request, contest):
+    """What contest-tabs.html expects from the contest views."""
+    profile = request.profile
+    return {
+        'contest': contest,
+        'tab': 'registrations',
+        'now': timezone.now(),
+        'can_edit': True,
+        'is_editor': profile.id in contest.editor_ids,
+        'is_tester': profile.id in contest.tester_ids,
+        'has_joined': contest.users.for_profile(profile).filter(virtual=ContestParticipation.LIVE).exists(),
+    }
+
+
+def _box(contest, modality):
+    """What the field that adds people does on this tab (2026-11-04): in a contest on site and online it registers in
+    the modality of the tab whoever is not registered and moves there whoever is; anywhere else it registers."""
+    if contest.is_hybrid:
+        return 'online' if modality == 'online' else 'onsite'
+    return 'register'
+
+
+def _unresolved(unknown, ambiguous):
+    errors = []
+    if unknown:
+        errors.append(_('No hay ninguna cuenta ni equipo con estos nombres: %(names)s.') % {'names': _listed(unknown)})
+    if ambiguous:
+        # A picked suggestion says which one it is (2026-11-01); a typed name may say more than one.
+        errors.append(_('Estos nombres coinciden con más de un registro, cuenta o equipo: elige el correcto en las '
+                        'sugerencias, o márcalo en la tabla: %(names)s.') % {'names': _listed(ambiguous)})
+    return errors
+
+
+def _registered_notice(contest, onsite, names):
+    if contest.is_hybrid and onsite:
+        text = ngettext('%(count)d registrado en presencial: %(names)s.',
+                        '%(count)d registrados en presencial: %(names)s.', len(names))
+    elif contest.is_hybrid:
+        text = ngettext('%(count)d registrado en línea: %(names)s.', '%(count)d registrados en línea: %(names)s.',
+                        len(names))
+    else:
+        text = ngettext('%(count)d registrado: %(names)s.', '%(count)d registrados: %(names)s.', len(names))
+    return text % {'count': len(names), 'names': _listed(names)}
+
+
+def _refused(refused):
+    """Why some were not registered, in one line: each reason names whom it is about."""
+    shown = ' '.join(refused[:SHOWN_NAMES])
+    if len(refused) > SHOWN_NAMES:
+        shown += ' ' + ngettext('Y %(count)d más.', 'Y %(count)d más.', len(refused) - SHOWN_NAMES) % {
+            'count': len(refused) - SHOWN_NAMES}
+    return _('No se registraron: %(reasons)s') % {'reasons': shown}
+
+
+def _members_step(request, contest, target, ids, people, teams, errors, query):
+    """The second step of registering teams (the owner, 2026-11-04: «siempre, todos marcados», within the sizes the
+    contest sets): every team with its members of today, all ticked but whoever cannot compete, said why. Nothing
+    changes until it is sent. What the first step found travels with it: the registrations to move and the accounts to
+    register, by id, and the teams signed, so that the second step registers only the teams the first one named."""
+    from django.core import signing
+    from judge.contest_teams import _roster_blocker
+    from judge.models import Team, TeamMembership
+    from judge.models.team import ContestTeamMember
+    found = list(Team.objects.filter(pk__in=set(teams.values()), is_active=True).order_by('name', 'pk'))
+    official = contest.users.official()
+    taken = set(official.filter(team__isnull=True).values_list('user_id', flat=True))
+    taken |= set(ContestTeamMember.objects.filter(participation__in=official).values_list('profile_id', flat=True))
+    by_team = {}
+    memberships = (TeamMembership.objects.filter(team__in=found).select_related('profile__user')
+                   .order_by('profile__user__username', 'profile_id'))
+    for membership in memberships:
+        profile = membership.profile
+        why = _roster_blocker(contest, profile)
+        if why is None and profile.pk in taken:
+            why = _('%(user)s ya está inscrito en otra participación de este concurso.') % {'user': profile.username}
+        by_team.setdefault(membership.team_id, []).append({'pk': profile.pk, 'name': profile.username, 'why': why})
+    rows = list(entrants(contest).filter(pk__in=ids).select_related('user__user')) if ids else []
+    moved = [row.team_name if row.team_id else row.user.user.username for row in rows]
+    alone = list(Profile.objects.filter(pk__in=set(people.values())).order_by('user__username')
+                 .values_list('id', 'user__username'))
+    signed = signing.dumps({'contest': contest.pk, 'teams': sorted(team.pk for team in found)}, salt=MEMBERS_SALT)
+    context = _tabs(request, contest)
+    context.update({
+        'title': _('Integrantes'),
+        'target': target,
+        'signed': signed,
+        'rows': [row.pk for row in rows],
+        'moved': moved,
+        'people': alone,
+        'teams': [{'pk': team.pk, 'name': team.name, 'members': by_team.get(team.pk, [])} for team in found],
+        'errors': errors,
+        'query': query,
+        'back': reverse('contest_registrations', args=[contest.key]) + query,
+    })
+    return render(request, 'contest/registrations-members.html', context)
+
+
+def _signed_teams(contest, token):
+    """The teams the first step named, from what it signed; None if it is not this contest's or is too old."""
+    from django.core import signing
+    try:
+        value = signing.loads(token, salt=MEMBERS_SALT, max_age=MEMBERS_MAX_AGE)
+    except signing.BadSignature:
+        return None
+    if not isinstance(value, dict) or value.get('contest') != contest.pk:
+        return None
+    return {pk for pk in value.get('teams', ()) if isinstance(pk, int)}
+
+
+def _remove(request, contest, back):
+    """Taking registrations away, ticked in the table (2026-11-04): only the ones that have not entered."""
+    from judge.contest_registration import remove_registrations
+    ids = set(_ints(request.POST.getlist('selected'), PAGE_SIZE))
+    valid = list(entrants(contest).filter(pk__in=ids).values_list('pk', flat=True)) if ids else []
+    if not valid:
+        _leave(request, contest, errors=[_('No elegiste a nadie.')])
+        return back
+    removed, entered = remove_registrations(contest.pk, request.profile, valid)
+    notices = []
+    if removed:
+        notices.append(ngettext('%(count)d registro quitado: %(names)s.', '%(count)d registros quitados: %(names)s.',
+                                len(removed)) % {'count': len(removed), 'names': _listed(removed)})
+    if entered:
+        notices.append(ngettext('%(count)d ya entró al concurso: no se le quita.',
+                                '%(count)d ya entraron al concurso: no se les quita.', entered) % {'count': entered})
+    _leave(request, contest, notices)
+    return back
+
+
 @login_required
 @require_POST
 def contest_registrations_move(request, contest):
+    """The box over the table and the buttons of the table. In a contest on site and online the box registers in the
+    modality of its tab whoever is not registered and moves there whoever is (2026-11-04), and the table moves the
+    ticked ones; anywhere else the box only registers. Teams go through a second step, to pick their members. The
+    table also takes registrations away (`action=remove`)."""
+    from judge.contest_registration import register_for
     contest = _contest(request, contest)
     back = _back(contest, request.GET)
-    if not contest.is_hybrid:
+    if request.POST.get('action') == 'remove':
+        return _remove(request, contest, back)
+    target = request.POST.get('target', '')
+    second = request.POST.get('step') == 'members'
+    pasted = 'names' in request.POST or 'picked' in request.POST
+    if contest.is_hybrid and target not in ('onsite', 'online'):
+        _leave(request, contest, errors=[_('Elige si pasan a presencial o a en línea.')])
+        return back
+    if not contest.is_hybrid and (target != 'register' or not (pasted or second)):
         _leave(request, contest, errors=[
             _('Este concurso no es presencial y en línea a la vez: no hay modalidades que asignar.')])
         return back
-    target = request.POST.get('target', '')
-    if target not in ('onsite', 'online'):
-        _leave(request, contest, errors=[_('Elige si pasan a presencial o a en línea.')])
-        return back
     onsite = target == 'onsite'
-    pasted = 'names' in request.POST or 'picked' in request.POST
     names, picked = '', []
     if pasted:
         # The page sends every chip in one value, a name per line, with scripts or without (2026-11-01); several
@@ -543,12 +705,29 @@ def contest_registrations_move(request, contest):
                 name = ' '.join((match.group(3) or '').split())[:NAME_CHARS * 2]
                 picked.append((match.group(1), int(match.group(2)), name or match.group(1) + match.group(2)))
     ids = set()
-    if not pasted:
-        for value in request.POST.getlist('selected')[:PAGE_SIZE]:
+    if second:
+        ids = set(_ints(request.POST.getlist('row'), MAX_NAMES))
+    elif not pasted:
+        ids = set(_ints(request.POST.getlist('selected'), PAGE_SIZE))
+    # The second step: the accounts by id, and the teams the first one signed, with the members ticked.
+    people, teams = {}, []
+    if second:
+        allowed = _signed_teams(contest, request.POST.get('teams', ''))
+        if allowed is None:
+            _leave(request, contest, errors=[_('Esta página caducó: vuelve a agregarlos.')])
+            return back
+        people = {'#%d' % pk: pk for pk in _ints(request.POST.getlist('person'), MAX_NAMES)}
+        ticked = {}
+        for value in request.POST.getlist('member')[:MAX_NAMES]:
+            team, _sep, member = value.partition(':')
             try:
-                ids.add(int(value))
-            except (TypeError, ValueError):
+                team, member = int(team), int(member)
+            except ValueError:
                 continue
+            if team in allowed:
+                ticked.setdefault(team, []).append(member)
+        # A team with nobody ticked is left out: that is how a team that cannot fit is dropped from the page.
+        teams = [(team, ticked[team]) for team in sorted(allowed) if ticked.get(team)]
     # The rows of the list of who competes on site without a registration, ticked to take them off it.
     ticked_profiles, ticked_teams = set(), set()
     for value in request.POST.getlist('waiting')[:MAX_NAMES]:
@@ -556,9 +735,11 @@ def contest_registrations_move(request, contest):
         if match:
             (ticked_profiles if match.group(1) == 'p' else ticked_teams).add(int(match.group(2)))
 
+    notices, errors = [], []
+    registered, refused, created = [], [], []
     with transaction.atomic():
         # The contest first, as join_attempt locks it before reading the list of who competes on site. The names are
-        # read after it (2026-11-01): whoever registers meanwhile is moved, not listed as not registered yet.
+        # read after it (2026-11-01): whoever registers meanwhile is moved, not registered twice.
         locked = Contest.objects.select_for_update().get(pk=contest.pk)
         waiting_profiles, waiting_teams, unknown, ambiguous = {}, {}, [], []
         # Only what was sent: with the contest locked, whoever joins now waits for this.
@@ -571,81 +752,99 @@ def contest_registrations_move(request, contest):
             waiting_teams.update(more[2])
             unknown += more[3]
             ambiguous += more[4]
-        unlisted_profiles, unlisted_teams = set(), set()
-        if not onsite:
-            # Pasted to go online (the page only offers it for the boxes): whoever is not registered leaves the list.
-            unlisted_profiles = ticked_profiles | set(waiting_profiles.values())
-            unlisted_teams = ticked_teams | set(waiting_teams.values())
-            waiting_profiles, waiting_teams = {}, {}
-        # Only rows of this contest, official and not of its staff, whatever ids were sent; then only those rows are
-        # locked: MariaDB has no FOR UPDATE OF, and the joins of entrants() would lock their profiles too.
-        valid = list(entrants(contest).filter(pk__in=ids).values_list('pk', flat=True)) if ids else []
-        rows = list(ContestParticipation.objects.filter(pk__in=valid).select_for_update()
-                    .values_list('pk', 'onsite', 'user_id', 'team_id'))
-        changed = [pk for pk, now_onsite, _user, _team in rows if now_onsite != onsite]
-        if changed:
-            ContestParticipation.objects.filter(pk__in=changed).update(onsite=onsite)
-        # The list follows every move: whoever cancels and registers again, or is pasted before registering, starts
-        # where whoever organizes put them.
-        people = {user for _pk, _onsite, user, team in rows if not team}
-        teams = {team for _pk, _onsite, _user, team in rows if team}
-        listed_profiles, listed_teams = locked.onsite_designations()
-        if onsite:
-            locked.change_onsite_list(add_profiles=people | set(waiting_profiles.values()),
-                                      add_teams=teams | set(waiting_teams.values()))
+        if second:
+            waiting_profiles = people
+        if waiting_teams and not contest.ended:
+            # Teams not registered: nothing changes yet; the second step picks their members.
+            step = (ids, waiting_profiles, waiting_teams, _unresolved(unknown, ambiguous))
         else:
-            from judge.models.team import ContestTeamMember
-            roster = set(ContestTeamMember.objects.filter(
-                participation_id__in=[pk for pk, _onsite, _user, team in rows if team]).values_list('profile_id',
-                                                                                                    flat=True))
-            locked.change_onsite_list(remove_profiles=people | roster | unlisted_profiles,
-                                      remove_teams=teams | unlisted_teams)
+            step = None
+        if step is None:
+            # Only rows of this contest, official and not of its staff, whatever ids were sent; then only those rows
+            # are locked: MariaDB has no FOR UPDATE OF, and the joins of entrants() would lock their profiles too.
+            valid = list(entrants(contest).filter(pk__in=ids).values_list('pk', flat=True)) if ids else []
+            rows = list(ContestParticipation.objects.filter(pk__in=valid).select_for_update()
+                        .values_list('pk', 'onsite', 'user_id', 'team_id'))
+            changed = [pk for pk, now_onsite, _user, _team in rows if now_onsite != onsite] if contest.is_hybrid \
+                else []
+            if changed:
+                ContestParticipation.objects.filter(pk__in=changed).update(onsite=onsite)
+            # The list follows every move: whoever cancels and registers again starts where whoever organizes put
+            # them.
+            listed_profiles, listed_teams = locked.onsite_designations()
+            if contest.is_hybrid and rows:
+                people_moved = {user for _pk, _onsite, user, team in rows if not team}
+                teams_moved = {team for _pk, _onsite, _user, team in rows if team}
+                if onsite:
+                    locked.change_onsite_list(add_profiles=people_moved, add_teams=teams_moved)
+                else:
+                    from judge.models.team import ContestTeamMember
+                    roster = set(ContestTeamMember.objects.filter(
+                        participation_id__in=[pk for pk, _onsite, _user, team in rows if team])
+                        .values_list('profile_id', flat=True))
+                    locked.change_onsite_list(remove_profiles=people_moved | roster, remove_teams=teams_moved)
+            if ticked_profiles or ticked_teams:
+                locked.change_onsite_list(remove_profiles=ticked_profiles, remove_teams=ticked_teams)
+            # Whoever is not registered is registered now, by whoever organizes (2026-11-04), in this modality.
+            if waiting_profiles or waiting_teams or teams:
+                if contest.ended:
+                    errors.append(_('El concurso ya terminó: ya no se puede registrar a nadie.'))
+                else:
+                    try:
+                        registered, refused, created = register_for(
+                            contest.pk, request.profile, profile_ids=list(waiting_profiles.values()), teams=teams,
+                            onsite=onsite)
+                    except ValidationError as exc:
+                        errors.extend(exc.messages)
+    if step is not None:
+        return _members_step(request, contest, target, *step, query=_query(
+            request.GET.get('q', '')[:150], request.GET.get('modality', ''), request.GET.get('state', ''),
+            request.GET.get('page', '')))
     if changed:
         logger.info('Contest %s: %s moved %d participations to %s: %s', contest.key, request.user.username,
                     len(changed), target, ' '.join(str(pk) for pk in sorted(changed)))
-    newly_listed = [name for name, pk in waiting_profiles.items() if pk not in listed_profiles] + \
-        [name for name, pk in waiting_teams.items() if pk not in listed_teams]
-    unlisted = [name for pk, name in Profile.objects.filter(pk__in=unlisted_profiles & listed_profiles)
+    unlisted = [name for pk, name in Profile.objects.filter(pk__in=ticked_profiles & listed_profiles)
                 .values_list('id', 'user__username')]
-    if unlisted_teams & listed_teams:
+    if ticked_teams & listed_teams:
         from judge.models import Team
-        unlisted += list(Team.objects.filter(pk__in=unlisted_teams & listed_teams).values_list('name', flat=True))
-    if newly_listed or unlisted:
-        logger.info('Contest %s: %s %s the list of who competes on site: %s', contest.key, request.user.username,
-                    'added to' if onsite else 'took off', ' '.join(sorted(newly_listed or unlisted)))
+        unlisted += list(Team.objects.filter(pk__in=ticked_teams & listed_teams).values_list('name', flat=True))
+    if unlisted:
+        logger.info('Contest %s: %s took off the list of who competes on site: %s', contest.key,
+                    request.user.username, ' '.join(sorted(unlisted)))
 
-    notices, errors = [], []
-    if not ids and not waiting_profiles and not waiting_teams and not unknown and not ambiguous and \
-            not unlisted_profiles and not unlisted_teams:
+    if not ids and not waiting_profiles and not teams and not unknown and not ambiguous and \
+            not ticked_profiles and not ticked_teams and not errors:
         errors.append(_('No elegiste a nadie.'))
-    elif changed:
-        names = {row.pk: row.team_name if row.team_id else row.user.user.username for row in
-                 ContestParticipation.objects.filter(pk__in=changed).select_related('user__user')}
+    names = {row.pk: row.team_name if row.team_id else row.user.user.username for row in
+             ContestParticipation.objects.filter(pk__in=list(changed) + [entry.pk for entry in created])
+             .select_related('user__user')}
+    if changed:
         if onsite:
             text = ngettext('%(count)d pasó a presencial: %(names)s.', '%(count)d pasaron a presencial: %(names)s.',
                             len(changed))
         else:
             text = ngettext('%(count)d pasó a en línea: %(names)s.', '%(count)d pasaron a en línea: %(names)s.',
                             len(changed))
-        notices.append(text % {'count': len(changed), 'names': _listed(names.values())})
-        notices.extend(_balloon_notices(contest, onsite, changed, names))
+        notices.append(text % {'count': len(changed), 'names': _listed([names[pk] for pk in changed])})
+    if registered:
+        notices.append(_registered_notice(contest, onsite, registered))
+        if not contest.is_visible:
+            notices.append(_('El concurso no es visible: no lo verán hasta que lo hagas visible.'))
+    if changed or (created and onsite):
+        notices.extend(_balloon_notices(contest, onsite, list(changed) + [entry.pk for entry in created], names))
     already = len(rows) - len(changed)
-    if already:
+    if already and contest.is_hybrid:
         notices.append((ngettext('%(count)d ya estaba en presencial.', '%(count)d ya estaban en presencial.', already)
                         if onsite else
                         ngettext('%(count)d ya estaba en línea.', '%(count)d ya estaban en línea.', already))
                        % {'count': already})
-    if waiting_profiles or waiting_teams:
-        # Short (the owner, 2026-11-01): the chips under the field say the rest.
-        notices.append(_('En la lista de la sede, sin registrarse todavía: %(names)s.')
-                       % {'names': _listed(list(waiting_profiles) + list(waiting_teams))})
+    elif already:
+        notices.append(ngettext('%(count)d ya estaba registrado.', '%(count)d ya estaban registrados.', already)
+                       % {'count': already})
     if unlisted:
         notices.append(_('Ya no están en la lista de la sede: %(names)s.') % {'names': _listed(unlisted)})
-    if unknown:
-        errors.append(_('No hay ninguna cuenta ni equipo con estos nombres: %(names)s.') % {'names': _listed(unknown)})
-    if ambiguous:
-        # A picked suggestion says which one it is (2026-11-01); a typed name may say more than one.
-        errors.append(_('Estos nombres coinciden con más de un registro, cuenta o equipo: elige el correcto en las '
-                        'sugerencias, o márcalo en la tabla: %(names)s.') % {'names': _listed(ambiguous)})
+    if refused:
+        errors.append(_refused(refused))
+    errors.extend(_unresolved(unknown, ambiguous))
     _leave(request, contest, notices, errors)
     return back

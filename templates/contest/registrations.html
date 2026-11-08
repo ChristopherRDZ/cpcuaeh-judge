@@ -167,13 +167,14 @@
         }
 
         /* The site styles every button as its blue one with white text, the colour with !important. */
-        #reg-confirm .reg-secondary {
+        #reg-confirm .reg-secondary, .reg-actions .reg-plain {
             background: var(--reg-plain);
             border-color: var(--reg-plain-border);
             color: var(--reg-plain-text) !important;
         }
 
-        #reg-confirm .reg-secondary:hover, #reg-confirm .reg-secondary:active {
+        #reg-confirm .reg-secondary:hover, #reg-confirm .reg-secondary:active,
+        .reg-actions .reg-plain:hover, .reg-actions .reg-plain:active {
             background: var(--reg-plain-hover);
         }
 
@@ -365,7 +366,7 @@
             // the same.
             var $boxes = $('#reg-move input[name="selected"]');
             var $all = $('#reg-all');
-            var $moves = $('#reg-move button[name="target"]');
+            var $moves = $('#reg-move button[name="target"], #reg-move button[name="action"]');
 
             function paint() {
                 $boxes.each(function () {
@@ -390,16 +391,37 @@
             // and the balloons. Asked on the click, not on the submit: common.js disables every button of the page as a
             // form is sent, even if the sending is then cancelled. Without scripts, the move goes at once.
             var $confirm = $('#reg-confirm'), proceed = null, focusBefore = null;
+            // The balloons only matter once it started. Registering and taking away (2026-11-04) ask too.
             var TEXTS = {
                 onsite: {
                     title: {{ _('¿Pasar a presencial?')|htmltojs }},
                     action: {{ _('Pasar a presencial')|htmltojs }},
-                    note: {{ _('Reciben los globos de lo que ya resolvieron.')|htmltojs }}
+                    note: {{ (_('Reciben los globos de lo que ya resolvieron.') if contest.started else '')|htmltojs }}
                 },
                 online: {
                     title: {{ _('¿Pasar a en línea?')|htmltojs }},
                     action: {{ _('Pasar a en línea')|htmltojs }},
-                    note: {{ _('Dejan de recibir globos.')|htmltojs }}
+                    note: {{ (_('Dejan de recibir globos.') if contest.started else '')|htmltojs }}
+                },
+                'add-onsite': {
+                    title: {{ _('¿Agregar a presencial?')|htmltojs }},
+                    action: {{ _('Agregar')|htmltojs }},
+                    note: {{ (_('Reciben los globos de lo que ya resolvieron.') if contest.started else '')|htmltojs }}
+                },
+                'add-online': {
+                    title: {{ _('¿Agregar a en línea?')|htmltojs }},
+                    action: {{ _('Agregar')|htmltojs }},
+                    note: {{ (_('Dejan de recibir globos.') if contest.started else '')|htmltojs }}
+                },
+                register: {
+                    title: {{ _('¿Registrarlos?')|htmltojs }},
+                    action: {{ _('Registrar')|htmltojs }},
+                    note: ''
+                },
+                remove: {
+                    title: {{ _('¿Quitar el registro?')|htmltojs }},
+                    action: {{ _('Quitar registro')|htmltojs }},
+                    note: {{ _('Tendrán que registrarse de nuevo.')|htmltojs }}
                 }
             };
             var COUNT = {{ _('Seleccionados: %(count)s', count='{count}')|htmltojs }};
@@ -408,7 +430,7 @@
                 var text = TEXTS[target];
                 $('#reg-confirm-title').text(text.title);
                 $('#reg-confirm-count').text(COUNT.replace('{count}', count));
-                $('#reg-confirm-note').text(text.note);
+                $('#reg-confirm-note').text(text.note).prop('hidden', !text.note);
                 $('#reg-confirm-yes').text(text.action);
                 proceed = then;
                 focusBefore = document.activeElement;
@@ -472,10 +494,10 @@
             // A disabled button does not send its value, and common.js disables them all as a form is sent: the
             // hidden field carries it. Without scripts the button sends it, and the field stays disabled.
             $moves.on('click', function (event) {
-                var target = this.value, form = this.form;
+                var target = this.value, form = this.form, removing = this.name === 'action';
                 event.preventDefault();
-                ask(target, $boxes.filter(':checked').length, function () {
-                    $('#reg-target').val(target).prop('disabled', false);
+                ask(removing ? 'remove' : target, $boxes.filter(':checked').length, function () {
+                    $(removing ? '#reg-action' : '#reg-target').val(target).prop('disabled', false);
                     form.submit();
                 });
             });
@@ -483,8 +505,9 @@
                 $('#reg-waiting-key').val(this.value).prop('disabled', false);
             });
 
-            // The field that adds to the list of who competes on site, as the testers of the administration: it
-            // suggests registrations, accounts and teams, and each name is a chip. A list pasted from a spreadsheet,
+            // The field that registers others and moves them (2026-11-04; until then it added to the list of who
+            // competes on site), as the testers of the administration: it suggests registrations, accounts and teams,
+            // and each name is a chip. A list pasted from a spreadsheet,
             // one per line, becomes one chip per name.
             var $names = $('#reg-names');
             if (!$names.length || !$.fn.select2)
@@ -659,8 +682,9 @@
                 }
 
                 event.preventDefault();
+                var target = $(form).find('input[name="target"]').val();
                 if (chips.length)
-                    ask('onsite', chips.length, send);
+                    ask(target === 'register' ? 'register' : 'add-' + target, chips.length, send);
                 else
                     send();
             });
@@ -688,19 +712,39 @@
         {% endif %}
     </ul>
 
+    {# One tab per modality, with the tabs of the site (2026-11-01): each lists only its own, its field adds to it
+       (2026-11-04), and its button moves the ticked ones to the other. #}
     {% if contest.is_hybrid %}
-        {# Whoever is named and has not registered yet stays on the list of who competes on site, and enters on site
-           when they register or join (2026-10-31): the chips under the field. #}
+        <div class="tabs reg-tabs">
+            <ul>
+                <li class="tab{% if modality == 'onsite' %} active{% endif %}">
+                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.onsite }}"{% if modality == 'onsite' %} aria-current="page"{% endif %}>
+                        <i class="tab-icon fa fa-map-marker"></i> {{ _('Presencial') }} ({{ counts.onsite }})</a>
+                </li>
+                <li class="tab{% if modality == 'online' %} active{% endif %}">
+                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.online }}"{% if modality == 'online' %} aria-current="page"{% endif %}>
+                        <i class="tab-icon fa fa-globe"></i> {{ _('En línea') }} ({{ counts.online }})</a>
+                </li>
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if show_box %}
+        {# Registering others, without the access code (2026-11-04): in the modality of the tab whoever is not
+           registered, and whoever is moves there; teams pick their members on the next page. Whoever was named on
+           the list of who competes on site before that stays on it: the chips under the field. #}
         <div class="reg-box">
             <form method="post" id="paste" action="{{ url('contest_registrations_move', contest.key) }}{{ search_query }}">
                 {% csrf_token %}
-                <input type="hidden" name="target" value="onsite">
-                <label for="reg-names" class="reg-box-title">{{ _('Agregar a presencial') }}</label>
+                <input type="hidden" name="target" value="{{ box_target }}">
+                <label for="reg-names" class="reg-box-title">
+                    {{- _('Agregar a presencial') if box_target == 'onsite' else _('Agregar a en línea') if box_target == 'online' else _('Registrar') -}}
+                </label>
                 <div class="reg-add-row">
                     <textarea id="reg-names" name="names" rows="3" maxlength="{{ max_paste }}" autocomplete="off"
                               spellcheck="false"
                               placeholder="{{ _('Usuario o equipo') if contest.participation_mode != 'individual' else _('Usuario') }}"></textarea>
-                    <button type="submit" class="button">{{ _('Pasar a presencial') }}</button>
+                    <button type="submit" class="button">{{ _('Registrar') if box_target == 'register' else _('Agregar') }}</button>
                 </div>
             </form>
             {% if waiting %}
@@ -741,44 +785,28 @@
         {% endif %}
     </form>
 
-    {# One tab per modality, with the tabs of the site (2026-11-01): each lists only its own, and its button moves the
-       ticked ones to the other. #}
-    {% if contest.is_hybrid %}
-        <div class="tabs reg-tabs">
-            <ul>
-                <li class="tab{% if modality == 'onsite' %} active{% endif %}">
-                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.onsite }}"{% if modality == 'onsite' %} aria-current="page"{% endif %}>
-                        <i class="tab-icon fa fa-map-marker"></i> {{ _('Presencial') }} ({{ counts.onsite }})</a>
-                </li>
-                <li class="tab{% if modality == 'online' %} active{% endif %}">
-                    <a href="{{ url('contest_registrations', contest.key) }}{{ tab_queries.online }}"{% if modality == 'online' %} aria-current="page"{% endif %}>
-                        <i class="tab-icon fa fa-globe"></i> {{ _('En línea') }} ({{ counts.online }})</a>
-                </li>
-            </ul>
-        </div>
-    {% endif %}
-
     {% if page.object_list %}
-        {% if contest.is_hybrid %}
-            {% set target = 'online' if modality == 'onsite' else 'onsite' %}
-            <form method="post" id="reg-move" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
-            {% csrf_token %}
-            <input type="hidden" name="target" id="reg-target" disabled>
-            <div class="reg-actions">
+        {% set target = 'online' if modality == 'onsite' else 'onsite' %}
+        <form method="post" id="reg-move" action="{{ url('contest_registrations_move', contest.key) }}{{ here_query }}">
+        {% csrf_token %}
+        <input type="hidden" name="target" id="reg-target" disabled>
+        <input type="hidden" name="action" id="reg-action" disabled>
+        <div class="reg-actions">
+            {% if contest.is_hybrid %}
                 <button type="submit" name="target" value="{{ target }}" class="button">
                     {{- _('Pasar a en línea') if target == 'online' else _('Pasar a presencial') -}}
                 </button>
-            </div>
-        {% endif %}
+            {% endif %}
+            {# Only the ones that have not entered (2026-11-04); whoever entered stays, and is said so. #}
+            <button type="submit" name="action" value="remove" class="button reg-plain">{{ _('Quitar registro') }}</button>
+        </div>
         <div class="reg-table-wrap">
             <table class="table striped reg-table">
                 <thead>
                 <tr>
-                    {% if contest.is_hybrid %}
-                        <th scope="col" class="reg-check">
-                            <input type="checkbox" id="reg-all" hidden aria-label="{{ _('Marcar a todos los de esta página') }}">
-                        </th>
-                    {% endif %}
+                    <th scope="col" class="reg-check">
+                        <input type="checkbox" id="reg-all" hidden aria-label="{{ _('Marcar a todos los de esta página') }}">
+                    </th>
                     <th scope="col">{{ _('Participante') }}</th>
                     <th scope="col">{{ _('Estado') }}</th>
                 </tr>
@@ -786,17 +814,15 @@
                 <tbody>
                 {% for row in page.object_list %}
                     <tr>
-                        {% if contest.is_hybrid %}
-                            <td class="reg-check">
-                                <input type="checkbox" name="selected" value="{{ row.pk }}" id="reg-row-{{ row.pk }}">
-                            </td>
-                        {% endif %}
+                        <td class="reg-check">
+                            <input type="checkbox" name="selected" value="{{ row.pk }}" id="reg-row-{{ row.pk }}">
+                        </td>
                         <th scope="row">
-                            {# The name ticks the box, where there are boxes. The username, and under it the full name
-                               of the account, which only whoever runs the contest reads here (2026-11-01). #}
-                            {% if contest.is_hybrid %}<label for="reg-row-{{ row.pk }}" class="reg-name">{% else %}<span class="reg-name">{% endif %}
+                            {# The name ticks the box. The username, and under it the full name of the account, which
+                               only whoever runs the contest reads here (2026-11-01). #}
+                            <label for="reg-row-{{ row.pk }}" class="reg-name">
                                 {{- row.team_name if row.team_id else row.user.username -}}
-                            {% if contest.is_hybrid %}</label>{% else %}</span>{% endif %}
+                            </label>
                             {% if row.team_id %}
                                 <span class="reg-sub">{{ row.team_roster.all()|map(attribute='username')|join(', ') }}</span>
                             {% else %}
@@ -813,7 +839,7 @@
                                 <span class="reg-sub">{{ _('No puede entrar al concurso.') }}</span>
                             {% elif row.registered %}
                                 <span class="reg-state">{{ _('Sin entrar') if contest.started else _('Registrado') }}</span>
-                                <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}</span>
+                                <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}{% if row.by_organizer %} · {{ _('por la organización') }}{% endif %}</span>
                             {% else %}
                                 <span class="reg-state">{{ _('Entró') }}</span>
                                 <span class="reg-sub">{{ row.real_start|date(_("M j, Y, G:i")) }}</span>
@@ -824,9 +850,7 @@
                 </tbody>
             </table>
         </div>
-        {% if contest.is_hybrid %}
-            </form>
-        {% endif %}
+        </form>
         {% if page.has_other_pages() %}
             <nav class="reg-pagination" aria-label="{{ _('Páginas') }}">
                 {% if page.has_previous() %}<a href="{{ url('contest_registrations', contest.key) }}{{ previous_query }}">{{ _('Previous') }}</a>{% endif %}
@@ -844,20 +868,19 @@
         <p class="reg-empty">{{ _('Todavía no se registra nadie.') }}</p>
     {% endif %}
 
-    {% if contest.is_hybrid %}
-        {# A second look before moving anybody (the owner, 2026-11-01): a click by mistake changes the scoreboard
-           and the balloons. Drawn as the popups of the site; opened by the script above, which knows how many. #}
-        <div class="reg-confirm" id="reg-confirm" hidden>
-            <div class="reg-confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="reg-confirm-title"
-                 aria-describedby="reg-confirm-count" tabindex="-1">
-                <div class="reg-confirm-title" id="reg-confirm-title"></div>
-                <p id="reg-confirm-count"></p>
-                {% if contest.started %}<p class="reg-muted" id="reg-confirm-note"></p>{% endif %}
-                <div class="reg-confirm-actions">
-                    <button type="button" class="reg-secondary" id="reg-confirm-no">{{ _('Cancelar') }}</button>
-                    <button type="button" class="button" id="reg-confirm-yes"></button>
-                </div>
+    {# A second look before moving, registering or taking away anybody (the owner, 2026-11-01): a click by mistake
+       changes the scoreboard and the balloons. Drawn as the popups of the site; opened by the script above, which
+       knows how many. #}
+    <div class="reg-confirm" id="reg-confirm" hidden>
+        <div class="reg-confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="reg-confirm-title"
+             aria-describedby="reg-confirm-count" tabindex="-1">
+            <div class="reg-confirm-title" id="reg-confirm-title"></div>
+            <p id="reg-confirm-count"></p>
+            <p class="reg-muted" id="reg-confirm-note" hidden></p>
+            <div class="reg-confirm-actions">
+                <button type="button" class="reg-secondary" id="reg-confirm-no">{{ _('Cancelar') }}</button>
+                <button type="button" class="button" id="reg-confirm-yes"></button>
             </div>
         </div>
-    {% endif %}
+    </div>
 {% endblock %}

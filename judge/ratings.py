@@ -143,7 +143,8 @@ def recalculate_ratings(ranking, old_mean, times_ranked, historical_p):
 def rate_contest(contest):
     """Store the ratings of this contest. Returns False, storing nothing, while its scoreboard is frozen: the ratings
     would give away the real standings before the reveal (congelacion-revelador-1, 2026-10-29). Whoever organizes or
-    tests it today does not count (without_contest_staff)."""
+    tests it today does not count (without_contest_staff), and in a contest on site and online at once only the part
+    its `rating_modality` says (2026-11-04)."""
     from judge.models import Rating, Profile
 
     if contest.freeze_active:
@@ -165,6 +166,9 @@ def rate_contest(contest):
         .exclude(user_id__in=contest.rate_exclude.all()) \
         .filter(virtual=0, team__isnull=True).values('id', 'user_id', 'score', 'cumtime', 'tiebreaker',
                                   'last_rating', 'last_mean', 'times')
+    # Only on site or only online, when a contest that is both says so (2026-11-04).
+    if contest.is_hybrid and contest.rating_modality in (contest.ONSITE, contest.ONLINE):
+        users = users.filter(onsite=contest.rating_modality == contest.ONSITE)
     if not contest.rate_all:
         users = users.filter(submissions__gt=0)
     if contest.rating_floor is not None:

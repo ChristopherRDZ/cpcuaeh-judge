@@ -259,7 +259,8 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
         (_('Scheduling'), {'fields': ('start_time', 'end_time', 'time_limit')}),
         (_('Details'), {'fields': ('description', 'og_image', 'logo_override_image', 'tags', 'summary')}),
         (_('Format'), {'fields': ('format_name', 'format_config', 'problem_label_script')}),
-        (_('Rating'), {'fields': ('is_rated', 'rate_all', 'rating_floor', 'rating_ceiling', 'rate_exclude')}),
+        (_('Rating'), {'fields': ('is_rated', 'rating_modality', 'rate_all', 'rating_floor', 'rating_ceiling',
+                                  'rate_exclude')}),
         (_('Access'), {'fields': ('access_code', 'private_contestants', 'private_teams', 'organizations', 'classes',
                                   'join_organizations', 'view_contest_scoreboard', 'view_contest_submissions')}),
         (_('Justice'), {'fields': ('banned_users',)}),
@@ -268,6 +269,8 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
     list_display = ('key', 'name', 'is_visible', 'is_rated', 'locked_after', 'start_time', 'end_time', 'time_limit',
                     'user_count', 'reveal_link')
     search_fields = ('key', 'name')
+    # The three choices in sight (the owner, 2026-11-04: «que sí sea notorio que existen las otras opciones»).
+    radio_fields = {'rating_modality': admin.VERTICAL}
     list_filter = (DuelContestFilter,)
     inlines = [ContestProblemInline]
     actions_on_top = True
@@ -364,7 +367,7 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
     def get_readonly_fields(self, request, obj=None):
         readonly = []
         if not request.user.has_perm('judge.contest_rating'):
-            readonly += ['is_rated', 'rate_all', 'rate_exclude']
+            readonly += ['is_rated', 'rating_modality', 'rate_all', 'rate_exclude']
         if not request.user.has_perm('judge.lock_contest'):
             readonly += ['locked_after']
         if not request.user.has_perm('judge.contest_access_code'):
@@ -449,6 +452,11 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
             self.message_user(request, _('The authors, curators or testers of this contest changed after it was '
                                          'rated: rate it again so that its ratings match its scoreboard.'),
                               messages.WARNING)
+        # The same when who of it gets a rating changes (2026-11-04).
+        if change and 'rating_modality' in form.changed_data and \
+                Rating.objects.filter(contest=form.instance).exists():
+            self.message_user(request, _('Cambió quién cuenta para el rating de este concurso, que ya tenía rating: '
+                                         'vuelve a calificarlo.'), messages.WARNING)
 
     def has_change_permission(self, request, obj=None):
         if not request.user.has_perm('judge.edit_own_contest'):

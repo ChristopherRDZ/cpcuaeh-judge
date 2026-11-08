@@ -213,6 +213,12 @@
                                     {{ _('This contest will be **rated** for participants who submit at least once.')|markdown('default') }}
                                 {% endif %}
                             {% endif %}
+                            {# Only one part of a contest on site and online, when it says so (2026-11-04). #}
+                            {% if contest.is_hybrid and contest.rating_modality == 'onsite' %}
+                                {{ _('Sólo cuentan quienes compiten en **presencial**.')|markdown('default') }}
+                            {% elif contest.is_hybrid and contest.rating_modality == 'online' %}
+                                {{ _('Sólo cuentan quienes compiten **en línea**.')|markdown('default') }}
+                            {% endif %}
                         {% else %}
                             {{ _('This contest will **not** be rated.')|markdown('default') }}
                         {% endif %}

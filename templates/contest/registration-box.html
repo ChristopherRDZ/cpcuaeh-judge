@@ -17,9 +17,13 @@
                 {% if registration.team_id %}
                     <p>{{ _('Equipo') }}: <strong>{{ registration.team_name }}</strong>
                         <span class="contest-registration-muted">· {{ registration.team_roster.all()|map(attribute='username')|join(', ') }}</span></p>
-                    {% if not mine %}
+                    {% if not mine and not registration.by_organizer %}
                         <p class="contest-registration-muted">{{ _('Te registró %(user)s.', user=registration.user.username) }}</p>
                     {% endif %}
+                {% endif %}
+                {# Made by whoever organizes (2026-11-04, the owner: only on the site, no mail). #}
+                {% if registration.by_organizer %}
+                    <p class="contest-registration-muted">{{ _('Te registró la organización.') }}</p>
                 {% endif %}
                 {% if contest.is_hybrid %}
                     <p>{{ _('Modalidad') }}: <strong>{{ _('Presencial') if registration.onsite else _('En línea') }}</strong></p>
