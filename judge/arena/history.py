@@ -5,6 +5,7 @@ podium and the final standings. Read by judge/views/arena_history.py, by the pla
 What anybody may see, even without an account:
 
 * a tournament that has started (in progress, finished or archived) whose organizers left «show in the history» on;
+  a cancelled one, only if it had started and somebody showed it again: cancelling hides it (2026-11-06);
 * a draft with that box on and a planned date, as upcoming, until half a day after that date: only its name, date and
   description. Its participants and bracket can still change, so they wait until it starts.
 
@@ -21,7 +22,7 @@ take a lock. The pages of the players and the organizers do that, as always.
 from datetime import timedelta
 
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -37,6 +38,8 @@ __all__ = ['UPCOMING_GRACE', 'is_public', 'find', 'live', 'upcoming', 'finished'
 
 STARTED = (ArenaTournament.RUNNING, ArenaTournament.FINISHED, ArenaTournament.ARCHIVED)
 OVER = (ArenaTournament.FINISHED, ArenaTournament.ARCHIVED)
+# A cancelled tournament (2026-11-06) is over and has no champion; it was played only if it had started.
+PLAYED_CANCELLED = Q(status=ArenaTournament.CANCELLED, started_at__isnull=False)
 # A tournament announced for a date still shows as upcoming for a while after it: it may start late.
 UPCOMING_GRACE = timedelta(hours=12)
 SUMMARY_FINISHED = 5
@@ -71,13 +74,19 @@ def upcoming(now=None):
 
 
 def finished():
-    return _shown().filter(status__in=OVER).order_by('-finished_at', '-started_at', '-id')
+    return _shown().filter(Q(status__in=OVER) | PLAYED_CANCELLED).order_by('-finished_at', '-started_at', '-id')
+
+
+def was_played(tournament):
+    """Whether `tournament` started: in progress, over, or cancelled once it had started."""
+    return tournament.status in STARTED or (tournament.status == ArenaTournament.CANCELLED and
+                                            tournament.started_at is not None)
 
 
 def is_public(tournament, now=None):
     if not tournament.show_in_history:
         return False
-    if tournament.status in STARTED:
+    if was_played(tournament):
         return True
     now = now or timezone.now()
     return (tournament.status == ArenaTournament.DRAFT and tournament.planned_at is not None and
@@ -141,6 +150,7 @@ def rows(tournaments):
             'participants': counts.get(tournament.pk, 0),
             'champion': _person(champion),
             'runner_up': _person(runner_up),
+            'cancelled': tournament.status == ArenaTournament.CANCELLED,
         })
     return result
 
@@ -176,7 +186,7 @@ def listing(user, finished_page, now=None):
     if finished_page.number != 1:
         return sections
     now = now or timezone.now()
-    hidden = access.history_hidden_for(user).filter(status__in=STARTED)
+    hidden = access.history_hidden_for(user).filter(Q(status__in=STARTED) | PLAYED_CANCELLED)
     if user is not None and user.is_authenticated:
         hidden = hidden.exclude(id__in=access.contended_tournaments(user).values('id'))
     hidden = hidden.order_by('-created_at', '-id')
@@ -416,9 +426,11 @@ def page(tournament, user, now=None):
     `user`, what anybody without an account sees."""
     now = now or timezone.now()
     user = user if user is not None else AnonymousUser()
-    started = tournament.status in STARTED
+    started = was_played(tournament)
+    cancelled = tournament.status == ArenaTournament.CANCELLED
     count = ArenaParticipant.objects.filter(tournament=tournament).count()
-    data = {'tournament': tournament, 'started': started, 'over': tournament.status in OVER,
+    data = {'tournament': tournament, 'started': started, 'over': tournament.status in OVER or cancelled,
+            'cancelled': cancelled,
             'live': tournament.status == ArenaTournament.RUNNING, 'participants': count,
             'upcoming': not started and tournament.planned_at is not None and
             tournament.planned_at >= now - UPCOMING_GRACE}
@@ -430,6 +442,7 @@ def page(tournament, user, now=None):
     groups = [(r.number, False) for r in rounds] + [(len(rounds), True)]
     grouped = ([m for m in matches if m['group'] == group] for group in groups)
     data['rounds'] = [{'name': inside[0]['round'], 'matches': inside} for inside in grouped if inside]
-    data['podium'] = _podium(matches)
+    # Nobody won a cancelled tournament, even if its final was played before its match for third place.
+    data['podium'] = _podium(matches) if not cancelled else None
     data['standings'] = _standings(tournament, rounds, matches) if data['over'] and data['podium'] else None
     return data

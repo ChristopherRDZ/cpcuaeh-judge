@@ -129,6 +129,9 @@
             ejemplo si el otro no llegó o se retiró.</td></tr>
         <tr><td class="ag-term">Cancelar la batalla</td><td>Sólo en batallas rápidas. Se descarta y los jugadores quedan
             libres.</td></tr>
+        <tr><td class="ag-term">Cancelar el torneo</td><td>En una batalla de un torneo lleva a la página del torneo: las
+            batallas sin terminar se cancelan y sus jugadores quedan libres. El torneo sale de Duelos → Torneos y nunca
+            cuenta para el ranking. Si ya cuenta, sólo lo cancela quien decide el ranking.</td></tr>
         <tr><td class="ag-term">Corregir: el ganador es...</td><td>Sólo en torneos, con la batalla decidida: cambia el
             ganador y el bracket avanza al otro, si la siguiente batalla no ha empezado.</td></tr>
     </table>
@@ -159,6 +162,7 @@
         nombre, en su orden). Ya iniciado, los participantes y el bracket no cambian.</p>
     <h3>4. Jugarlo</h3>
     <p>Quien gana avanza solo. El bracket se arrastra; <kbd>Ctrl</kbd> con la rueda lo acerca o lo aleja.</p>
+    <p>Una práctica que no terminas se cancela en <span class="ag-ui">¿Algo salió mal?</span>, bajo el bracket.</p>
 
     <h2 id="historial">Historial público de torneos</h2>
     <p>Duelos → <span class="ag-ui">Torneos</span> lo ve cualquiera, aun sin cuenta, y se actualiza solo mientras se
@@ -240,6 +244,8 @@
         teclas y el panel gana el último cambio: para regresarla a la del panel, pulsa ahí la vista marcada. Una pestaña
         con <code>?view=</code> en su dirección («Abrir en una pestaña nueva», en el menú) se queda con su propia
         vista.</p>
+    <p>Un proyector que muestra un torneo sigue la partida que se juega. Entre partidas se queda en la batalla, con
+        el ganador marcado; cuando se decide, 30 segundos y vuelve al bracket.</p>
     <p>Si un organizador juega el torneo, que el proyector de la sala lo lleve alguien que no juega. Si quien juega pudo
         ver el enlace, cámbialo después de apuntarlo al torneo.</p>
 
@@ -282,7 +288,7 @@
             lo tiene abierto</span>, vuelve a conectarlo desde <code>/proyector</code>. Si es una pestaña con su propia
             vista, usa las teclas 1–6 en esa pantalla.</td></tr>
         <tr><td>Un jugador no puede usar el sitio después del evento</td><td>Su batalla sigue abierta; termínala o
-            cancélala.</td></tr>
+            cancélala (en un torneo, cancela el torneo).</td></tr>
         <tr><td>Quieres jugar en una batalla que organizas</td><td>Que la lleve otra persona que organice: quien juega no
             ve la página de su batalla hasta que se decide. En un torneo, otro organizador puede ponerte en un lugar
             (tú no). Mientras sigas en él, el torneo, sus batallas, su banco y los proyectores que apuntan a él, aunque

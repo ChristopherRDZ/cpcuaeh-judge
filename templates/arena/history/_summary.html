@@ -75,7 +75,7 @@
                             <td><a href="{{ row.url }}"><b>{{ row.tournament.name }}</b></a></td>
                             <td class="ah-wide ar-muted">{% if moment %}{{ moment|date(_("M j, Y, G:i")) }}{% endif %}</td>
                             <td class="ah-wide">{{ row.participants }}</td>
-                            <td>{% if row.champion %}{{ person(row.champion) }}{% else %}<span class="ar-muted">{{ _('Not finished') }}</span>{% endif %}</td>
+                            <td>{% if row.champion %}{{ person(row.champion) }}{% elif row.cancelled %}<span class="ar-muted">{{ row.tournament.get_status_display() }}</span>{% else %}<span class="ar-muted">{{ _('Not finished') }}</span>{% endif %}</td>
                             <td class="ah-wide">{{ person(row.runner_up) }}</td>
                         </tr>
                     {% endfor %}

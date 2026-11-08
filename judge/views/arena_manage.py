@@ -290,8 +290,10 @@ def manage_banks(request):
 
 PAGE_SIZE = 20
 OPEN_MATCH = (ArenaMatch.READY, ArenaMatch.CALLED, ArenaMatch.PLAYING)
+# A cancelled tournament (2026-11-06) goes with the archived ones: out of the way, still there to look at.
 TOURNAMENT_GROUPS = {'active': (ArenaTournament.DRAFT, ArenaTournament.RUNNING),
-                     'finished': (ArenaTournament.FINISHED,), 'archived': (ArenaTournament.ARCHIVED,)}
+                     'finished': (ArenaTournament.FINISHED,),
+                     'archived': (ArenaTournament.ARCHIVED, ArenaTournament.CANCELLED)}
 
 
 def _panel(request, tab, context):
@@ -716,6 +718,8 @@ def manage_tournament_action(request, slug):
         arena_tournament.start_tournament(actor, tournament.pk, version, shrink=data.get('shrink') is True)
     elif action == 'archive':
         arena_tournament.archive_tournament(actor, tournament.pk, version)
+    elif action == 'cancel':
+        arena_tournament.cancel_tournament(actor, tournament.pk, version)
     elif action == 'fill':
         _refuse_closed_bank(request.user, tournament.bank_id)
         result['filled'] = arena_tournament.fill_ready_matches(actor, tournament.pk)

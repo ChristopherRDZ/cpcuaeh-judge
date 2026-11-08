@@ -477,7 +477,9 @@ def _free_screen(actor=None):
     battles = {pk: (status in (ArenaMatch.DECIDED, ArenaMatch.CANCELLED), ended) for pk, status, ended in
                ArenaMatch.objects.filter(pk__in=[s.match_id for s in screens if s.match_id])
                .values_list('pk', 'status', 'decided_at')}
-    tournaments = {pk: (status in (ArenaTournament.FINISHED, ArenaTournament.ARCHIVED), ended) for pk, status, ended in
+    # A cancelled tournament (2026-11-06) is over too, since it was cancelled.
+    over = (ArenaTournament.FINISHED, ArenaTournament.ARCHIVED, ArenaTournament.CANCELLED)
+    tournaments = {pk: (status in over, ended) for pk, status, ended in
                    ArenaTournament.objects.filter(pk__in=[s.tournament_id for s in screens if s.tournament_id])
                    .values_list('pk', 'status', 'finished_at')}
     now = timezone.now()

@@ -78,12 +78,15 @@ class ArenaBankProblem(models.Model):
 
 
 class ArenaTournament(models.Model):
-    DRAFT, RUNNING, FINISHED, ARCHIVED = 'draft', 'running', 'finished', 'archived'
+    DRAFT, RUNNING, FINISHED, ARCHIVED, CANCELLED = 'draft', 'running', 'finished', 'archived', 'cancelled'
     STATUS = (
         (DRAFT, _('Draft')),
         (RUNNING, _('In progress')),
         (FINISHED, _('Finished')),
         (ARCHIVED, _('Archived')),
+        # A draft or a tournament in progress dropped by its organizers (2026-11-06, judge/arena/tournament.py,
+        # cancel_tournament): left out of the history and never counting for the ranking of the duels.
+        (CANCELLED, _('Cancelled')),
     )
     SEED_MANUAL, SEED_RANDOM, SEED_RATING, SEED_DUEL = 'manual', 'random', 'rating', 'duel'
     SEEDING = (

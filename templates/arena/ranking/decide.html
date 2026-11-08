@@ -78,9 +78,12 @@ $(function () {
 {% block title_ruler %}{% endblock %}
 
 {# Why a battle never counts, short; the long reason (rating.never_texts) on hover. #}
-{% set never = {'cancelled': _('Never counts: cancelled'), 'bye': _('Never counts: bye'),
+{% set never = {'cancelled': _('Never counts: cancelled'), 'tournament': _('Never counts: cancelled'),
+                'bye': _('Never counts: bye'),
                 'walkover': _('Never counts: won without playing on'), 'guest': _('Never counts: club laptops')} %}
-{% set never_long = {'cancelled': _('Cancelled: it never counts.'), 'bye': _('A bye, nobody to play against: it never counts.'),
+{% set never_long = {'cancelled': _('Cancelled: it never counts.'),
+                     'tournament': _('Cancelled tournament: it never counts.'),
+                     'bye': _('A bye, nobody to play against: it never counts.'),
                      'walkover': _('Won without playing on: it never counts.'),
                      'guest': _('Played on a club laptop with a typed name: it never counts.')} %}
 
@@ -131,7 +134,7 @@ $(function () {
             <table class="ad-rows">
                 {% for t in data.tournaments %}
                     <tr>
-                        <td><b>{{ t.name }}</b>{% if t.ranking == 'pending' %} <span class="ar-badge ar-warn">{{ _('To review') }}</span>{% endif %}
+                        <td><b>{{ t.name }}</b>{% if t.ranking == 'pending' and t.status != 'cancelled' %} <span class="ar-badge ar-warn">{{ _('To review') }}</span>{% endif %}
                             <span class="ad-sub">{{ t.status_label }} · {{ ngettext('%(num)s participant', '%(num)s participants', t.participants) }} · {{ t.when|date(_("M j, Y")) }}
                                 {%- if not t.shown %} · {{ _('left out of the history') }}{% endif %}
                                 {%- if t.public_url %} · <a href="{{ t.public_url }}">{{ _('See the tournament') }}</a>{% endif %}</span>
@@ -160,7 +163,8 @@ $(function () {
                                 </details>
                             {% endif %}
                         </td>
-                        <td class="ad-act-cell">{{ choices('tournament', t.id, t.ranking) }}</td>
+                        <td class="ad-act-cell">{% if t.status == 'cancelled' %}<span class="ar-muted">{{ _('Cancelled tournament: it never counts.') }}</span>
+                            {%- else %}{{ choices('tournament', t.id, t.ranking) }}{% endif %}</td>
                     </tr>
                 {% endfor %}
             </table>

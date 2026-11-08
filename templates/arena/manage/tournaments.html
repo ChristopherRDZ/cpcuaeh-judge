@@ -34,9 +34,10 @@
                         {% if t.status == 'draft' %}{{ _('Being prepared') }}
                         {% elif t.status == 'running' %}{% if t.n_live %}<span class="am-live-dot"></span> {% endif %}{{ _('Being played') }}{% if t.n_live %} · {{ _('battles being played: %(count)s', count=t.n_live) }}{% endif %}
                         {% elif t.status == 'finished' %}{{ _('Finished') }}
+                        {% elif t.status == 'cancelled' %}{{ t.get_status_display() }}
                         {% else %}{{ _('Archived') }}{% endif %}</td>
                     <td>{% if t.status == 'draft' and places > t.n_participants %}{{ _('%(named)s of %(places)s', named=t.n_participants, places=places) }}{% else %}{{ t.n_participants }}{% endif %}</td>
-                    {% set moment = t.finished_at if t.status in ('finished', 'archived') and t.finished_at else (t.started_at or t.planned_at or t.created_at) %}
+                    {% set moment = t.finished_at if t.status in ('finished', 'archived', 'cancelled') and t.finished_at else (t.started_at or t.planned_at or t.created_at) %}
                     <td class="ar-muted">{{ moment|date(_("M j, Y, G:i")) }}</td>
                     <td style="text-align: right; white-space: nowrap;"><a class="ar-btn ar-btn-plain" href="{{ url('arena_manage_tournament', t.slug) }}">{{ _('Open') }}</a></td>
                 </tr>

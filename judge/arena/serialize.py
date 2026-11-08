@@ -11,7 +11,7 @@ against the server clock rather than its own.
 from datetime import timedelta
 
 from django.contrib.auth.models import Permission, User
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, Max, OuterRef, Q, Subquery
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -190,10 +190,15 @@ def own_account(match, slot):
 def _player_match(profile, now):
     match = engine.active_match_for(profile.id)
     if match is None:
+        # Not a battle of a cancelled tournament they were never called to (2026-11-06): its players never heard of
+        # it, and a draft never showed its bracket.
         match = ArenaMatch.objects.filter(Q(player_a=profile) | Q(player_b=profile),
                                           status__in=(ArenaMatch.DECIDED, ArenaMatch.CANCELLED),
                                           decided_at__gte=now - RECENT_RESULT) \
-            .exclude(decided_reason='bye').order_by('-decided_at', '-id').first()
+            .exclude(decided_reason='bye') \
+            .exclude(status=ArenaMatch.CANCELLED, called_at__isnull=True,
+                     tournament__status=ArenaTournament.CANCELLED) \
+            .order_by('-decided_at', '-id').first()
     return match
 
 
@@ -525,7 +530,7 @@ def overview(now=None, user=None):
                 'status': match.status, 'wins': {'a': match.wins_a, 'b': match.wins_b}, 'best_of': match.best_of,
                 'winner': match.winner_slot or None, 'live': match.live_status,
                 'decided_at': ts(match.decided_at)}
-    tournaments = tournaments.exclude(status=ArenaTournament.ARCHIVED) \
+    tournaments = tournaments.exclude(status__in=(ArenaTournament.ARCHIVED, ArenaTournament.CANCELLED)) \
         .annotate(n_participants=Count('participants', distinct=True),
                   n_live=Count('matches', filter=Q(matches__status=ArenaMatch.PLAYING), distinct=True)) \
         .order_by('-created_at')[:30]
@@ -752,7 +757,9 @@ def bracket_view(tournament, rounds=None):
     final = next((m for m in matches if m.next_match_id is None and not m.is_third_place and
                   m.round is not None and m.round.number == total), None)
     champion = None
-    if final is not None and final.status == ArenaMatch.DECIDED and final.winner_slot:
+    # A cancelled tournament has no champion, even with its final played (2026-11-06), as its page has no podium.
+    if final is not None and final.status == ArenaMatch.DECIDED and final.winner_slot and \
+            tournament.status != ArenaTournament.CANCELLED:
         champion = cell(final, final.winner_slot)
     return {'rounds': result, 'champion': champion}
 
@@ -797,6 +804,50 @@ def _held(screen, match):
     return _held_by_a_player(screen, match)
 
 
+# How long a projector that follows a tournament keeps a battle once decided, with its winner, before the bracket
+# (2026-11-06, as its owner decided).
+SCREEN_SHOW_DECIDED = timedelta(seconds=30)
+
+
+def _followed_match(screen, now):
+    """The battle a projector that follows its tournament shows now, or None for the bracket.
+
+    A game being played anywhere in the tournament first, as always. Otherwise, since 2026-11-06, the battle whose
+    last game ended most recently: while it goes on (between its games, as long as its players are still kept in the
+    arena, engine.lock_idle_minutes), with the result of that game until the next one starts, and once decided by its
+    games for SCREEN_SHOW_DECIDED. Until then only a battle with a game being played was shown: the projector went to the
+    bracket as soon as a game ended, and the green frame of its winner only showed when the projector itself happened
+    to be the page that ended it (engine.tick, run by whoever asks first)."""
+    # Every battle here is of that tournament: when its creator plays it, _held holds them all.
+    if access.profile_contends(screen.created_by_id, screen.tournament_id):
+        return None
+    live = ArenaMatch.objects.filter(tournament_id=screen.tournament_id,
+                                     games__status__in=ArenaGame.ACTIVE_STATUSES) \
+        .order_by('-games__started_at', '-id')
+    # The latest game started that this screen may show (one held by a player gave the bracket until 2026-11-06).
+    found = False
+    for match in live[:5]:
+        found = True
+        if not _held_by_a_player(screen, match):
+            return match
+    if found:
+        return None
+    # Decided by playing: a winner corrected by hand or a walkover would frame the winner of the last game while the
+    # banner names the other player, so those go to the bracket as before.
+    decided = Q(status=ArenaMatch.DECIDED, decided_reason='games', decided_at__gte=now - SCREEN_SHOW_DECIDED)
+    recent = ArenaMatch.objects.filter(tournament_id=screen.tournament_id) \
+        .filter(Q(status=ArenaMatch.PLAYING) | decided) \
+        .annotate(last_end=Max('games__finished_at', filter=Q(games__status__in=ArenaGame.DONE_STATUSES))) \
+        .filter(last_end__isnull=False).order_by('-last_end', '-id')
+    still_held = now - timedelta(minutes=engine.lock_idle_minutes())
+    for match in recent[:5]:
+        if match.status == ArenaMatch.PLAYING and match.last_end < still_held:
+            continue
+        if not _held_by_a_player(screen, match):
+            return match
+    return None
+
+
 def _screen_target(screen):
     """(mode, match, tournament) actually shown by a screen right now. A battle held from this screen (_held) is
     not shown: the screen shows its bracket, or waits."""
@@ -808,11 +859,9 @@ def _screen_target(screen):
         return ArenaScreen.IDLE, None, screen.tournament
     if screen.mode == ArenaScreen.BRACKET and screen.tournament_id:
         if screen.follow_live:
-            live = ArenaMatch.objects.filter(tournament_id=screen.tournament_id,
-                                             games__status__in=ArenaGame.ACTIVE_STATUSES) \
-                .order_by('-games__started_at').first()
-            if live is not None and not _held(screen, live):
-                return ArenaScreen.MATCH, live, screen.tournament
+            followed = _followed_match(screen, timezone.now())
+            if followed is not None:
+                return ArenaScreen.MATCH, followed, screen.tournament
         return ArenaScreen.BRACKET, None, screen.tournament
     if screen.mode == ArenaScreen.MESSAGE:
         return ArenaScreen.MESSAGE, None, screen.tournament

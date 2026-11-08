@@ -38,7 +38,8 @@ $(function () {
     var A = window.Arena, W = window.ArenaWidgets;
     var TEXT = {
         status: {draft: {{ _('Being prepared')|tojson }}, running: {{ _('Being played')|tojson }},
-                 finished: {{ _('Finished')|tojson }}, archived: {{ _('Archived')|tojson }}},
+                 finished: {{ _('Finished')|tojson }}, archived: {{ _('Archived')|tojson }},
+                 cancelled: {{ _('Cancelled')|tojson }}},
         matchStatus: {pending: {{ _('Waiting for players')|tojson }}, ready: {{ _('Ready to start')|tojson }},
                       called: {{ _('In the waiting room')|tojson }}, playing: {{ _('Being played')|tojson }},
                       decided: {{ _('Ended')|tojson }}, cancelled: {{ _('Called off')|tojson }}},
@@ -120,6 +121,9 @@ $(function () {
         organizersSaved: {{ _('Organizers saved')|tojson }},
         archiveConfirm: {{ _('It leaves the panel. Its public page stays.')|tojson }},
         archive: {{ _('Archive the tournament')|tojson }},
+        cancelTournament: {{ _('Cancel the tournament')|tojson }},
+        cancelTournamentConfirm: [{{ _('The battles not decided are cancelled and their players are released.')|tojson }},
+                                  {{ _('It leaves Duels → Tournaments and never counts for the ranking.')|tojson }}],
         // Projectors.
         showsBracket: {{ _('%(name)s shows the bracket', name='%(name)s')|tojson }},
         showsBattle: {{ _('%(name)s shows one of its battles', name='%(name)s')|tojson }},
@@ -202,6 +206,7 @@ $(function () {
         renderBracket();
         $('#tm-fill').prop('hidden', !state.draw.bank);
         $('#tm-archive-box').prop('hidden', t.status !== 'finished');
+        $('#tm-wrong').prop('hidden', t.status !== 'draft' && t.status !== 'running');
     }
 
     function renderChampion() {
@@ -767,12 +772,22 @@ $(function () {
     $('#tm-archive').on('click', function () {
         W.confirmBox(TEXT.archive, [TEXT.archiveConfirm], TEXT.archive, function () { act({action: 'archive'}); });
     });
+    $('#tm-cancel').on('click', function () {
+        W.confirmBox(TEXT.cancelTournament, TEXT.cancelTournamentConfirm, TEXT.cancelTournament, function () {
+            act({action: 'cancel'});
+        }, true);
+    });
 
     function refresh() {
         return A.get(STATE).then(function (data) { state = data; render(); }).catch(function () {});
     }
     setInterval(function () { if (!document.hidden) refresh(); }, 4000);
     render();
+    // «Cancel the tournament» on the page of one of its battles brings here (2026-11-06).
+    if (window.location.hash === '#cancelar' && !$('#tm-wrong').prop('hidden')) {
+        $('#tm-wrong').prop('open', true);
+        document.getElementById('tm-wrong').scrollIntoView({block: 'center'});
+    }
 });
 </script>
 {% endblock %}
@@ -814,6 +829,10 @@ $(function () {
                 <table class="am-rows"><tbody id="tm-next"></tbody></table>
             </section>
         </div>
+        <details class="am-details ar-panel" id="tm-wrong" style="padding: .5em .8em; margin-top: 1em;" hidden>
+            <summary>{{ _('Something went wrong?') }}</summary>
+            <div class="am-actions am-mt"><button type="button" class="ar-btn ar-btn-red" id="tm-cancel">{{ _('Cancel the tournament') }}</button></div>
+        </details>
     </div>
 
     <div data-pane="participants" hidden>

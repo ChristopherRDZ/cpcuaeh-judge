@@ -18,11 +18,13 @@ from django.utils.text import slugify
 from django.utils.translation import gettext as _, ngettext
 
 from judge.arena import rules as arena_rules
-from judge.arena.engine import ArenaError, _bump, _check_version, _log, clean_ranking, ensure_default_screen, \
-    lock_match, problems_used_in_tournament, refresh_lock_on_commit, take_free_screen, visible_problems
+from judge.arena.engine import ArenaError, _bump, _check_version, _close_contest, _log, clean_ranking, \
+    ensure_default_screen, lock_match, problems_used_in_tournament, refresh_lock_on_commit, take_free_screen, \
+    visible_problems
 from judge.models import Submission
 from judge.models.arena import ArenaBankProblem, ArenaGame, ArenaGameProblem, ArenaMatch, ArenaParticipant, \
-    ArenaProblemBank, ArenaRating, ArenaRound, ArenaTournament, RANKING_PENDING, SLOT_A, SLOT_B
+    ArenaProblemBank, ArenaRating, ArenaRound, ArenaTournament, RANKING_COUNTS, RANKING_EXCLUDED, RANKING_PENDING, \
+    SLOT_A, SLOT_B
 
 logger = logging.getLogger('judge.arena')
 
@@ -601,6 +603,61 @@ def archive_tournament(actor, tournament_id, version=None):
     return tournament
 
 
+@transaction.atomic
+def cancel_tournament(actor, tournament_id, version=None):
+    """Drop a draft or a tournament in progress (2026-11-06): a practice left half played kept its players in a
+    battle that never ended, so nobody could call them to another one, and a running tournament could neither be
+    archived nor finish.
+
+    Every battle not decided is cancelled as engine.cancel_match cancels a quick one: the game being played (or a
+    tie waiting for the organizer) is voided, the games prepared and never played go, and its players are let out at
+    once. What was decided stays as it was. The tournament leaves the history (it can be shown again) and never counts
+    for the ranking of the duels: its decision becomes «does not count» and rating.set_tournament_ranking refuses
+    to change it."""
+    from judge.arena import access, rating
+    tournament = _lock_tournament(tournament_id)
+    _check_version(tournament, version)
+    if tournament.status not in (ArenaTournament.DRAFT, ArenaTournament.RUNNING):
+        raise ArenaError(_('Only a tournament being prepared or played can be cancelled.'))
+    # Organizing does not decide the ranking (2026-10-25), and cancelling takes out for good what already counted
+    # (adversarial review, 2026-11-06).
+    if tournament.ranking == RANKING_COUNTS and actor is not None and not access.decides_ranking(actor.user):
+        raise ArenaError(_('This tournament counts for the ranking: only whoever decides the ranking can cancel it.'))
+    now = timezone.now()
+    open_ids = list(ArenaMatch.objects.filter(tournament=tournament)
+                    .exclude(status__in=(ArenaMatch.DECIDED, ArenaMatch.CANCELLED))
+                    .order_by('round__number', 'is_third_place', 'position').values_list('pk', flat=True))
+    for match_id in open_ids:
+        # The tournament first, then each match (engine.lock_match), as every other change of a bracket.
+        match = lock_match(match_id)
+        for game in ArenaGame.objects.filter(match=match, status__in=ArenaGame.ACTIVE_STATUSES + (ArenaGame.TIE,)):
+            game.status = ArenaGame.CANCELLED
+            game.finished_at = now
+            game.closed_at = game.closed_at or now
+            game.decided_by = actor
+            game.save(update_fields=['status', 'finished_at', 'closed_at', 'decided_by'])
+            _close_contest(game, max(game.started_at, min(now, game.ends_at)))
+        ArenaGame.objects.filter(match=match, status=ArenaGame.PREPARED, contest__isnull=True).delete()
+        match.status = ArenaMatch.CANCELLED
+        match.decided_at = now
+        _bump(match, 'status', 'decided_at')
+        _log('cancel', actor, match)
+    before = {'ranking': tournament.ranking, 'show_in_history': tournament.show_in_history,
+              'status': tournament.status}
+    tournament.status = ArenaTournament.CANCELLED
+    tournament.finished_at = now
+    tournament.show_in_history = False
+    tournament.ranking = RANKING_EXCLUDED
+    tournament.version += 1
+    tournament.save(update_fields=['status', 'finished_at', 'show_in_history', 'ranking', 'version'])
+    _log('tournament_cancel', actor, tournament=tournament, battles=len(open_ids), **before)
+    if before['ranking'] == RANKING_COUNTS:
+        # Its battles decided so far counted: they stop counting.
+        rating.recompute_on_commit()
+    refresh_lock_on_commit()
+    return tournament
+
+
 def _place(match_id, slot, profile, seed):
     target = lock_match(match_id)
     if ArenaGame.objects.filter(match=target, contest__isnull=False).exists():
@@ -660,6 +717,9 @@ def set_winner(actor, match_id, slot, version=None):
     # As the panel and the guide say: a quick battle is not corrected (2026-10-28).
     if match.tournament_id is None:
         raise ArenaError(_('Only the winner of a tournament match can be corrected.'))
+    # A cancelled tournament stays as it was left (2026-11-06): correcting a winner would move the bracket.
+    if match.tournament.status == ArenaTournament.CANCELLED:
+        raise ArenaError(_('The tournament was cancelled: nothing in it changes.'))
     if match.status != ArenaMatch.DECIDED or match.winner_slot == slot:
         raise ArenaError(_('Only the winner of a decided match can be corrected.'))
     if not match.player_id(slot):
@@ -879,6 +939,9 @@ def fill_ready_matches(actor, tournament_id):
     for match_id in ids:
         with transaction.atomic():
             match = lock_match(match_id)
+            # Decided or cancelled (the tournament too) since the list was read (2026-11-06).
+            if match.status not in (ArenaMatch.READY, ArenaMatch.CALLED, ArenaMatch.PLAYING):
+                continue
             if ArenaGame.objects.filter(match=match, status__in=ArenaGame.ACTIVE_STATUSES).exists():
                 continue
             if fill_from_bank(match, _ensure_next_game(match), actor, force=True):
@@ -939,5 +1002,5 @@ def problem_conflicts(tournament):
 
 __all__ = ['seeding_order', 'bracket_size', 'round_count', 'default_round_name', 'round_name', 'create_tournament',
            'update_tournament', 'set_participants', 'set_round', 'set_rounds', 'generate_bracket', 'start_tournament',
-           'archive_tournament', 'advance', 'set_winner', 'create_bank', 'set_bank_problems', 'draw_problems',
+           'archive_tournament', 'cancel_tournament', 'advance', 'set_winner', 'create_bank', 'set_bank_problems', 'draw_problems',
            'clean_places', 'problem_conflicts']

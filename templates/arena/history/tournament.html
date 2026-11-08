@@ -133,6 +133,7 @@ $(function () {
 
     <h2 class="ah-title">{{ t.name }}
         {% if data.live %}<span class="ar-badge ar-bad">{{ _('LIVE') }}</span>
+        {% elif data.cancelled %}<span class="ar-badge ar-none">{{ t.get_status_display() }}</span>
         {% elif data.over %}<span class="ar-badge ar-ok">{{ t.get_status_display() }}</span>
         {% elif data.upcoming %}<span class="ar-badge ar-info">{{ _('Upcoming') }}</span>{% endif %}
     </h2>
@@ -140,7 +141,7 @@ $(function () {
         <p class="ah-facts ar-muted">
             {{ _('Single elimination') }} · {{ _('Participants') }}: {{ data.participants }}
             {% if t.started_at %} · {{ _('Started') }}: {{ t.started_at|date(_("M j, Y, G:i")) }}{% endif %}
-            {% if t.finished_at %} · {{ _('Finished') }}: {{ t.finished_at|date(_("M j, Y, G:i")) }}{% endif %}
+            {% if t.finished_at %} · {{ t.get_status_display() if data.cancelled else _('Finished') }}: {{ t.finished_at|date(_("M j, Y, G:i")) }}{% endif %}
             <br>
             {% for round in data.format %}{{ round.name }}: {% if round.best_of > 1 %}{{ _('Best of') }} {{ round.best_of }}{% else %}{{ _('A single game') }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
             {% if t.third_place_match %} · {{ _('With a match for third place') }}{% endif %}
@@ -164,7 +165,9 @@ $(function () {
         </div>
     {% endif %}
 
-    {% if not data.started %}
+    {% if not data.started and data.cancelled %}
+        <div class="ar-alert ar-alert-info">{{ _('It was cancelled before it started.') }}</div>
+    {% elif not data.started %}
         <div class="ar-alert ar-alert-info">
             {% if t.planned_at %}<b>{{ _('Planned for') }}: {{ t.planned_at|date(_("F j, Y, G:i T")) }}.</b> {% endif %}
             {{ _('The participants and the bracket are shown when the tournament starts.') }}

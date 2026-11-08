@@ -96,6 +96,7 @@ $(function () {
         walkoverConfirm: {{ _('The whole battle goes to this player without playing on.')|tojson }},
         cancelMatch: {{ _('Cancel the battle')|tojson }},
         cancelMatchConfirm: {{ _('The battle is dropped and the players are released.')|tojson }},
+        cancelTournament: {{ _('Cancel the tournament')|tojson }},
         correct: {{ _('Correct: the winner is %(name)s', name='%(name)s')|tojson }},
         correctConfirm: {{ _('The bracket moves the other player forward instead.')|tojson }},
         // Projectors.
@@ -172,6 +173,7 @@ $(function () {
                   leftOut: {{ _('Left out of the ranking, although its tournament counts.')|tojson }},
                   never: {
                       cancelled: {{ _('Cancelled: it never counts.')|tojson }},
+                      tournament: {{ _('Cancelled tournament: it never counts.')|tojson }},
                       bye: {{ _('A bye, nobody to play against: it never counts.')|tojson }},
                       walkover: {{ _('Won without playing on: it never counts.')|tojson }},
                       guest: {{ _('Played on a club laptop with a typed name: it never counts.')|tojson }}
@@ -690,7 +692,10 @@ $(function () {
             if (match.quick) box.appendChild(button(TEXT.cancelMatch, 'ar-btn-red', function () {
                 confirmed(TEXT.cancelMatch, TEXT.cancelMatchConfirm, TEXT.cancelMatch, {action: 'cancel'}, true);
             }));
-        } else if (match.status === 'decided' && match.tournament && match.winner) {
+            // A battle of a tournament is not cancelled alone: the whole tournament is (2026-11-06), from its page.
+            else if (match.tournament) box.appendChild(A.el('a', {'class': 'ar-btn ar-btn-plain', text: TEXT.cancelTournament,
+                href: {{ url('arena_manage_tournament', 'x')|tojson }}.replace('/x/', '/' + match.tournament.slug + '/') + '#cancelar'}));
+        } else if (match.status === 'decided' && match.tournament && match.tournament.status !== 'cancelled' && match.winner) {
             var loser = match.winner === 'a' ? 'b' : 'a';
             box.appendChild(button(fill(TEXT.correct, {name: names[loser]}), 'ar-btn-plain', function () {
                 confirmed(fill(TEXT.correct, {name: names[loser]}), TEXT.correctConfirm, fill(TEXT.correct, {name: names[loser]}),

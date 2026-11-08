@@ -14912,3 +14912,39 @@ msgid "Además, %(count)d correo pegado."
 msgid_plural "Además, %(count)d correos pegados."
 msgstr[0] "Además, %(count)d correo pegado."
 msgstr[1] "Además, %(count)d correos pegados."
+
+#: cpc 2026-11-06
+msgid "Cancel the tournament"
+msgstr "Cancelar el torneo"
+
+#: cpc 2026-11-06
+msgid "The battles not decided are cancelled and their players are released."
+msgstr "Las batallas sin terminar se cancelan y sus jugadores quedan libres."
+
+#: cpc 2026-11-06
+msgid "It leaves Duels → Tournaments and never counts for the ranking."
+msgstr "Sale de Duelos → Torneos y nunca cuenta para el ranking."
+
+#: cpc 2026-11-06
+msgid "Only a tournament being prepared or played can be cancelled."
+msgstr "Sólo se puede cancelar un torneo en preparación o en juego."
+
+#: cpc 2026-11-06
+msgid "This tournament counts for the ranking: only whoever decides the ranking can cancel it."
+msgstr "Este torneo cuenta para el ranking: sólo quien decide el ranking puede cancelarlo."
+
+#: cpc 2026-11-06
+msgid "The tournament was cancelled: nothing in it changes."
+msgstr "El torneo se canceló: ya no cambia nada en él."
+
+#: cpc 2026-11-06
+msgid "A cancelled tournament never counts."
+msgstr "Un torneo cancelado nunca cuenta."
+
+#: cpc 2026-11-06
+msgid "Cancelled tournament: it never counts."
+msgstr "Torneo cancelado: nunca cuenta."
+
+#: cpc 2026-11-06
+msgid "It was cancelled before it started."
+msgstr "Se canceló antes de empezar."

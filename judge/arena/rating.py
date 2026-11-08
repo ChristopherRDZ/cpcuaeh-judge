@@ -3,8 +3,8 @@
 Who decides: whoever has `judge.decide_arena_ranking` (access.decides_ranking), never just for organizing. Every
 tournament and quick battle starts not decided yet and only counts once somebody marks it «counts»; a battle of a
 tournament goes with its tournament and can only be left out. Some battles never count, however they are marked
-(`never_reason`): cancelled ones, byes, battles won without playing on and battles played with a typed name on a club
-laptop. Inside a battle that counts, every finished game with a winner counts, also the ones the organizer gave; ties
+(`never_reason`): cancelled ones, those of a cancelled tournament, byes, battles won without playing on and battles
+played with a typed name on a club laptop. Inside a battle that counts, every finished game with a winner counts, also the ones the organizer gave; ties
 and voided games do not. An unlisted account (also every cancelled one) only leaves the table: its battles still count
 for its rivals, so cancelling an account never changes a published rating.
 
@@ -139,6 +139,9 @@ def never_reason(match):
     """Why `match` can never count, whatever is decided about it, or None if it can."""
     if match.status == ArenaMatch.CANCELLED:
         return 'cancelled'
+    # Its tournament was cancelled (2026-11-06), as counts_q says.
+    if match.tournament_id is not None and match.tournament.status == ArenaTournament.CANCELLED:
+        return 'tournament'
     if match.decided_reason == 'bye':
         return 'bye'
     if match.decided_reason == 'walkover':
@@ -152,6 +155,7 @@ def never_texts():
     """Why a battle never counts, in words, for every page that says so."""
     return {
         'cancelled': _('Cancelled: it never counts.'),
+        'tournament': _('Cancelled tournament: it never counts.'),
         'bye': _('A bye, nobody to play against: it never counts.'),
         'walkover': _('Won without playing on: it never counts.'),
         'guest': _('Played on a club laptop with a typed name: it never counts.'),
@@ -173,9 +177,12 @@ def counts_q(prefix=''):
     p = prefix
     decided = Q(**{p + 'tournament__isnull': True, p + 'ranking': RANKING_COUNTS}) | \
         (Q(**{p + 'tournament__ranking': RANKING_COUNTS}) & ~Q(**{p + 'ranking': RANKING_EXCLUDED}))
+    # A cancelled tournament never counts (2026-11-06): cancelling it already decides «does not count», and nobody
+    # can change that; this holds even for a decision written some other way (the admin, the shell).
     return decided & Q(**{p + 'status': ArenaMatch.DECIDED, p + 'player_a__isnull': False,
                           p + 'player_b__isnull': False, p + 'display_name_a': '', p + 'display_name_b': ''}) & \
-        ~Q(**{p + 'decided_reason__in': ('bye', 'walkover')})
+        ~Q(**{p + 'decided_reason__in': ('bye', 'walkover')}) & \
+        ~Q(**{p + 'tournament__status': ArenaTournament.CANCELLED})
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -347,6 +354,8 @@ def set_tournament_ranking(actor, tournament_id, value):
     tournament = ArenaTournament.objects.select_for_update().filter(pk=tournament_id).first()
     if tournament is None:
         raise ArenaError(_('That tournament does not exist.'), status=404)
+    if tournament.status == ArenaTournament.CANCELLED and value != RANKING_EXCLUDED:
+        raise ArenaError(_('A cancelled tournament never counts.'))
     before = tournament.ranking
     if value != before:
         tournament.ranking = value
