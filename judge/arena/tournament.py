@@ -68,11 +68,25 @@ def default_round_name(number, rounds):
         return _('Quarterfinal')
     if from_end == 3:
         return _('Round of 16')
+    # Up to 64 places (2026-11-08): until then the first rounds of a bracket of 17 or more were «Round 1», «Round 2».
+    if from_end == 4:
+        return _('Round of 32')
+    if from_end == 5:
+        return _('Round of 64')
     return _('Round %(number)s') % {'number': number}
 
 
 def round_name(round_obj, rounds):
     return round_obj.name or default_round_name(round_obj.number, rounds)
+
+
+# Rules each round chooses for itself and the tournament never holds (2026-11-08): stored for the whole tournament,
+# a round without its own value would take it, as the rounds that a bigger bracket adds at the start.
+ROUND_RULES = ('starter_code',)
+
+
+def _without_round_rules(rules):
+    return {name: value for name, value in rules.items() if name not in ROUND_RULES}
 
 
 def _unique_slug(name):
@@ -198,7 +212,7 @@ def create_tournament(actor, name, profiles, seeding=ArenaTournament.SEED_MANUAL
     if seeding not in dict(ArenaTournament.SEEDING):
         raise ArenaError(_('Invalid seeding.'))
     try:
-        rules = arena_rules.clean_rules(rules)
+        rules = _without_round_rules(arena_rules.clean_rules(rules))
     except ValidationError as error:
         raise ArenaError(error.messages[0])
     planned_at = clean_planned_at(planned_at)
@@ -281,7 +295,7 @@ def update_tournament(actor, tournament_id, version=None, name=None, description
         fields.append('description')
     if rules is not None or draw is not None:
         try:
-            cleaned = arena_rules.clean_rules(rules) if rules is not None else None
+            cleaned = _without_round_rules(arena_rules.clean_rules(rules)) if rules is not None else None
             tournament.rules = arena_rules.with_draw(tournament.rules, cleaned, arena_rules.clean_draw(draw))
         except ValidationError as error:
             raise ArenaError(error.messages[0])
@@ -371,7 +385,10 @@ def set_participants(actor, tournament_id, profiles, seeding=None, version=None,
 
 
 @transaction.atomic
-def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None, version=None, draw=None):
+def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None, version=None, draw=None,
+              starter_code=None):
+    """`starter_code` (2026-11-08): whether the editor starts with the C++ template in the games of this round that
+    have not started yet; those started keep the rules they started with."""
     tournament = _lock_tournament(tournament_id)
     _check_version(tournament, version)
     round_obj = ArenaRound.objects.filter(tournament=tournament, number=number).first()
@@ -383,20 +400,36 @@ def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None,
             best_of = arena_rules.clean_best_of(best_of)
         except ValidationError as error:
             raise ArenaError(error.messages[0])
-        started = ArenaGame.objects.filter(match__round=round_obj, contest__isnull=False).exists()
-        if started and best_of != round_obj.best_of:
-            raise ArenaError(_('This round has already started; change the length of each match instead.'))
-        round_obj.best_of = best_of
-        fields.append('best_of')
-        ArenaMatch.objects.filter(round=round_obj).exclude(status=ArenaMatch.DECIDED).update(best_of=best_of)
+        if best_of != round_obj.best_of:
+            started = ArenaGame.objects.filter(match__round=round_obj, contest__isnull=False).exists()
+            if started:
+                raise ArenaError(_('This round has already started; change the length of each match instead.'))
+            round_obj.best_of = best_of
+            fields.append('best_of')
+            # Only when the round changes (2026-11-08): «Save» of «Rounds and problems» sends every round, and a battle
+            # given other games on its own page went back to those of its round, mid-series too.
+            ArenaMatch.objects.filter(round=round_obj).exclude(status=ArenaMatch.DECIDED).update(best_of=best_of)
     if rules is not None or draw is not None:
+        kept = (round_obj.rules or {}).get('starter_code')
         try:
             cleaned = arena_rules.clean_rules(rules) if rules is not None else None
             draw = {key: value for key, value in arena_rules.clean_draw(draw).items() if key != 'auto_draw'}
             round_obj.rules = arena_rules.with_draw(round_obj.rules, cleaned, draw)
         except ValidationError as error:
             raise ArenaError(error.messages[0])
+        if cleaned is not None and 'starter_code' not in cleaned and kept is not None:
+            # Game rules sent without the template keep the one of the round.
+            round_obj.rules['starter_code'] = kept
         fields.append('rules')
+    if starter_code is not None:
+        try:
+            value = arena_rules.clean_rules({'starter_code': starter_code})['starter_code']
+        except ValidationError as error:
+            raise ArenaError(error.messages[0])
+        if (round_obj.rules or {}).get('starter_code') != value:
+            round_obj.rules = dict(round_obj.rules or {}, starter_code=value)
+            if 'rules' not in fields:
+                fields.append('rules')
     if name is not None:
         round_obj.name = name.strip()[:60]
         fields.append('name')
@@ -953,7 +986,7 @@ def fill_ready_matches(actor, tournament_id):
 @transaction.atomic
 def set_rounds(actor, tournament_id, rounds, version=None):
     """All the rounds of a tournament at once, from the tab «Rounds and problems» (2026-11-03), so one Save keeps
-    them all or none: `rounds` is a list of {number, name, best_of, draw_count, level_min, level_max}."""
+    them all or none: `rounds` is a list of {number, name, best_of, draw_count, level_min, level_max, starter_code}."""
     if not isinstance(rounds, list) or len(rounds) > round_count(MAX_PARTICIPANTS) + 1:
         raise ArenaError(_('Invalid request.'))
     tournament = _lock_tournament(tournament_id)
@@ -963,7 +996,8 @@ def set_rounds(actor, tournament_id, rounds, version=None):
             raise ArenaError(_('That round does not exist.'), status=404)
         draw = {key: row[key] for key in ('draw_count', 'level_min', 'level_max') if key in row}
         set_round(actor, tournament.pk, row['number'], best_of=row.get('best_of'), name=row.get('name'),
-                  version=ArenaTournament.objects.get(pk=tournament.pk).version, draw=draw or None)
+                  version=ArenaTournament.objects.get(pk=tournament.pk).version, draw=draw or None,
+                  starter_code=row.get('starter_code'))
     return ArenaTournament.objects.get(pk=tournament.pk)
 
 

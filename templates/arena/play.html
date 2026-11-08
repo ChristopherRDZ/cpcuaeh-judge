@@ -502,7 +502,9 @@ $(function () {
         aceTheme: {{ (ace_theme or '')|tojson }},
         light: {{ ace_light_theme|tojson }},
         dark: {{ ace_dark_theme|tojson }},
-        defaultLanguage: {{ default_language_key|tojson }}
+        defaultLanguage: {{ default_language_key|tojson }},
+        // The C++ template of the rounds and battles that start with it, by the start of the language key.
+        starter: {{ starter_code|tojson }}
     };
     var A = window.Arena;
     // The battle in the site's own bar, where its tabs were, while the player is held (see .ar-nav-battle). Same
@@ -912,7 +914,8 @@ $(function () {
         forgetOtherGames(g.id);
         buildTabs();
         loadStatements();
-        // Drafts: this browser first, then the server (another laptop), then the language template.
+        // Drafts: this browser first, then the server (another laptop), then the C++ template of the rules or the
+        // language template.
         A.get(URLS.game + g.id + '/code/mine').catch(function () { return {drafts: {}}; }).then(function (data) {
             problems.forEach(function (problem) {
                 var saved = null;
@@ -925,7 +928,7 @@ $(function () {
                 session.setUseWrapMode(false);
                 session.setTabSize(4);
                 sessions[problem.order] = session;
-                if (!draft) loadTemplate(problem, key, session);
+                if (!draft) startCode(problem, key, session);
             });
             selectTab(0);
         });
@@ -935,8 +938,40 @@ $(function () {
     function pickLanguage(problem, wanted) {
         var keys = problem.languages.map(function (lang) { return lang.key; });
         if (wanted && keys.indexOf(wanted) !== -1) return wanted;
+        // With the C++ template (2026-11-08), C++: the player's own if it is one, else the newest the problem allows.
+        var cpp = keys.filter(function (key) { return starterText(key) !== null; }).sort();
+        if (cpp.length) return cpp.indexOf(CONF.defaultLanguage) !== -1 ? CONF.defaultLanguage : cpp[cpp.length - 1];
         if (CONF.defaultLanguage && keys.indexOf(CONF.defaultLanguage) !== -1) return CONF.defaultLanguage;
         return keys[0];
+    }
+
+    // The C++ template of the rules (judge/arena/rules.py, STARTER_CODE) for a language key, or null: without the
+    // rule, or for a language that is not C++.
+    function starterOn() { return !!(game && game.rules && game.rules.starter_code); }
+    function starterText(key) {
+        if (!starterOn() || !key) return null;
+        var found = null;
+        Object.keys(CONF.starter.code).forEach(function (prefix) {
+            if (key.indexOf(prefix) === 0) found = CONF.starter.code[prefix];
+        });
+        return found;
+    }
+
+    // Whether the code is a template nobody touched (spaces at the end of a line do not count).
+    function isStarter(text) {
+        function bare(code) { return plainText(code).replace(/[ \t]+$/gm, '').replace(/\s+$/, ''); }
+        return Object.keys(CONF.starter.code).some(function (prefix) { return bare(text) === bare(CONF.starter.code[prefix]); });
+    }
+
+    // A problem without code: the C++ template of the rules, with the cursor inside main(); else, as always, the
+    // template of the language in the site.
+    function startCode(problem, key, session) {
+        var starter = starterText(key);
+        if (starter === null) { loadTemplate(problem, key, session); return; }
+        session.setValue(starter);
+        session.selection.moveCursorTo(CONF.starter.cursor.row, CONF.starter.cursor.column);
+        session.selection.clearSelection();
+        if (sessions[tab] === session) { sendReason = 'template'; queueSend(); }
     }
 
     function aceMode(problem, key) {
@@ -1017,7 +1052,14 @@ $(function () {
         if (!problem || !sessions[tab]) return;
         languages[tab] = key;
         sessions[tab].setMode('ace/mode/' + aceMode(problem, key));
-        if (!sessions[tab].getValue().trim()) loadTemplate(problem, key, sessions[tab]);
+        // The C++ template untouched goes with C++ (2026-11-08): another C++ keeps it, another language starts as it
+        // would have started.
+        var text = sessions[tab].getValue();
+        if (starterOn() && text.trim() && isStarter(text) && starterText(key) === null) {
+            sendReason = 'template';
+            sessions[tab].setValue('');
+        }
+        if (!sessions[tab].getValue().trim()) startCode(problem, key, sessions[tab]);
         remember();
         queueSend();
     });

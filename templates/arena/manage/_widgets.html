@@ -41,6 +41,9 @@
                     border: 1px solid var(--ar-soft-border); border-radius: 4px; }
     .am-languages label { font-weight: normal; }
     details.am-details > summary { cursor: pointer; font-weight: 600; padding: .3em 0; }
+    details.am-starter { margin-top: .5em; }
+    details.am-starter > summary { font-weight: normal; }
+    details.am-starter > .ar-pre { display: inline-block; min-width: 18em; margin-top: .3em; }
     .am-presets { display: flex; gap: .5em; flex-wrap: wrap; margin-bottom: .8em; }
     .am-table { width: 100%; border-collapse: collapse; }
     .am-table th, .am-table td { padding: .45em .6em; border-bottom: 1px solid var(--ar-soft-border); text-align: left;
@@ -140,6 +143,8 @@ window.ArenaWidgets = (function () {
             block_paste: {{ _('Block pasting in the editor')|tojson }},
             show_rival: {{ _('Players see the progress of the rival')|tojson }},
             screen_code: {{ _('Show the code on the screens')|tojson }},
+            starter_code: {{ _('Start with the C++ template')|tojson }},
+            seeTemplate: {{ _('See the template')|tojson }},
             languages: {{ _('Languages (none checked = whatever each problem allows)')|tojson }}
         },
         summary: {
@@ -150,7 +155,8 @@ window.ArenaWidgets = (function () {
             noLimit: {{ _('no limit of attempts')|tojson }},
             partial: {{ _('partial points')|tojson }},
             paste: {{ _('pasting blocked')|tojson }},
-            screen: {{ _('code on the projector')|tojson }}
+            screen: {{ _('code on the projector')|tojson }},
+            starter: {{ _('C++ template')|tojson }}
         }
     };
 
@@ -395,7 +401,8 @@ window.ArenaWidgets = (function () {
     };
 
     // Rules editor. `values` are the effective rules, `languages` [{key, name}]. `options.outside` gives inputs that
-    // live elsewhere on the page ({duration: input}); `options.onChange` is told of every change.
+    // live elsewhere on the page ({duration: input}); `options.onChange` is told of every change. `options.starter`,
+    // the C++ template: with it, the box to start with it (a quick battle; in a tournament each round chooses).
     W.rulesEditor = function (container, values, languages, options) {
         options = options || {};
         var T = W.TEXT.rules;
@@ -425,7 +432,9 @@ window.ArenaWidgets = (function () {
         check('block_paste');
         check('show_rival');
         check('screen_code');
+        if (options.starter) check('starter_code');
         container.appendChild(grid);
+        if (options.starter) container.appendChild(W.starterPreview(options.starter));
         var boxes = [];
         if (languages && languages.length) {
             container.appendChild(A.el('div', {'class': 'am-label', style: 'margin-top: .8em;', text: T.languages}));
@@ -442,14 +451,17 @@ window.ArenaWidgets = (function () {
             container.addEventListener('input', options.onChange);
             container.addEventListener('change', options.onChange);
         }
-        return {
+        var editor = {
             get: function () {
                 var rules = {};
                 ['duration', 'countdown', 'penalty', 'max_attempts'].forEach(function (name) {
                     rules[name] = parseInt(inputs[name].value, 10);
-                    if (isNaN(rules[name])) rules[name] = values[name];
+                    // An empty field: what it had when it was last filled (set() and mark() follow the server).
+                    if (isNaN(rules[name])) rules[name] = marked ? marked[name] : values[name];
                 });
-                ['partial', 'block_paste', 'show_rival', 'screen_code'].forEach(function (name) { rules[name] = inputs[name].checked; });
+                ['partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code'].forEach(function (name) {
+                    if (inputs[name]) rules[name] = inputs[name].checked;
+                });
                 if (boxes.length) rules.languages = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
                 return rules;
             },
@@ -459,8 +471,30 @@ window.ArenaWidgets = (function () {
                     if (inputs[name].type === 'checkbox') inputs[name].checked = !!rules[name];
                     else inputs[name].value = rules[name];
                 });
-            }
+                if (rules.languages) boxes.forEach(function (box) { box.checked = rules.languages.indexOf(box.value) !== -1; });
+            },
+            // Only what was changed here since the editor was filled or since mark() (2026-11-08): a page opened before
+            // somebody else changed the rules does not send back what it showed then.
+            changed: function () {
+                var now = editor.get(), result = {};
+                Object.keys(now).forEach(function (name) {
+                    if (JSON.stringify(now[name]) !== JSON.stringify(marked[name])) result[name] = now[name];
+                });
+                return result;
+            },
+            // `rules`: what was sent, when it differs from what the editor has by the time the answer comes.
+            mark: function (rules) { marked = rules || editor.get(); }
         };
+        var marked = editor.get();
+        return editor;
+    };
+
+    // «See the template», folded: what the editor of the players starts with (2026-11-08).
+    W.starterPreview = function (code) {
+        return A.el('details', {'class': 'am-details am-starter'}, [
+            A.el('summary', {text: W.TEXT.rules.seeTemplate}),
+            A.el('pre', {'class': 'ar-pre', text: code})
+        ]);
     };
 
     W.confirmBox = function (title, lines, confirmLabel, onConfirm, danger) {
@@ -568,6 +602,7 @@ window.ArenaWidgets = (function () {
         if (rules.partial) parts.push(T.partial);
         if (rules.block_paste) parts.push(T.paste);
         if (rules.screen_code) parts.push(T.screen);
+        if (rules.starter_code) parts.push(T.starter);
         return parts.join(' · ');
     };
 

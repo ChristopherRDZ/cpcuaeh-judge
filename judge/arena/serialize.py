@@ -83,7 +83,13 @@ def player_card(match, slot, size=128):
 def _rules_view(rules):
     return {name: rules.get(name, arena_rules.DEFAULTS[name])
             for name in ('duration', 'countdown', 'partial', 'penalty', 'max_attempts', 'block_paste', 'show_rival',
-                         'screen_code')}
+                         'screen_code', 'starter_code')}
+
+
+def _editable_rules(rules):
+    """The rules the panel edits, the languages too (2026-11-08): without them its boxes came all unchecked, and
+    saving anything else on the page took away the languages chosen before."""
+    return dict(_rules_view(rules), languages=sorted(rules.get('languages') or ()))
 
 
 def _game_rules(game):
@@ -450,7 +456,7 @@ def organizer_match_state(match, language, now=None, user=None):
             'reason': match.decided_reason,
             'tie': tied.pk if tied is not None else None,
             'quick': match.tournament_id is None,
-            'rules': _rules_view(arena_rules.match_rules(match)),
+            'rules': _editable_rules(arena_rules.match_rules(match)),
             'overrides': match.rules,
             # Whether the players are still sent back to the arena from the rest of the site (see lock.py).
             'held': held_until is not None and held_until > now,
@@ -669,6 +675,10 @@ def tournament_state(tournament, language, now=None, user=None):
     tournament.refresh_from_db()
     rounds = list(tournament.rounds.order_by('number'))
     total = len(rounds)
+    # The rounds with a game played: their games per battle no longer change (tournament.set_round), so the page locks
+    # that list instead of refusing the whole table on Save (2026-11-08).
+    started = set(ArenaGame.objects.filter(match__tournament=tournament, contest__isnull=False)
+                  .values_list('match__round_id', flat=True))
     participants = list(tournament.participants.select_related('profile__user').order_by('seed'))
     duel_ratings = duel_rating_map([p.profile_id for p in participants])
     return {
@@ -677,7 +687,7 @@ def tournament_state(tournament, language, now=None, user=None):
             'id': tournament.pk, 'name': tournament.name, 'slug': tournament.slug, 'status': tournament.status,
             'description': tournament.description, 'version': tournament.version,
             'seeding': tournament.seeding, 'third_place': tournament.third_place_match,
-            'bank': tournament.bank_id, 'rules': _rules_view(arena_rules.merge(tournament.rules)),
+            'bank': tournament.bank_id, 'rules': _editable_rules(arena_rules.merge(tournament.rules)),
             'overrides': tournament.rules,
             # The public history (judge/arena/history.py): the box, the planned date as the organizer's own clock
             # reads it (the value of a datetime-local field) and where the public page is.
@@ -703,7 +713,9 @@ def tournament_state(tournament, language, now=None, user=None):
         if tournament.status in (ArenaTournament.DRAFT, ArenaTournament.RUNNING) else {},
         'rounds': [{'number': r.number, 'name': round_name(r, total), 'custom_name': r.name, 'best_of': r.best_of,
                     'overrides': r.rules, 'draw_count': (r.rules or {}).get('draw_count'),
-                    'level_min': (r.rules or {}).get('level_min'), 'level_max': (r.rules or {}).get('level_max')}
+                    'level_min': (r.rules or {}).get('level_min'), 'level_max': (r.rules or {}).get('level_max'),
+                    'starter_code': bool(arena_rules.merge(tournament.rules, r.rules)['starter_code']),
+                    'started': r.pk in started}
                    for r in rounds],
         'draw': {'auto': bool((tournament.rules or {}).get('auto_draw')),
                  'count': (tournament.rules or {}).get('draw_count') or 1, 'bank': tournament.bank_id},

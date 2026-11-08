@@ -14948,3 +14948,48 @@ msgstr "Torneo cancelado: nunca cuenta."
 #: cpc 2026-11-06
 msgid "It was cancelled before it started."
 msgstr "Se canceló antes de empezar."
+
+#: cpc 2026-11-08
+msgid "Start with the C++ template"
+msgstr "Empezar con la plantilla de C++"
+
+#: cpc 2026-11-08
+msgid "C++ template"
+msgstr "plantilla de C++"
+
+#: cpc 2026-11-08
+msgid "See the template"
+msgstr "Ver la plantilla"
+
+#: cpc 2026-11-08
+msgid "Template"
+msgstr "Plantilla"
+
+#: cpc 2026-11-08
+#, python-format
+msgid "C++ template: %(round)s"
+msgstr "Plantilla de C++: %(round)s"
+
+#: cpc 2026-11-08
+msgid "Already started: change the games of each battle on its page."
+msgstr "Ya empezó: cambia las partidas de cada batalla en su página."
+
+#: cpc 2026-11-08
+msgid "C++ template: yes"
+msgstr "Plantilla de C++: sí"
+
+#: cpc 2026-11-08
+msgid "C++ template: no"
+msgstr "Plantilla de C++: no"
+
+#: cpc 2026-11-08
+msgid "chosen by its round"
+msgstr "la elige su ronda"
+
+#: cpc 2026-11-08
+msgid "Round of 32"
+msgstr "Dieciseisavos de final"
+
+#: cpc 2026-11-08
+msgid "Round of 64"
+msgstr "Treintaidosavos de final"

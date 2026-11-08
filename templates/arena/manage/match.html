@@ -43,6 +43,7 @@
 {% include "arena/manage/_widgets.html" %}
 {{ state|json_script('mm-state') }}
 {{ languages|json_script('mm-languages') }}
+{{ starter_code|json_script('mm-starter') }}
 <script type="text/javascript">
 // The page of a battle (2026-11-03): one main button, that of the next step; what went wrong, folded; the rest in
 // tabs.
@@ -135,6 +136,8 @@ $(function () {
         winner: {{ _('Winner')|tojson }},
         tie: {{ _('Tie. Give the game to one player or play a tiebreak game: choose its problems below and start it.')|tojson }},
         settingsSaved: {{ _('Settings saved')|tojson }},
+        starterOn: {{ _('C++ template: yes')|tojson }},
+        starterOff: {{ _('C++ template: no')|tojson }},
         reasons: {
             all_solved: {{ _('Solved every problem first')|tojson }},
             unreachable: {{ _('The rival could no longer catch up')|tojson }},
@@ -187,7 +190,14 @@ $(function () {
     var DRAW = {{ url('arena_manage_draw', state.match.id)|tojson }};
     var CODE = {{ url('arena_manage')|tojson }} + 'game/';
     var problemRows = {};   // game number -> {node, editor, saved, dirty()}
-    var rulesEditor = null, organizers = null;
+    var rulesEditor = null, organizers = null, bestOf = null, named = null;
+    function namesNow() { return {title: $('#mm-title').val(), a: $('#mm-display-a').val(), b: $('#mm-display-b').val()}; }
+    function fillNames(match) {
+        $('#mm-title').val(match.title || '');
+        $('#mm-display-a').val(state.players.a.display_name || '');
+        $('#mm-display-b').val(state.players.b.display_name || '');
+        named = namesNow();
+    }
     var editors = {}, codeSeq = {a: 0, b: 0}, codeGame = null;
     // How long a submission has waited, when a player was last seen and how far the code went move by themselves.
     var paint = W.painter(['queued_for', 'seen_ago', 'code_seq']);
@@ -276,13 +286,25 @@ $(function () {
         paint('screens', [state.screens, match.id], renderScreens);
         paint('log', state.log, renderLog);
         if (!rulesEditor) {
-            rulesEditor = W.rulesEditor(document.getElementById('mm-rules'), match.rules, languages);
+            // The C++ template: a quick battle chooses it here; a battle of a tournament takes the one of its round.
+            rulesEditor = W.rulesEditor(document.getElementById('mm-rules'), match.rules, languages,
+                                        match.quick ? {starter: JSON.parse(document.getElementById('mm-starter').textContent)} : {});
             $('#mm-best-of').val(String(match.best_of));
-            $('#mm-title').val(match.title || '');
-            $('#mm-display-a').val(state.players.a.display_name || '');
-            $('#mm-display-b').val(state.players.b.display_name || '');
+            bestOf = match.best_of;
+            fillNames(match);
             $('#mm-display').prop('hidden', !match.quick);
+        } else if (!Object.keys(rulesEditor.changed()).length && parseInt($('#mm-best-of').val(), 10) === bestOf &&
+                   JSON.stringify(namesNow()) === JSON.stringify(named) &&
+                   !$(document.activeElement).closest('[data-pane="settings"]').length) {
+            // Nothing changed here, and nobody is writing in it (a number being typed is empty for a moment): the
+            // rules and games follow what others change, in its tournament too (2026-11-08).
+            rulesEditor.set(match.rules);
+            rulesEditor.mark();
+            $('#mm-best-of').val(String(match.best_of));
+            bestOf = match.best_of;
+            fillNames(match);
         }
+        paint('starter', [match.quick, match.rules.starter_code], renderStarter);
         paint('ranking', match.ranking, renderRanking);
         if (!organizers) {
             // Filled once, like the settings: a refresh must not undo who is being added.
@@ -291,6 +313,13 @@ $(function () {
             $('#mm-organizers-tournament').prop('hidden', !team.tournament);
             $('#mm-organizers-actions').prop('hidden', team.tournament);
         }
+    }
+
+    function renderStarter() {
+        var on = state.match.rules.starter_code;
+        $('#mm-starter-round').prop('hidden', state.match.quick);
+        $('#mm-starter-round i').attr('class', 'fa ' + (on ? 'fa-check am-check' : 'fa-times'));
+        $('#mm-starter-state').text(on ? TEXT.starterOn : TEXT.starterOff);
     }
 
     // ------------------------------------------------------------ the ranking of the duels
@@ -750,10 +779,13 @@ $(function () {
     });
 
     $('#mm-save-settings').on('click', function () {
-        act({action: 'update', best_of: parseInt($('#mm-best-of').val(), 10), rules: rulesEditor.get(),
-             title: $('#mm-title').val(), display_a: state.match.quick ? $('#mm-display-a').val() : undefined,
-             display_b: state.match.quick ? $('#mm-display-b').val() : undefined},
-            function () { A.toast(TEXT.settingsSaved, 'ok', 2000); });
+        // Only what was changed here (2026-11-08): the rest stays as the battle has it, or as its tournament gives it.
+        var games = parseInt($('#mm-best-of').val(), 10), names = namesNow(), sent = rulesEditor.get();
+        act({action: 'update', best_of: games !== bestOf ? games : undefined, rules: rulesEditor.changed(),
+             title: names.title !== named.title ? names.title : undefined,
+             display_a: state.match.quick && names.a !== named.a ? names.a : undefined,
+             display_b: state.match.quick && names.b !== named.b ? names.b : undefined},
+            function () { rulesEditor.mark(sent); bestOf = games; named = names; A.toast(TEXT.settingsSaved, 'ok', 2000); });
     });
 
     // ------------------------------------------------------------ clock and refresh
@@ -884,6 +916,11 @@ $(function () {
                     </div>
                 </div>
                 <div id="mm-rules"></div>
+                {% if state.match.tournament %}
+                    <p class="am-mt" id="mm-starter-round" hidden><i class="fa" aria-hidden="true"></i> <span id="mm-starter-state"></span>
+                        <span class="am-hint">· {{ _('chosen by its round') }} ·
+                            <a href="{{ url('arena_manage_tournament', state.match.tournament.slug) }}#problems">{{ _('Rounds and problems') }}</a></span></p>
+                {% endif %}
                 <div class="am-actions am-mt"><button type="button" class="ar-btn" id="mm-save-settings">{{ _('Save') }}</button></div>
             </div></section>
             <div class="am-stack">

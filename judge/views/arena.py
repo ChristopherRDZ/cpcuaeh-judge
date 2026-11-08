@@ -23,7 +23,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST, require_safe
 
-from judge.arena import access, engine, live_code, serialize
+from judge.arena import access, engine, live_code, rules as arena_rules, serialize
 from judge.arena.engine import ArenaError
 from judge.models import ProblemTranslation
 from judge.models.arena import ArenaGame, ArenaGameProblem, ArenaScreen
@@ -128,6 +128,8 @@ def arena_home(request):
         'can_manage': can_manage(request.user),
         'ace_theme': request.profile.resolved_ace_theme,
         'default_language_key': request.profile.language.key if request.profile.language_id else '',
+        # The C++ template of the rounds and battles that start with it (rules.STARTER_CODE, 2026-11-08).
+        'starter_code': {'code': arena_rules.STARTER_CODE, 'cursor': arena_rules.STARTER_CURSOR},
         'history_tab': 'home',
     }
     context.update(_ace_context())

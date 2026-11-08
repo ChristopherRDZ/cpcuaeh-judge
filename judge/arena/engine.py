@@ -1095,9 +1095,19 @@ def update_match(actor, match_id, version=None, best_of=None, rules=None, title=
         fields.append('best_of')
     if rules is not None:
         try:
-            match.rules = arena_rules.clean_rules(rules)
+            cleaned = arena_rules.clean_rules(rules)
         except ValidationError as error:
             raise ArenaError(error.messages[0])
+        layers = arena_rules.inherited_layers(match)
+        # What was sent goes over the rules the battle has now: the page sends only what was changed on it, so one
+        # opened before its tournament changed does not bring back what it showed then (2026-11-08).
+        wanted = dict(arena_rules.merge(*(layers + [match.rules])), **cleaned)
+        if match.tournament_id:
+            # Its round decides the template: the page of the battle only shows it.
+            wanted.pop('starter_code', None)
+        # Only what differs from its tournament and round (or from the defaults, in a quick battle), so the battle
+        # keeps following them.
+        match.rules = arena_rules.changes_only(wanted, layers)
         fields.append('rules')
     if title is not None:
         match.title = title.strip()[:100]

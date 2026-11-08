@@ -12,9 +12,12 @@
     .tm-match-foot .ar-btn { padding: 1px 8px; font-size: .88em; }
     .tm-match-foot .ar-badge { font-size: .8em; }
     .tm-match-foot .ar-muted { font-size: .85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tm-rounds td input, .tm-rounds td select { width: 100%; }
+    .tm-rounds td input:not([type=checkbox]), .tm-rounds td select { width: 100%; }
     .tm-rounds td.tm-levels { white-space: nowrap; }
     .tm-rounds td.tm-levels select { width: auto; }
+    .tm-rounds .tm-starter { text-align: center; width: 1%; white-space: nowrap; }
+    .tm-rounds td.tm-starter input { margin: 0; }
+    .tm-rounds td select:disabled { opacity: .55; cursor: not-allowed; }
     .tm-live { display: grid; grid-template-columns: minmax(0, 1fr) 24em; gap: 1em; align-items: start; }
     .tm-place .ar-input { flex: 1 1 12em; }
     .tm-place img { width: 24px; height: 24px; border-radius: 3px; }
@@ -31,6 +34,7 @@
 {% include "arena/manage/_widgets.html" %}
 {{ state|json_script('tm-state') }}
 {{ languages|json_script('tm-languages') }}
+{{ starter_code|json_script('tm-starter') }}
 <script type="text/javascript">
 // The page of a tournament (2026-11-03): in tabs, with what is missing before it starts on top and, while it is
 // played, what comes next beside the bracket.
@@ -99,7 +103,10 @@ $(function () {
         down: {{ _('Move down')|tojson }},
         // Rounds.
         final: {{ _('Final')|tojson }}, semifinal: {{ _('Semifinal')|tojson }}, quarter: {{ _('Quarterfinal')|tojson }},
-        r16: {{ _('Round of 16')|tojson }}, roundN: {{ _('Round %(number)s', number='%(number)s')|tojson }},
+        r16: {{ _('Round of 16')|tojson }}, r32: {{ _('Round of 32')|tojson }}, r64: {{ _('Round of 64')|tojson }},
+        roundN: {{ _('Round %(number)s', number='%(number)s')|tojson }},
+        starterFor: {{ _('C++ template: %(round)s', round='%(round)s')|tojson }},
+        roundStarted: {{ _('Already started: change the games of each battle on its page.')|tojson }},
         bestOf: {{ _('Best of')|tojson }},
         single: {{ _('A single game')|tojson }},
         any: {{ _('any')|tojson }},
@@ -134,6 +141,8 @@ $(function () {
         shown: {{ _('Shown on %(name)s.', name='%(name)s')|tojson }}
     };
     var languages = JSON.parse(document.getElementById('tm-languages').textContent);
+    document.getElementById('tm-starter-preview').appendChild(
+        W.starterPreview(JSON.parse(document.getElementById('tm-starter').textContent)));
     var state = JSON.parse(document.getElementById('tm-state').textContent);
     var ACTION = {{ url('arena_manage_tournament_action', state.tournament.slug)|tojson }};
     var STATE = {{ url('arena_manage_tournament_state', state.tournament.slug)|tojson }};
@@ -198,7 +207,8 @@ $(function () {
         renderChampion();
         paint('before', [t.status, state.places, state.participants.length, state.bracket, state.draw, state.conflicts], renderBefore);
         paint('places', [t.status, state.places, state.participants, state.conflicts], renderPlaces);
-        paint('rounds', [state.rounds, state.draw], renderRounds);
+        paint('rounds', [state.rounds.map(function (r) { return Object.assign({}, r, {started: null}); }), state.draw], renderRounds);
+        paint('round-lock', state.rounds.map(function (r) { return r.started; }), lockRounds);
         paint('round-status', [roundSummary(), bankDraws()], renderRoundStatus);
         paint('next', [t.status, state.bracket, state.draw], renderNext);
         paint('screens', [state.screens, t.id], renderScreens);
@@ -297,7 +307,7 @@ $(function () {
     }
     function defaultRoundName(number, total) {
         var fromEnd = total - number;
-        return [TEXT.final, TEXT.semifinal, TEXT.quarter, TEXT.r16][fromEnd] || fill(TEXT.roundN, {number: number});
+        return [TEXT.final, TEXT.semifinal, TEXT.quarter, TEXT.r16, TEXT.r32, TEXT.r64][fromEnd] || fill(TEXT.roundN, {number: number});
     }
     function currentRoundName(number) {
         var round = state.rounds.filter(function (r) { return r.number === number; })[0];
@@ -547,19 +557,34 @@ $(function () {
             var count = A.el('input', {'class': 'ar-input', type: 'number', min: 1, max: 5, value: round.draw_count || '',
                                        placeholder: String(state.draw.count || 1)});
             var low = levelSelect(round.level_min), high = levelSelect(round.level_max);
+            var starter = A.el('input', {type: 'checkbox', 'aria-label': fill(TEXT.starterFor, {round: round.name})});
+            starter.checked = !!round.starter_code;
             var status = A.el('td');
             roundInputs.push({number: round.number, select: select, name: name, count: count, low: low, high: high,
-                              status: status});
+                              starter: starter, status: status});
             body.appendChild(A.el('tr', {}, [
                 A.el('td', {text: String(round.number)}),
                 A.el('td', {}, [name]),
                 A.el('td', {}, [select]),
                 A.el('td', {'class': 'tm-bank-col', hidden: mode() !== 'bank'}, [count]),
                 A.el('td', {'class': 'tm-bank-col tm-levels', hidden: mode() !== 'bank'}, [low, ' – ', high]),
+                A.el('td', {'class': 'tm-starter'}, [starter]),
                 status
             ]));
         });
+        lockRounds();
         renderRoundStatus();
+    }
+
+    // A round with a game played keeps its games per battle (tournament.set_round): its list is locked, with why.
+    function lockRounds() {
+        roundInputs.forEach(function (row) {
+            var round = state.rounds.filter(function (r) { return r.number === row.number; })[0];
+            var locked = !!(round && round.started);
+            row.select.disabled = locked;
+            if (locked) row.select.value = String(round.best_of);
+            row.select.title = locked ? TEXT.roundStarted : '';
+        });
     }
 
     // What each round still needs, apart from its fields: a battle that ends or gets its problems redraws only this
@@ -594,7 +619,8 @@ $(function () {
         var auto = mode() === 'bank';
         if (auto && !bank) { A.toast(TEXT.chooseBank, 'warn'); return; }
         var rounds = roundInputs.map(function (row) {
-            var data = {number: row.number, best_of: parseInt(row.select.value, 10), name: row.name.value};
+            var data = {number: row.number, best_of: parseInt(row.select.value, 10), name: row.name.value,
+                        starter_code: row.starter.checked};
             if (auto) {
                 data.draw_count = parseInt(row.count.value, 10) || null;
                 data.level_min = parseInt(row.low.value, 10) || null;
@@ -885,9 +911,11 @@ $(function () {
             <table class="am-table tm-rounds">
                 <thead><tr><th>#</th><th>{{ _('Round') }}</th><th>{{ _('Games per battle') }}</th>
                     <th class="tm-bank-col">{{ _('Problems per game') }}</th>
-                    <th class="tm-bank-col">{{ _('Difficulty') }}</th><th>{{ _('Battles') }}</th></tr></thead>
+                    <th class="tm-bank-col">{{ _('Difficulty') }}</th><th class="tm-starter">{{ _('Template') }}</th>
+                    <th>{{ _('Battles') }}</th></tr></thead>
                 <tbody id="tm-rounds"></tbody>
             </table>
+            <div id="tm-starter-preview"></div>
             <p class="am-hint tm-bank-col">{{ _('Difficulty from 1 (easy) to 5 (hard), as in the bank. Empty means any.') }}</p>
             <div class="am-actions am-mt">
                 <button type="button" class="ar-btn" id="tm-save-problems">{{ _('Save') }}</button>

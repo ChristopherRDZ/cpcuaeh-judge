@@ -12,6 +12,7 @@
 {% include "arena/manage/_widgets.html" %}
 {{ defaults|json_script('am-defaults') }}
 {{ languages|json_script('am-languages') }}
+{{ starter_code|json_script('am-starter') }}
 <script type="text/javascript">
 // A new quick battle (2026-11-03, on the first page of the panel until then): the players, how many games, the
 // problems of the first one, and the rest of the rules folded.
@@ -33,6 +34,7 @@ $(function () {
     var summary = document.getElementById('am-rules-summary');
     var rules = W.rulesEditor(document.getElementById('am-rules'), defaults, languages, {
         outside: {duration: document.getElementById('am-duration')},
+        starter: JSON.parse(document.getElementById('am-starter').textContent),
         onChange: function () { summary.textContent = W.rulesSummary(rules.get()); }
     });
     summary.textContent = W.rulesSummary(rules.get());

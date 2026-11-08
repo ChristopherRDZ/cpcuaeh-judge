@@ -227,6 +227,7 @@ def manage_match(request, match):
         'state': serialize.organizer_match_state(match, request.LANGUAGE_CODE, user=request.user),
         'defaults': arena_rules.DEFAULTS,
         'languages': _languages(),
+        'starter_code': arena_rules.STARTER_CODE['CPP'],
     }
     context.update(_ace_context())
     return render(request, 'arena/manage/match.html',
@@ -243,6 +244,7 @@ def manage_tournament(request, slug):
         'defaults': arena_rules.DEFAULTS,
         'languages': _languages(),
         'banks': _bank_choices(request.user, tournament.bank_id),
+        'starter_code': arena_rules.STARTER_CODE['CPP'],
         'min_places': arena_tournament.MIN_PARTICIPANTS,
         'max_places': arena_tournament.MAX_PARTICIPANTS,
     }))
@@ -351,6 +353,7 @@ def manage_quick_new(request):
         'title': _('New quick battle'),
         'defaults': arena_rules.DEFAULTS,
         'languages': _languages(),
+        'starter_code': arena_rules.STARTER_CODE['CPP'],
         'decides_ranking': access.decides_ranking(request.user),
     }))
 
@@ -711,7 +714,7 @@ def manage_tournament_action(request, slug):
             raise ArenaError(_('That round does not exist.'), status=404)
         arena_tournament.set_round(actor, tournament.pk, number, best_of=data.get('best_of'),
                                    rules=data.get('rules'), name=data.get('name'), version=version,
-                                   draw=data.get('draw'))
+                                   draw=data.get('draw'), starter_code=data.get('starter_code'))
     elif action == 'generate':
         arena_tournament.generate_bracket(actor, tournament.pk, version)
     elif action == 'start':

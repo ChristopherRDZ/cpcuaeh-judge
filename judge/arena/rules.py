@@ -26,6 +26,9 @@ DEFAULTS = {
     'show_rival': True,
     # Whether the projector screens show what each player types.
     'screen_code': True,
+    # Whether the editor starts with STARTER_CODE (2026-11-08). Chosen by round in a tournament, never for the whole
+    # tournament (the tab «Rules» does not show it), and with the other rules in a quick battle.
+    'starter_code': False,
 }
 
 BOUNDS = {
@@ -34,7 +37,7 @@ BOUNDS = {
     'penalty': (0, 60),
     'max_attempts': (0, 50),
 }
-BOOLEANS = ('partial', 'block_paste', 'show_rival', 'screen_code')
+BOOLEANS = ('partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code')
 LABELS = {
     'duration': gettext_lazy('Duration'),
     'countdown': gettext_lazy('Countdown'),
@@ -45,8 +48,18 @@ LABELS = {
     'block_paste': gettext_lazy('Block pasting'),
     'show_rival': gettext_lazy('Show rival progress'),
     'screen_code': gettext_lazy('Code on the screens'),
+    'starter_code': gettext_lazy('Start with the C++ template'),
 }
 MAX_LANGUAGES = 40
+
+# What the editor starts with when the rule `starter_code` is on, by the start of the language key: every C++ of the
+# site (CPP03 ... CPP20). Other languages start as without the rule, with the template of their language in the site
+# (all empty on 2026-11-08). Fixed here on purpose: those of the site are also those of the normal submit page.
+STARTER_CODE = {
+    'CPP': '#include<iostream>\nusing namespace std;\n\nint main(){\n  \n  return 0;\n}',
+}
+# Where the cursor waits in it: the empty line inside main(), already indented.
+STARTER_CURSOR = {'row': 4, 'column': 2}
 
 DEFAULT_POINTS = 100
 POINT_BOUNDS = (1, 10000)
@@ -167,13 +180,35 @@ def merge(*layers):
 
 def match_rules(match):
     """The rules a new game of this match would get."""
+    return merge(*(inherited_layers(match) + [match.rules]))
+
+
+def inherited_layers(match):
+    """The layers a match takes its rules from before its own: its tournament and its round (none for a quick
+    battle, whose rules come from DEFAULTS)."""
     layers = []
     if match.tournament_id:
         layers.append(match.tournament.rules)
     if match.round_id:
         layers.append(match.round.rules)
-    layers.append(match.rules)
-    return merge(*layers)
+    return layers
+
+
+def changes_only(rules, layers):
+    """What of the cleaned `rules` differs from what `layers` give (2026-11-08). The settings of a battle send all its
+    rules; storing them all froze the battle, which no longer followed its tournament or its round, even when only its
+    title had been saved."""
+    inherited = merge(*layers)
+    changed = {}
+    for name, value in rules.items():
+        before = inherited.get(name)
+        if name == 'languages':
+            same = sorted(value or ()) == sorted(before or ())
+        else:
+            same = value == before
+        if not same:
+            changed[name] = value
+    return changed
 
 
 def clean_points(value):
