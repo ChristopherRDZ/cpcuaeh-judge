@@ -83,7 +83,7 @@ def player_card(match, slot, size=128):
 def _rules_view(rules):
     return {name: rules.get(name, arena_rules.DEFAULTS[name])
             for name in ('duration', 'countdown', 'partial', 'penalty', 'max_attempts', 'block_paste', 'show_rival',
-                         'screen_code', 'starter_code')}
+                         'screen_code', 'starter_code', 'autocomplete')}
 
 
 def _editable_rules(rules):
@@ -715,6 +715,9 @@ def tournament_state(tournament, language, now=None, user=None):
                     'overrides': r.rules, 'draw_count': (r.rules or {}).get('draw_count'),
                     'level_min': (r.rules or {}).get('level_min'), 'level_max': (r.rules or {}).get('level_max'),
                     'starter_code': bool(arena_rules.merge(tournament.rules, r.rules)['starter_code']),
+                    # 'inherit' when the round follows the tournament, else its own choice (2026-11-08).
+                    'autocomplete': ('inherit' if 'autocomplete' not in (r.rules or {}) else
+                                     'on' if r.rules['autocomplete'] else 'off'),
                     'started': r.pk in started}
                    for r in rounds],
         'draw': {'auto': bool((tournament.rules or {}).get('auto_draw')),

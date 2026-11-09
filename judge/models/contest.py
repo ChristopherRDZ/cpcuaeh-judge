@@ -239,6 +239,13 @@ class Contest(models.Model):
     private_contestants = models.ManyToManyField(Profile, blank=True, verbose_name=_('private contestants'),
                                                  help_text=_('If non-empty, only these users may see the contest.'),
                                                  related_name='private_contestants+')
+    # Whether the editor suggests words of the code, keywords and headers inside this contest (2026-11-08): on the
+    # submit page and the custom test while someone is in it. Off unless whoever organizes allows it; outside
+    # contests it is on. The value in the database is for the code from before.
+    autocomplete = models.BooleanField(
+        verbose_name=_('allow autocompletion'), default=False, db_default=False,
+        help_text=_('The editor suggests words of the code, keywords and headers while typing. Each person can '
+                    'turn it off in their editor.'))
     hide_problem_tags = models.BooleanField(verbose_name=_('hide problem tags'),
                                             help_text=_('Whether problem tags should be hidden by default.'),
                                             default=False)

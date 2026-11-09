@@ -714,7 +714,8 @@ def manage_tournament_action(request, slug):
             raise ArenaError(_('That round does not exist.'), status=404)
         arena_tournament.set_round(actor, tournament.pk, number, best_of=data.get('best_of'),
                                    rules=data.get('rules'), name=data.get('name'), version=version,
-                                   draw=data.get('draw'), starter_code=data.get('starter_code'))
+                                   draw=data.get('draw'), starter_code=data.get('starter_code'),
+                                   autocomplete=data.get('autocomplete'))
     elif action == 'generate':
         arena_tournament.generate_bracket(actor, tournament.pk, version)
     elif action == 'start':

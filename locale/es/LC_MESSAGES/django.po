@@ -14993,3 +14993,48 @@ msgstr "Dieciseisavos de final"
 #: cpc 2026-11-08
 msgid "Round of 64"
 msgstr "Treintaidosavos de final"
+
+#: cpc 2026-11-08 autocompletado
+msgid "Autocomplete"
+msgstr "Autocompletar"
+
+#: cpc 2026-11-08 autocompletado
+msgid "allow autocompletion"
+msgstr "permitir autocompletado"
+
+#: cpc 2026-11-08 autocompletado
+msgid "The editor suggests words of the code, keywords and headers while typing. Each person can turn it off in their editor."
+msgstr "El editor sugiere palabras del código, palabras clave y cabeceras mientras se escribe. Cada quien lo puede apagar en su editor."
+
+#: cpc 2026-11-08 autocompletado
+msgid "Autocomplete code"
+msgstr "Autocompletar código"
+
+#: cpc 2026-11-08 autocompletado
+msgid "autocomplete"
+msgstr "autocompletado"
+
+#: cpc 2026-11-08 autocompletado
+msgid "With autocompletion"
+msgstr "Con autocompletado"
+
+#: cpc 2026-11-08 autocompletado
+#, python-format
+msgid "Autocomplete: %(round)s"
+msgstr "Autocompletar: %(round)s"
+
+#: cpc 2026-11-08 autocompletado
+msgid "As the tournament"
+msgstr "Como el torneo"
+
+#: cpc 2026-11-08 autocompletado
+msgid "Autocomplete: yes"
+msgstr "Autocompletado: sí"
+
+#: cpc 2026-11-08 autocompletado
+msgid "Autocomplete: no"
+msgstr "Autocompletado: no"
+
+#: cpc 2026-11-08 autocompletado
+msgid "decided by its round"
+msgstr "lo decide su ronda"

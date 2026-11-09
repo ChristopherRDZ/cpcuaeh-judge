@@ -2,6 +2,7 @@
 
 {% block js_media %}
     <script type="text/javascript" src="{{ ACE_URL }}/ace.js"></script>
+    <script type="text/javascript" src="{{ ACE_URL }}/ext-language_tools.js"></script>
     {{ form.media.js }}
     {% compress js %}
         <script type="text/javascript">
@@ -123,10 +124,34 @@
             });
         </script>
     {% endcompress %}
+    {#- Outside the compressed block above, so the offline manifest does not change (2026-11-08). -#}
+    {% include "ace-autocomplete.html" %}
+    <script type="text/javascript">
+        $(function () {
+            function start(editor) {
+                cpcAutocomplete.setup(editor, {
+                    allowed: {{ autocomplete_allowed|tojson }},
+                    box: document.getElementById('autocomplete-box'),
+                    wrap: document.getElementById('autocomplete')
+                });
+            }
+            $('#ace_source').one('ace_load', function (e, editor) { start(editor); });
+            // django_ace builds the editor on the «load» of the window, and jQuery 3 runs this later than
+            // DOMContentLoaded: with the page cached, «load» can come first and «ace_load» is gone, also for the hook
+            // above (font, wrap, Ctrl+S, the template of the language), which then never ran. If the editor is there,
+            // «ace_load» again: that hook can run twice without harm. Until then window.ace_source is the element
+            // with that id, not the editor.
+            if (window.ace_source && window.ace_source.getSession) $('#ace_source').trigger('ace_load', [window.ace_source]);
+        });
+    </script>
 {% endblock %}
 
 {% block media %}
     {{ form.media.css }}
+    <style>
+        #autocomplete { display: flex; align-items: center; gap: .4em; margin-top: .7em; cursor: pointer; }
+        #autocomplete input { margin: 0; }
+    </style>
 {% endblock %}
 
 {% block body %}
@@ -180,6 +205,9 @@
                             {% endfor %}
                         </select>
                     </div>
+                    {% if autocomplete_allowed %}
+                        <label id="autocomplete"><input type="checkbox" id="autocomplete-box"> {{ _('Autocomplete') }}</label>
+                    {% endif %}
                 </div>
             {% endif %}
         </div>

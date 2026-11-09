@@ -254,7 +254,7 @@ class ContestAdmin(PurgeMixin, NoBatchDeleteMixin, SortableAdminBase, VersionAdm
                            'tester_see_scoreboard', 'spectators')}),
         (_('Settings'), {'fields': ('is_visible', 'use_clarifications', 'hide_problem_tags', 'hide_problem_authors',
                                     'show_short_display', 'run_pretests_only', 'locked_after', 'scoreboard_visibility',
-                                    'freeze_minutes', 'scoreboard_revealed', 'points_precision')}),
+                                    'freeze_minutes', 'scoreboard_revealed', 'points_precision', 'autocomplete')}),
         (_('Participación'), {'fields': ('participation_mode', 'team_min_size', 'team_max_size', 'attendance_mode')}),
         (_('Scheduling'), {'fields': ('start_time', 'end_time', 'time_limit')}),
         (_('Details'), {'fields': ('description', 'og_image', 'logo_override_image', 'tags', 'summary')}),

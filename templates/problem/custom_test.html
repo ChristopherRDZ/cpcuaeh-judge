@@ -198,6 +198,8 @@
         font-size: .95em;
     }
     .ct-limits { margin-left: auto; font-size: .85em; color: var(--ct-muted); }
+    .ct-autocomplete { display: inline-flex; align-items: center; gap: .35em; font-size: .85em; cursor: pointer; }
+    .ct-autocomplete input { margin: 0; }
     .ct-secondary {
         color: var(--ct-fg) !important;
         background: var(--ct-bg) !important;
@@ -295,6 +297,8 @@
 
 {% block js_media %}
 <script type="text/javascript" src="{{ ACE_URL }}/ace.js"></script>
+<script type="text/javascript" src="{{ ACE_URL }}/ext-language_tools.js"></script>
+{% include "ace-autocomplete.html" %}
 <script type="text/javascript">
 $(function () {
     // Los textos viven aquí y no dentro del código para que sí se traduzcan.
@@ -326,6 +330,12 @@ $(function () {
     editor.setFontSize(14);
     editor.setPrintMarginColumn(100);
     window.ace_editor = editor;
+    // Autocompletado (2026-11-08): encendido salvo dentro de un concurso que no lo permite; la casilla lo apaga.
+    cpcAutocomplete.setup(editor, {
+        allowed: {{ autocomplete_allowed|tojson }},
+        box: document.getElementById('ct-autocomplete-box'),
+        wrap: document.getElementById('ct-autocomplete')
+    });
     // Ace no observa el tamaño del contenedor: al depender el alto de la ventana
     // hay que avisarle o el área de texto queda del tamaño inicial.
     var resizeTimer = null;
@@ -574,6 +584,9 @@ $(function () {
             <div class="ct-panel-foot">
                 <button type="button" id="ct-run">{{ _('Ejecutar') }}</button>
                 <span class="ct-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+                {% if autocomplete_allowed %}
+                    <label class="ct-autocomplete" id="ct-autocomplete"><input type="checkbox" id="ct-autocomplete-box"> {{ _('Autocomplete') }}</label>
+                {% endif %}
                 <span class="ct-limits">
                     {{ _('Límites: %(seconds)s s · %(megabytes)s MB', seconds=time_limit, megabytes=memory_limit // 1024) }}
                 </span>

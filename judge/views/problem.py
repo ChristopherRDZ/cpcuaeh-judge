@@ -52,6 +52,16 @@ def get_contest_problem(problem, profile):
         return None
 
 
+def autocomplete_allowed(profile):
+    """Whether the editors of the submit page and the custom test autocomplete for `profile` (2026-11-08): inside a
+    contest that has not ended for them, live or virtual, only if the contest allows it; anywhere else, yes. Each
+    person can still turn it off in their editor (templates/ace-autocomplete.html)."""
+    participation = profile.current_contest
+    if participation is None or participation.ended:
+        return True
+    return bool(participation.contest.autocomplete)
+
+
 def get_contest_submission_count(problem, profile, virtual):
     return profile.current_contest.submissions.exclude(submission__status__in=['IE']) \
                   .filter(problem__problem=problem, participation__virtual=virtual).count()
@@ -846,6 +856,7 @@ class ProblemSubmit(LoginRequiredMixin, ProblemMixin, TitleMixin, SingleObjectFo
         context['submission_limit'] = self.contest_problem and self.contest_problem.max_submissions
         context['submissions_left'] = self.remaining_submission_count
         context['ACE_URL'] = settings.ACE_URL
+        context['autocomplete_allowed'] = autocomplete_allowed(self.request.profile)
         context['default_lang'] = self.default_language
         return context
 
@@ -1097,6 +1108,7 @@ class CustomTestView(LoginRequiredMixin, TitleMixin, TemplateView):
             'languages': languages,
             'default_lang': self.request.profile.language or languages.first(),
             'ACE_URL': settings.ACE_URL,
+            'autocomplete_allowed': autocomplete_allowed(self.request.profile),
             # Con el tema del sitio en «auto» esto es None y el tema del editor se
             # resuelve en el navegador, igual que hace django_ace/widget.js.
             'ace_theme': self.request.profile.resolved_ace_theme,

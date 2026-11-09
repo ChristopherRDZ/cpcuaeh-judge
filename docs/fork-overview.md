@@ -72,6 +72,7 @@ presents them, with the date each one was added.
 | Email footer | Every email says the club is independent and not an official service of its university; emails to users link the privacy notice. 2026-10-24 |
 | Back in read-only admin forms | The bottom bar of a form that can only be viewed was black and empty; it now offers Back, keeping the list filter. 2026-10-24 |
 | Site icons | A multi-size favicon, and the site's own artwork in the Windows tile and browser notifications. 2026-10-08 |
+| Autocomplete in the editor | Submit, custom tests and duels suggest words of the code, keywords and, in C and C++, `#include` lines; Tab picks and Enter always starts a new line. On in practice; each contest, duel tournament, round or quick battle allows it. Ace 1.43.3. Migration `0167`. 2026-11-09 |
 | Spanish interface | Spanish translations for every screen the fork adds. |
 
 ## Emails to users

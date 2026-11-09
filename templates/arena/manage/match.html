@@ -138,6 +138,8 @@ $(function () {
         settingsSaved: {{ _('Settings saved')|tojson }},
         starterOn: {{ _('C++ template: yes')|tojson }},
         starterOff: {{ _('C++ template: no')|tojson }},
+        autocompleteOn: {{ _('Autocomplete: yes')|tojson }},
+        autocompleteOff: {{ _('Autocomplete: no')|tojson }},
         reasons: {
             all_solved: {{ _('Solved every problem first')|tojson }},
             unreachable: {{ _('The rival could no longer catch up')|tojson }},
@@ -286,9 +288,11 @@ $(function () {
         paint('screens', [state.screens, match.id], renderScreens);
         paint('log', state.log, renderLog);
         if (!rulesEditor) {
-            // The C++ template: a quick battle chooses it here; a battle of a tournament takes the one of its round.
+            // The C++ template and the autocompletion: a quick battle chooses them here; a battle of a tournament
+            // takes those of its round.
             rulesEditor = W.rulesEditor(document.getElementById('mm-rules'), match.rules, languages,
-                                        match.quick ? {starter: JSON.parse(document.getElementById('mm-starter').textContent)} : {});
+                                        match.quick ? {starter: JSON.parse(document.getElementById('mm-starter').textContent),
+                                                       autocomplete: true} : {});
             $('#mm-best-of').val(String(match.best_of));
             bestOf = match.best_of;
             fillNames(match);
@@ -305,6 +309,7 @@ $(function () {
             fillNames(match);
         }
         paint('starter', [match.quick, match.rules.starter_code], renderStarter);
+        paint('autocomplete', [match.quick, match.rules.autocomplete], renderAutocomplete);
         paint('ranking', match.ranking, renderRanking);
         if (!organizers) {
             // Filled once, like the settings: a refresh must not undo who is being added.
@@ -320,6 +325,13 @@ $(function () {
         $('#mm-starter-round').prop('hidden', state.match.quick);
         $('#mm-starter-round i').attr('class', 'fa ' + (on ? 'fa-check am-check' : 'fa-times'));
         $('#mm-starter-state').text(on ? TEXT.starterOn : TEXT.starterOff);
+    }
+
+    function renderAutocomplete() {
+        var on = state.match.rules.autocomplete;
+        $('#mm-autocomplete-round').prop('hidden', state.match.quick);
+        $('#mm-autocomplete-round i').attr('class', 'fa ' + (on ? 'fa-check am-check' : 'fa-times'));
+        $('#mm-autocomplete-state').text(on ? TEXT.autocompleteOn : TEXT.autocompleteOff);
     }
 
     // ------------------------------------------------------------ the ranking of the duels
@@ -919,6 +931,9 @@ $(function () {
                 {% if state.match.tournament %}
                     <p class="am-mt" id="mm-starter-round" hidden><i class="fa" aria-hidden="true"></i> <span id="mm-starter-state"></span>
                         <span class="am-hint">· {{ _('chosen by its round') }} ·
+                            <a href="{{ url('arena_manage_tournament', state.match.tournament.slug) }}#problems">{{ _('Rounds and problems') }}</a></span></p>
+                    <p class="am-tight" id="mm-autocomplete-round" hidden><i class="fa" aria-hidden="true"></i> <span id="mm-autocomplete-state"></span>
+                        <span class="am-hint">· {{ _('decided by its round') }} ·
                             <a href="{{ url('arena_manage_tournament', state.match.tournament.slug) }}#problems">{{ _('Rounds and problems') }}</a></span></p>
                 {% endif %}
                 <div class="am-actions am-mt"><button type="button" class="ar-btn" id="mm-save-settings">{{ _('Save') }}</button></div>

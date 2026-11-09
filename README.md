@@ -228,6 +228,14 @@ public submission histories and statistics.
 
 ![Custom test editor with example code, input and simulated output](docs/screenshots/custom-test.png)
 
+### Autocomplete
+
+The editors of submit, custom tests and duels suggest as you type: words already
+in the code, the language's keywords and, in C and C++, whole `#include` lines.
+Tab picks and Enter always starts a new line; a box next to the language turns
+it off. It is on for practice, and each contest or duel round decides whether it
+is allowed.
+
 ### Test cases from ZIP archives
 
 Populate test cases from paired input and output files. Automatic pairing

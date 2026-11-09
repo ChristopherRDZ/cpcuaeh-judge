@@ -83,6 +83,9 @@ def round_name(round_obj, rounds):
 # Rules each round chooses for itself and the tournament never holds (2026-11-08): stored for the whole tournament,
 # a round without its own value would take it, as the rounds that a bigger bracket adds at the start.
 ROUND_RULES = ('starter_code',)
+# What a round keeps when its game rules are sent without it (the API action «round»): the template, and its own
+# autocompletion when it has one (2026-11-08).
+ROUND_KEPT = ('starter_code', 'autocomplete')
 
 
 def _without_round_rules(rules):
@@ -386,9 +389,10 @@ def set_participants(actor, tournament_id, profiles, seeding=None, version=None,
 
 @transaction.atomic
 def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None, version=None, draw=None,
-              starter_code=None):
+              starter_code=None, autocomplete=None):
     """`starter_code` (2026-11-08): whether the editor starts with the C++ template in the games of this round that
-    have not started yet; those started keep the rules they started with."""
+    have not started yet; those started keep the rules they started with. `autocomplete` (2026-11-08): 'inherit' to
+    follow the tournament (the round stores nothing), or on/off for this round only; None leaves it as it is."""
     tournament = _lock_tournament(tournament_id)
     _check_version(tournament, version)
     round_obj = ArenaRound.objects.filter(tournament=tournament, number=number).first()
@@ -410,16 +414,17 @@ def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None,
             # given other games on its own page went back to those of its round, mid-series too.
             ArenaMatch.objects.filter(round=round_obj).exclude(status=ArenaMatch.DECIDED).update(best_of=best_of)
     if rules is not None or draw is not None:
-        kept = (round_obj.rules or {}).get('starter_code')
+        kept = {key: (round_obj.rules or {})[key] for key in ROUND_KEPT if key in (round_obj.rules or {})}
         try:
             cleaned = arena_rules.clean_rules(rules) if rules is not None else None
             draw = {key: value for key, value in arena_rules.clean_draw(draw).items() if key != 'auto_draw'}
             round_obj.rules = arena_rules.with_draw(round_obj.rules, cleaned, draw)
         except ValidationError as error:
             raise ArenaError(error.messages[0])
-        if cleaned is not None and 'starter_code' not in cleaned and kept is not None:
-            # Game rules sent without the template keep the one of the round.
-            round_obj.rules['starter_code'] = kept
+        for key, value in kept.items():
+            if cleaned is not None and key not in cleaned:
+                # Game rules sent without the template or the autocompletion keep those of the round.
+                round_obj.rules[key] = value
         fields.append('rules')
     if starter_code is not None:
         try:
@@ -428,6 +433,21 @@ def set_round(actor, tournament_id, number, best_of=None, rules=None, name=None,
             raise ArenaError(error.messages[0])
         if (round_obj.rules or {}).get('starter_code') != value:
             round_obj.rules = dict(round_obj.rules or {}, starter_code=value)
+            if 'rules' not in fields:
+                fields.append('rules')
+    if autocomplete is not None:
+        if not (isinstance(autocomplete, bool) or autocomplete in ('inherit', 'on', 'off')):
+            raise ArenaError(_('Invalid value for %(name)s.') % {'name': arena_rules.LABELS['autocomplete']})
+        current = dict(round_obj.rules or {})
+        if autocomplete == 'inherit':
+            current.pop('autocomplete', None)
+        else:
+            try:
+                current['autocomplete'] = arena_rules.clean_rules({'autocomplete': autocomplete})['autocomplete']
+            except ValidationError as error:
+                raise ArenaError(error.messages[0])
+        if current != (round_obj.rules or {}):
+            round_obj.rules = current
             if 'rules' not in fields:
                 fields.append('rules')
     if name is not None:
@@ -986,7 +1006,8 @@ def fill_ready_matches(actor, tournament_id):
 @transaction.atomic
 def set_rounds(actor, tournament_id, rounds, version=None):
     """All the rounds of a tournament at once, from the tab «Rounds and problems» (2026-11-03), so one Save keeps
-    them all or none: `rounds` is a list of {number, name, best_of, draw_count, level_min, level_max, starter_code}."""
+    them all or none: `rounds` is a list of {number, name, best_of, draw_count, level_min, level_max, starter_code,
+    autocomplete}."""
     if not isinstance(rounds, list) or len(rounds) > round_count(MAX_PARTICIPANTS) + 1:
         raise ArenaError(_('Invalid request.'))
     tournament = _lock_tournament(tournament_id)
@@ -997,7 +1018,7 @@ def set_rounds(actor, tournament_id, rounds, version=None):
         draw = {key: row[key] for key in ('draw_count', 'level_min', 'level_max') if key in row}
         set_round(actor, tournament.pk, row['number'], best_of=row.get('best_of'), name=row.get('name'),
                   version=ArenaTournament.objects.get(pk=tournament.pk).version, draw=draw or None,
-                  starter_code=row.get('starter_code'))
+                  starter_code=row.get('starter_code'), autocomplete=row.get('autocomplete'))
     return ArenaTournament.objects.get(pk=tournament.pk)
 
 

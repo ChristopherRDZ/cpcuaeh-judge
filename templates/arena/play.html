@@ -276,6 +276,9 @@
     .ar-side-tabs .ar-tab .ar-new { width: .55em; height: .55em; border-radius: 50%; background: var(--ar-warn-solid); display: inline-block; }
     .ar-side.ar-tabbed .ar-side-panels { grid-template-columns: minmax(0, 1fr); }
     .ar-side.ar-tabbed .ar-side-panels > .ar-panel > .ar-panel-head { display: none; }
+    .ar-autocomplete { display: inline-flex; align-items: center; gap: .35em; margin-right: .5em; font-size: .85em;
+                       font-weight: normal; cursor: pointer; }
+    .ar-autocomplete input { margin: 0; }
     .ar-side.ar-tabbed .ar-side-panels > .ar-panel:not(.ar-shown) { display: none; }
     .ar-run-body { display: flex; flex-direction: column; gap: .5em; flex: 1 1 auto; min-height: 0; padding: .6em; }
     #ar-run-input { flex: 1 1 40%; min-height: 4em; resize: none; width: 100%; }
@@ -361,6 +364,8 @@
 
 {% block js_media %}
 <script type="text/javascript" src="{{ ACE_URL }}/ace.js"></script>
+<script type="text/javascript" src="{{ ACE_URL }}/ext-language_tools.js"></script>
+{% include "ace-autocomplete.html" %}
 {% include "arena/_js.html" %}
 {{ state|json_script('ar-initial') }}
 <script type="text/javascript">
@@ -438,6 +443,7 @@ $(function () {
         noPenalty: {{ _('No penalty')|tojson }},
         maxAttempts: {{ _('Maximum attempts per problem')|tojson }},
         pasteOff: {{ _('Only your own code can be pasted')|tojson }},
+        autocompleteOn: {{ _('With autocompletion')|tojson }},
         bestOf: {{ _('Best of')|tojson }},
         reasons: {
             all_solved: {{ _('Solved every problem first')|tojson }},
@@ -547,6 +553,12 @@ $(function () {
     editor.setShowPrintMargin(false);
     editor.$blockScrolling = Infinity;
     A.aceTheme(editor, CONF.aceTheme, CONF.light, CONF.dark);
+    // Autocompletion (2026-11-08): only in games whose rules allow it (setupGame), on unless the player turned it off.
+    var autocomplete = cpcAutocomplete.setup(editor, {
+        allowed: false,
+        box: document.getElementById('ar-autocomplete-box'),
+        wrap: document.getElementById('ar-autocomplete')
+    });
 
     // ---------------------------------------------------------------- layout
     // Everything here is the player's choice and stays in this browser: how the width is shared, the height of the
@@ -817,6 +829,7 @@ $(function () {
                      rules.penalty ? TEXT.penalty + ': ' + rules.penalty + ' ' + TEXT.minutes : TEXT.noPenalty];
         if (rules.max_attempts) items.push(TEXT.maxAttempts + ': ' + rules.max_attempts);
         if (rules.block_paste) items.push(TEXT.pasteOff);
+        if (rules.autocomplete) items.push(TEXT.autocompleteOn);
         if (series && series.best_of > 1) items.push(TEXT.bestOf + ' ' + series.best_of);
         items.forEach(function (text) { container.appendChild(A.el('span', {'class': 'ar-badge ar-none', text: text})); });
     }
@@ -933,6 +946,7 @@ $(function () {
             selectTab(0);
         });
         if (g.rules && g.rules.block_paste) protectEditor();
+        autocomplete.allow(!!(g.rules && g.rules.autocomplete));
     }
 
     function pickLanguage(problem, wanted) {
@@ -1651,6 +1665,7 @@ $(function () {
                     <h3 class="ar-panel-head">
                         <i class="fa fa-code" aria-hidden="true"></i> {{ _('Code') }}
                         <span class="ar-spacer"></span>
+                        <label class="ar-autocomplete" id="ar-autocomplete" style="display: none;"><input type="checkbox" id="ar-autocomplete-box"> {{ _('Autocomplete') }}</label>
                         <label for="ar-language" class="ar-muted" style="color: inherit; opacity: .85;">{{ _('Language') }}</label>
                         <select id="ar-language" class="ar-select" style="max-width: 14em;"></select>
                         <span class="ar-tools" style="margin-left: 0;">

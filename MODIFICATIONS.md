@@ -1,8 +1,9 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-11-08, this source includes a C++ template per round of a duel
-tournament, cancelling a duel tournament, a duel panel organized around the next
-step with tournaments by number of places and projectors paired with a code, a
+As of 2026-11-09, this source includes autocomplete in the code editor, a C++
+template per round of a duel tournament, cancelling a duel tournament, a duel
+panel organized around the next step with tournaments by number of places and
+projectors paired with a code, a
 public history and a ranking of duels, approval before emails to users are sent,
 with senders of the site's domain, social links and pasted addresses,
 organizers who register people and teams in a contest, rating by attendance,
@@ -46,6 +47,18 @@ GNU Affero General Public License version 3.
 - Authentication using either a username or an email address.
 - A signed-in custom code testing workflow and its judge bridge support.
 - Minor registration and presentation adjustments.
+
+## Autocomplete in the code editor — 2026-11-09
+
+- The editors of submit, the custom test and the duel player suggest as one
+  types: words already in the code, the language's keywords and, in C and C++,
+  whole `#include` lines. Tab or a click picks; Enter always starts a new line.
+  An Autocomplete box next to the language turns it off in that browser.
+- On in practice. A contest allows it with Allow autocompletion; a duel
+  tournament in its Rules, each round as the tournament, yes or no, and a quick
+  battle under More rules. Off by default in both.
+- Ace goes from 1.1.3 to 1.43.3 (`ACE_URL`, now with a final slash). Migration
+  `0167` adds the contest's column, false by default also in the database.
 
 ## A C++ template per round in duel tournaments — 2026-11-08
 

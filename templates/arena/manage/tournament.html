@@ -17,6 +17,7 @@
     .tm-rounds td.tm-levels select { width: auto; }
     .tm-rounds .tm-starter { text-align: center; width: 1%; white-space: nowrap; }
     .tm-rounds td.tm-starter input { margin: 0; }
+    .tm-rounds td.tm-starter select { width: auto; }
     .tm-rounds td select:disabled { opacity: .55; cursor: not-allowed; }
     .tm-live { display: grid; grid-template-columns: minmax(0, 1fr) 24em; gap: 1em; align-items: start; }
     .tm-place .ar-input { flex: 1 1 12em; }
@@ -106,6 +107,9 @@ $(function () {
         r16: {{ _('Round of 16')|tojson }}, r32: {{ _('Round of 32')|tojson }}, r64: {{ _('Round of 64')|tojson }},
         roundN: {{ _('Round %(number)s', number='%(number)s')|tojson }},
         starterFor: {{ _('C++ template: %(round)s', round='%(round)s')|tojson }},
+        // Autocompletion of a round (2026-11-08): what the tournament says in Rules, or yes or no for this round.
+        autocompleteFor: {{ _('Autocomplete: %(round)s', round='%(round)s')|tojson }},
+        autocomplete: {inherit: {{ _('As the tournament')|tojson }}, on: {{ _('Yes')|tojson }}, off: {{ _('No')|tojson }}},
         roundStarted: {{ _('Already started: change the games of each battle on its page.')|tojson }},
         bestOf: {{ _('Best of')|tojson }},
         single: {{ _('A single game')|tojson }},
@@ -195,7 +199,7 @@ $(function () {
             $('#tm-name').val(t.name);
             $('#tm-description').val(t.description);
             $('#tm-planned').val(t.planned_at || '');
-            rules = W.rulesEditor(document.getElementById('tm-rules'), t.rules, languages);
+            rules = W.rulesEditor(document.getElementById('tm-rules'), t.rules, languages, {autocomplete: true});
             organizers = W.organizerList(document.getElementById('tm-organizers'), state.organizers.creator,
                                          state.organizers.list, true);
             $('input[name="tm-mode"][value="' + (state.draw.auto ? 'bank' : 'hand') + '"]').prop('checked', true);
@@ -559,9 +563,15 @@ $(function () {
             var low = levelSelect(round.level_min), high = levelSelect(round.level_max);
             var starter = A.el('input', {type: 'checkbox', 'aria-label': fill(TEXT.starterFor, {round: round.name})});
             starter.checked = !!round.starter_code;
+            var auto = A.el('select', {'class': 'ar-select', 'aria-label': fill(TEXT.autocompleteFor, {round: round.name})});
+            ['inherit', 'on', 'off'].forEach(function (value) {
+                var option = A.el('option', {value: value, text: TEXT.autocomplete[value]});
+                if (value === (round.autocomplete || 'inherit')) option.selected = true;
+                auto.appendChild(option);
+            });
             var status = A.el('td');
             roundInputs.push({number: round.number, select: select, name: name, count: count, low: low, high: high,
-                              starter: starter, status: status});
+                              starter: starter, auto: auto, status: status});
             body.appendChild(A.el('tr', {}, [
                 A.el('td', {text: String(round.number)}),
                 A.el('td', {}, [name]),
@@ -569,6 +579,7 @@ $(function () {
                 A.el('td', {'class': 'tm-bank-col', hidden: mode() !== 'bank'}, [count]),
                 A.el('td', {'class': 'tm-bank-col tm-levels', hidden: mode() !== 'bank'}, [low, ' – ', high]),
                 A.el('td', {'class': 'tm-starter'}, [starter]),
+                A.el('td', {'class': 'tm-starter'}, [auto]),
                 status
             ]));
         });
@@ -620,7 +631,7 @@ $(function () {
         if (auto && !bank) { A.toast(TEXT.chooseBank, 'warn'); return; }
         var rounds = roundInputs.map(function (row) {
             var data = {number: row.number, best_of: parseInt(row.select.value, 10), name: row.name.value,
-                        starter_code: row.starter.checked};
+                        starter_code: row.starter.checked, autocomplete: row.auto.value};
             if (auto) {
                 data.draw_count = parseInt(row.count.value, 10) || null;
                 data.level_min = parseInt(row.low.value, 10) || null;
@@ -912,7 +923,7 @@ $(function () {
                 <thead><tr><th>#</th><th>{{ _('Round') }}</th><th>{{ _('Games per battle') }}</th>
                     <th class="tm-bank-col">{{ _('Problems per game') }}</th>
                     <th class="tm-bank-col">{{ _('Difficulty') }}</th><th class="tm-starter">{{ _('Template') }}</th>
-                    <th>{{ _('Battles') }}</th></tr></thead>
+                    <th class="tm-starter">{{ _('Autocomplete') }}</th><th>{{ _('Battles') }}</th></tr></thead>
                 <tbody id="tm-rounds"></tbody>
             </table>
             <div id="tm-starter-preview"></div>

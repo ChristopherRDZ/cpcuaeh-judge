@@ -1103,8 +1103,9 @@ def update_match(actor, match_id, version=None, best_of=None, rules=None, title=
         # opened before its tournament changed does not bring back what it showed then (2026-11-08).
         wanted = dict(arena_rules.merge(*(layers + [match.rules])), **cleaned)
         if match.tournament_id:
-            # Its round decides the template: the page of the battle only shows it.
+            # Its round decides the template and the autocompletion: the page of the battle only shows them.
             wanted.pop('starter_code', None)
+            wanted.pop('autocomplete', None)
         # Only what differs from its tournament and round (or from the defaults, in a quick battle), so the battle
         # keeps following them.
         match.rules = arena_rules.changes_only(wanted, layers)

@@ -144,6 +144,7 @@ window.ArenaWidgets = (function () {
             show_rival: {{ _('Players see the progress of the rival')|tojson }},
             screen_code: {{ _('Show the code on the screens')|tojson }},
             starter_code: {{ _('Start with the C++ template')|tojson }},
+            autocomplete: {{ _('Autocomplete code')|tojson }},
             seeTemplate: {{ _('See the template')|tojson }},
             languages: {{ _('Languages (none checked = whatever each problem allows)')|tojson }}
         },
@@ -156,7 +157,8 @@ window.ArenaWidgets = (function () {
             partial: {{ _('partial points')|tojson }},
             paste: {{ _('pasting blocked')|tojson }},
             screen: {{ _('code on the projector')|tojson }},
-            starter: {{ _('C++ template')|tojson }}
+            starter: {{ _('C++ template')|tojson }},
+            autocomplete: {{ _('autocomplete')|tojson }}
         }
     };
 
@@ -403,6 +405,8 @@ window.ArenaWidgets = (function () {
     // Rules editor. `values` are the effective rules, `languages` [{key, name}]. `options.outside` gives inputs that
     // live elsewhere on the page ({duration: input}); `options.onChange` is told of every change. `options.starter`,
     // the C++ template: with it, the box to start with it (a quick battle; in a tournament each round chooses).
+    // `options.autocomplete`: the box for the autocompletion (a quick battle, and the Rules of a tournament, which each
+    // round can change; not in a battle of a tournament, whose round decides).
     W.rulesEditor = function (container, values, languages, options) {
         options = options || {};
         var T = W.TEXT.rules;
@@ -433,6 +437,7 @@ window.ArenaWidgets = (function () {
         check('show_rival');
         check('screen_code');
         if (options.starter) check('starter_code');
+        if (options.autocomplete) check('autocomplete');
         container.appendChild(grid);
         if (options.starter) container.appendChild(W.starterPreview(options.starter));
         var boxes = [];
@@ -459,7 +464,7 @@ window.ArenaWidgets = (function () {
                     // An empty field: what it had when it was last filled (set() and mark() follow the server).
                     if (isNaN(rules[name])) rules[name] = marked ? marked[name] : values[name];
                 });
-                ['partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code'].forEach(function (name) {
+                ['partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code', 'autocomplete'].forEach(function (name) {
                     if (inputs[name]) rules[name] = inputs[name].checked;
                 });
                 if (boxes.length) rules.languages = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
@@ -603,6 +608,7 @@ window.ArenaWidgets = (function () {
         if (rules.block_paste) parts.push(T.paste);
         if (rules.screen_code) parts.push(T.screen);
         if (rules.starter_code) parts.push(T.starter);
+        if (rules.autocomplete) parts.push(T.autocomplete);
         return parts.join(' · ');
     };
 

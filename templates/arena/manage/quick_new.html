@@ -35,6 +35,7 @@ $(function () {
     var rules = W.rulesEditor(document.getElementById('am-rules'), defaults, languages, {
         outside: {duration: document.getElementById('am-duration')},
         starter: JSON.parse(document.getElementById('am-starter').textContent),
+        autocomplete: true,
         onChange: function () { summary.textContent = W.rulesSummary(rules.get()); }
     });
     summary.textContent = W.rulesSummary(rules.get());

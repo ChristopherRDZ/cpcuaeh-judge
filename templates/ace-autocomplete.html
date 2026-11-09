@@ -1,0 +1,134 @@
+{#- The autocompletion of the code editors (2026-11-08), shared by the submit page, the custom test and the duel page.
+    As one types, the editor suggests words already in the code (the names one declared), keywords of the language
+    and, in C and C++, headers: «#incl» offers whole #include lines, and inside «#include <» the header names. Tab or
+    a click takes a suggestion; Enter always makes a new line (the owner's choice, 2026-11-08). No block snippets. It needs the ext-language_tools.js of the same Ace, loaded after ace.js; without it nothing
+    happens. Each page says whether it is allowed there; where it is, it starts on, and the person can turn it off
+    with the box next to the language, remembered in their browser for every editor. Kept outside the compressed
+    blocks on purpose: changing it does not touch the offline compression manifest. -#}
+<script type="text/javascript">
+window.cpcAutocomplete = window.cpcAutocomplete || (function () {
+    var KEY = 'cpc:autocomplete';
+    var HEADERS = ['bits/stdc++.h', 'iostream', 'vector', 'algorithm', 'string', 'map', 'set', 'unordered_map',
+                   'unordered_set', 'queue', 'stack', 'deque', 'list', 'array', 'bitset', 'utility', 'tuple',
+                   'functional', 'numeric', 'iomanip', 'sstream', 'cmath', 'cstdio', 'cstdlib', 'cstring',
+                   'climits', 'cassert', 'limits', 'chrono', 'random', 'stdio.h', 'stdlib.h', 'string.h', 'math.h',
+                   'stdbool.h', 'limits.h', 'ctype.h', 'stdint.h'];
+    var INCLUDE_OPEN = /^\s*#\s*include\s*<([A-Za-z0-9_.+\/]*)$/;
+
+    function wanted() {
+        try { return localStorage.getItem(KEY) !== 'off'; } catch (err) { return true; }
+    }
+
+    function remember(on) {
+        try {
+            if (on) localStorage.removeItem(KEY); else localStorage.setItem(KEY, 'off');
+        } catch (err) { /* private mode or quota: the choice lasts until the page closes */ }
+    }
+
+    function tools() {
+        try { return window.ace && ace.require('ace/ext/language_tools'); } catch (err) { return null; }
+    }
+
+    // In the order of the list: the most used first. Ace works out the prefix (the word before the cursor) as usual,
+    // with «$» and «-» for the languages that use them: «#incl» gives «incl», and «#include <bits/st» gives «st».
+    var headers = {
+        id: 'cpcHeaders',
+        getCompletions: function (editor, session, pos, prefix, callback) {
+            if (String(session.$modeId).indexOf('c_cpp') < 0) return callback(null, []);
+            var before = session.getLine(pos.row).slice(0, pos.column);
+            var open = INCLUDE_OPEN.exec(before);
+            if (open) {
+                // Inside «#include <»: the names that start with what follows «<». Ace replaces only the prefix, so
+                // each name goes from where the prefix starts.
+                var typed = open[1], start = typed.length - prefix.length;
+                return callback(null, HEADERS.filter(function (name) {
+                    return name.indexOf(typed) === 0;
+                }).map(function (name, index) {
+                    return {caption: name, value: name.slice(start) + '>', meta: '', score: 900 - index};
+                }));
+            }
+            // «#incl»: whole #include lines; the «#» is already written. Only while it can still be «include»: Ace
+            // filters loosely, and «#def» would match «#include <functional>».
+            if ('include'.indexOf(prefix) !== 0 || !/^\s*#\s*$/.test(before.slice(0, before.length - prefix.length)))
+                return callback(null, []);
+            callback(null, HEADERS.map(function (name, index) {
+                var line = 'include <' + name + '>';
+                return {caption: '#' + line, value: line, meta: '', score: 1000 - index};
+            }));
+        }
+    };
+
+    // Ace labels each suggestion with its kind, in English («local», «keyword»): without the label, nothing in English.
+    function unlabeled(completer) {
+        return {
+            id: completer.id,
+            identifierRegexps: completer.identifierRegexps,
+            getCompletions: function (editor, session, pos, prefix, callback) {
+                completer.getCompletions(editor, session, pos, prefix, function (error, list) {
+                    callback(error, (list || []).map(function (item) { return Object.assign({}, item, {meta: ''}); }));
+                });
+            }
+        };
+    }
+
+    function apply(editor, on) {
+        var lt = tools();
+        if (!lt) return;
+        if (on) {
+            editor.completers = [headers, unlabeled(lt.textCompleter), unlabeled(lt.keyWordCompleter)];
+            // Enter always makes a new line, as without the list: with the list open, Ace's Enter takes the first
+            // suggestion, so it is lost on the word just typed or changes it for a longer one. Tab or a click takes
+            // the suggestion. Each editor has its own list: this does not touch other editors.
+            var Autocomplete = ace.require('ace/autocomplete').Autocomplete;
+            if (Autocomplete && Autocomplete.for) {
+                var keys = Autocomplete.for(editor).keyboardHandler;
+                keys.bindKey('Return', null);
+                keys.bindKey('Shift-Return', null);
+            }
+        }
+        editor.setOptions({
+            enableBasicAutocompletion: on,
+            enableLiveAutocompletion: on,
+            enableSnippets: false,
+            // Two characters before the list shows by itself; Ctrl+Space shows it at once.
+            liveAutocompletionThreshold: 2,
+            liveAutocompletionDelay: 0
+        });
+        if (!on && editor.completer && editor.completer.detach) editor.completer.detach();
+    }
+
+    // editor: an Ace editor. options.allowed: whether this page allows it now. options.box: the checkbox that turns
+    // it on and off, and options.wrap the element shown only while it is allowed (the box itself by default).
+    // Returns {allow(bool)} for pages where it changes without reloading (the duel page, from one game to the next).
+    function setup(editor, options) {
+        options = options || {};
+        var allowed = !!options.allowed, box = options.box || null, wrap = options.wrap || box;
+
+        function refresh() {
+            var on = allowed && wanted();
+            if (box) box.checked = on;
+            if (wrap) wrap.style.display = allowed ? '' : 'none';
+            apply(editor, on);
+        }
+
+        if (box) {
+            box.addEventListener('change', function () {
+                remember(box.checked);
+                refresh();
+                editor.focus();
+            });
+        }
+        refresh();
+        return {
+            allow: function (value) {
+                if (!!value !== allowed) {
+                    allowed = !!value;
+                    refresh();
+                }
+            }
+        };
+    }
+
+    return {setup: setup};
+})();
+</script>

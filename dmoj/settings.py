@@ -48,7 +48,9 @@ DMOJ_PP_STEP = 0.95
 DMOJ_PP_ENTRIES = 100
 DMOJ_PP_BONUS_FUNCTION = lambda n: 300 * (1 - 0.997 ** n)  # noqa: E731
 
-ACE_URL = '//cdnjs.cloudflare.com/ajax/libs/ace/1.1.3'
+# 1.43.3 since 2026-11-08: older ones could not suggest as one types (ext-language_tools, enableLiveAutocompletion).
+# With the final slash: django_ace (the editors of the admin) joins it with urljoin. local_settings.py says the same.
+ACE_URL = '//cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/'
 SELECT2_JS_URL = '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js'
 SELECT2_CSS_URL = '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css'
 

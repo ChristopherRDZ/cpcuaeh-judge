@@ -29,6 +29,10 @@ DEFAULTS = {
     # Whether the editor starts with STARTER_CODE (2026-11-08). Chosen by round in a tournament, never for the whole
     # tournament (the tab «Rules» does not show it), and with the other rules in a quick battle.
     'starter_code': False,
+    # Whether the editor suggests words of the code, keywords and headers as the player types (2026-11-08). Set for
+    # the whole tournament in «Rules», and a round can change it; with the other rules in a quick battle. The player
+    # can still turn it off in their editor.
+    'autocomplete': False,
 }
 
 BOUNDS = {
@@ -37,7 +41,7 @@ BOUNDS = {
     'penalty': (0, 60),
     'max_attempts': (0, 50),
 }
-BOOLEANS = ('partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code')
+BOOLEANS = ('partial', 'block_paste', 'show_rival', 'screen_code', 'starter_code', 'autocomplete')
 LABELS = {
     'duration': gettext_lazy('Duration'),
     'countdown': gettext_lazy('Countdown'),
@@ -49,6 +53,7 @@ LABELS = {
     'show_rival': gettext_lazy('Show rival progress'),
     'screen_code': gettext_lazy('Code on the screens'),
     'starter_code': gettext_lazy('Start with the C++ template'),
+    'autocomplete': gettext_lazy('Autocomplete code'),
 }
 MAX_LANGUAGES = 40
 
