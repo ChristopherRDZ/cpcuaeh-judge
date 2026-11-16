@@ -7,7 +7,7 @@ import zlib
 from django.conf import settings
 from django.utils import timezone
 
-from judge import event_poster as event
+from judge import event_poster as event, public_scoreboard
 from judge.judge_priority import BATCH_REJUDGE_PRIORITY, CONTEST_SUBMISSION_PRIORITY, DEFAULT_PRIORITY, REJUDGE_PRIORITY
 
 logger = logging.getLogger('judge.judgeapi')
@@ -102,6 +102,8 @@ def judge_submission(submission, rejudge=False, batch_rejudge=False, judge_id=No
         if response['name'] != 'submission-received' or response['submission-id'] != submission.id:
             Submission.objects.filter(id=submission.id).update(status='IE', result='IE')
         _post_update_submission(submission)
+        # The public scoreboard of its contest, if it has one, shows the «?» at once. It never raises.
+        public_scoreboard.submitted(submission)
         success = True
     return success
 

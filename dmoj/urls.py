@@ -13,8 +13,8 @@ from judge.feed import AtomBlogFeed, AtomCommentFeed, AtomProblemFeed, BlogFeed,
 from judge.sitemap import sitemaps
 from judge.views import TitledTemplateView, announcement, api, arena, arena_history, arena_manage, arena_ranking, \
     blog, comment, contest_balloons, contest_registrations, contest_reveal, contests, language, license, mailgun, \
-    organization, preview, problem, problem_manage, ranked_submission, register, stats, status, submission, tasks, \
-    team, ticket, two_factor, user, widgets
+    organization, preview, problem, problem_manage, public_scoreboard, ranked_submission, register, stats, status, \
+    submission, tasks, team, ticket, two_factor, user, widgets
 from judge.views.problem_data import ProblemDataView, ProblemInteractiveExampleView, ProblemInteractiveGuideView, \
     ProblemSubmissionDiff, problem_data_file, problem_data_upload_gate, problem_init_view
 from judge.views.register import ActivationView, RegistrationView
@@ -270,6 +270,10 @@ urlpatterns = [
         path('', contests.ContestTagDetail.as_view(), name='contest_tag'),
         path('/ajax', contests.ContestTagDetailAjax.as_view(), name='contest_tag_ajax'),
     ])),
+
+    # The public scoreboard of a contest (2026-11-10): no account and no session. The page and what it shows.
+    path('marcador/<str:contest>/', public_scoreboard.page, name='public_scoreboard'),
+    path('marcador/<str:contest>/datos', public_scoreboard.data, name='public_scoreboard_data'),
 
     path('contest/<str:contest>', include([
         path('', contests.ContestDetail.as_view(), name='contest_view'),

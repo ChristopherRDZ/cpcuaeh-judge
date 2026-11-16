@@ -246,6 +246,15 @@ class Contest(models.Model):
         verbose_name=_('allow autocompletion'), default=False, db_default=False,
         help_text=_('The editor suggests words of the code, keywords and headers while typing. Each person can '
                     'turn it off in their editor.'))
+    # A page that anybody can open without an account, with the scoreboard of this contest as it happens
+    # (2026-11-10): /marcador/<key>/ (judge/public_scoreboard.py). Off unless whoever organizes turns it on, and only
+    # while the contest is visible. It shows the user name, the name and the picture of each participant, and it
+    # follows the freeze. The value in the database is for the code from before.
+    public_scoreboard = models.BooleanField(
+        verbose_name='marcador público', default=False, db_default=False,
+        help_text='Cualquiera puede ver el marcador en vivo, sin cuenta, en /marcador/ seguido de la clave del '
+                  'concurso: usuario, nombre y foto de cada participante. Respeta la congelación. Sólo con el '
+                  'concurso visible.')
     hide_problem_tags = models.BooleanField(verbose_name=_('hide problem tags'),
                                             help_text=_('Whether problem tags should be hidden by default.'),
                                             default=False)
