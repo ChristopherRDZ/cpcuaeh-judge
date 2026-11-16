@@ -399,7 +399,10 @@ class ContestClone(ContestMixin, PermissionRequiredMixin, TitleMixin, SingleObje
         private_contestants = contest.private_contestants.all()
         private_teams = list(contest.private_teams.all())
         view_contest_scoreboard = contest.view_contest_scoreboard.all()
-        contest_problems = contest.contest_problems.all()
+        # Read now. A queryset of a reverse foreign key keeps the contest itself and looks its id up when it is
+        # first used: by then the contest is the copy, which has no problems, and the copy got none (found on
+        # 2026-11-10 by a test of this view; the many-to-many ones above keep the id and are not affected).
+        contest_problems = list(contest.contest_problems.all())
         old_key = contest.key
 
         contest.pk = None
@@ -413,6 +416,9 @@ class ContestClone(ContestMixin, PermissionRequiredMixin, TitleMixin, SingleObje
         # returns false while it is set. Cloning last year's edition after its
         # ceremony used to hand the new one a freeze that silently never applied.
         contest.scoreboard_revealed = False
+        # Its public scoreboard is not copied: since 2026-11-10 a hidden contest can have one, and a clone is a
+        # contest being prepared, which nobody asked to show. Whoever organizes it turns it on in its admin page.
+        contest.public_scoreboard = False
         contest.key = form.cleaned_data['key']
         with revisions.create_revision(atomic=True):
             contest.save()

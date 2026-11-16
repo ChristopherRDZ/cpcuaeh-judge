@@ -775,13 +775,15 @@ html.movil .pie .der { margin-left: 0; }
         var una = function (grupo, valor, activa, rotulo, cuantos) {
             return '<a data-' + grupo + '="' + valor + '"' + (activa ? ' class="activa"' : '') + '>' + rotulo + ' <span>' + cuantos + '</span></a>';
         };
-        if (D.mixto) {
+        // With nobody on the scoreboard (before the start, or nobody in yet) the tabs would only count zeros.
+        var hay = base.length > 0;
+        if (hay && D.mixto) {
             var eq = base.filter(function (f) { return f.e; }).length;
             html += una('division', 'ind', division === 'ind', 'Individual', base.length - eq) + una('division', 'eq', division === 'eq', 'Equipos', eq);
             base = base.filter(function (f) { return f.e === (division === 'eq'); });
             if (D.hib) html += '<i class="sep"></i>';
         }
-        if (D.hib) {
+        if (hay && D.hib) {
             var pres = base.filter(function (f) { return f.s; }).length;
             html += una('filtro', 'todos', filtro === 'todos', 'Global', base.length) + una('filtro', 'pres', filtro === 'pres', 'Presencial', pres) +
                 una('filtro', 'linea', filtro === 'linea', 'En línea', base.length - pres);

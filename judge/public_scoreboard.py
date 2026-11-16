@@ -1,8 +1,10 @@
 """The public scoreboard of a contest (2026-11-10): what /marcador/<key>/ shows to anybody, without an account.
 
-Only a visible contest whose `public_scoreboard` is on has one: a contest that the site hides (one being prepared, a
-clone) has none, whatever its box says. The page asks for one small document, the snapshot, and draws
-everything from it: the problems, the rows in the order of the scoreboard, and the last submissions. It is told that
+A contest has one when its `public_scoreboard` is on, and only then: also a private contest and one that the site
+hides, which are the ones nobody outside can follow any other way (the owner, 2026-11-10; until then a hidden contest
+had none, whatever its box said). A clone starts with the box off (judge/views/contests.py). The page asks for one
+small document, the snapshot, and draws everything from it: the problems, the rows in the order of the scoreboard,
+and the last submissions. It is told that
 something happened by the event daemon (a submission arrives: `submitted`, here; a verdict: the `contest_<id>` that the
 bridge already posts) and then it asks for the snapshot again. So nothing that the page shows depends on having heard
 every event.
@@ -86,7 +88,7 @@ def submitted(submission):
         if not contest_id:
             return
         from judge.models import Contest
-        if Contest.objects.filter(id=contest_id, public_scoreboard=True, is_visible=True).exists():
+        if Contest.objects.filter(id=contest_id, public_scoreboard=True).exists():
             event.post(CHANNEL % contest_id, {'type': 'envio'})
     except Exception:
         logger.exception('public scoreboard: could not announce submission %s', getattr(submission, 'id', None))
@@ -96,7 +98,7 @@ def _load(key):
     from judge.models import Contest
     return Contest.objects.filter(key=key).only(
         'id', 'key', 'name', 'start_time', 'end_time', 'time_limit', 'freeze_minutes', 'scoreboard_revealed',
-        'format_name', 'format_config', 'participation_mode', 'attendance_mode', 'public_scoreboard', 'is_visible',
+        'format_name', 'format_config', 'participation_mode', 'attendance_mode', 'public_scoreboard',
         'points_precision').first()
 
 
@@ -337,7 +339,7 @@ def entry_for(key):
         return _keep(key, entry, local=False)
     try:
         contest = _load(key)
-        if contest is None or not contest.public_scoreboard or not contest.is_visible:
+        if contest is None or not contest.public_scoreboard:
             fresh = {'ts': stamp, 'off': True}
         else:
             now = timezone.now()
