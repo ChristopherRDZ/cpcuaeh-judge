@@ -86,7 +86,7 @@ problem; the jury answers privately or for everyone.
 <tr>
 <td width="50%" valign="top">
 <b>Reveal ceremony</b><br>
-<a href="docs/screenshots/reveal-ceremony.png"><img src="docs/screenshots/reveal-ceremony.png" width="380" alt="Reveal ceremony with a team award card"></a><br>
+<a href="docs/screenshots/reveal-ceremony.png"><img src="docs/screenshots/reveal-ceremony.png" width="380" alt="The reveal ceremony halfway through, with pending cells to reveal"></a><br>
 Reveal the final standings step by step, with medals, ties and first-to-solve
 awards, for contestants or teams.
 </td>
@@ -194,10 +194,19 @@ approver reviews and sends. See <a href="docs/mass-email.md">Emails to users</a>
 </td>
 <td width="50%" valign="top">
 <b>Light and dark themes</b><br>
-<a href="docs/screenshots/dark-mode.png"><img src="docs/screenshots/dark-mode.png" width="380" alt="The same page in light and dark themes"></a><br>
+<a href="docs/screenshots/dark-mode.png"><img src="docs/screenshots/dark-mode.png" width="380" alt="A frozen scoreboard, half in the light theme and half in the dark one"></a><br>
 Every account chooses light, dark or the system's theme. Phones get a stable
 480 px layout, and account emails share one design that reads well everywhere.
-<br><br>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Teams in the admin</b><br>
+<a href="docs/screenshots/admin-teams.png"><img src="docs/screenshots/admin-teams.png" width="380" alt="Team administration with owners, members and participation counts"></a><br>
+Teams, invitations and memberships, searchable by team or member, with their
+contest participations.
+</td>
+<td width="50%" valign="top">
 <b>Protected owner accounts</b><br>
 <a href="docs/screenshots/admin-owner-lock.png"><img src="docs/screenshots/admin-owner-lock.png" width="380" alt="Owner-only deletion confirmation listing affected records"></a><br>
 Accounts in <code>CPC_SERVER_OWNERS</code> control deletion, which lists what
