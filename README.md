@@ -8,41 +8,216 @@
   <a href="LICENSE"><img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <a href="docs/setup-guide.md">Installation</a> ·
   <a href="docs/fork-overview.md">Features</a> ·
-  <a href="#django-52">Django 5.2</a> ·
-  <a href="#security">Security</a> ·
+  <a href="docs/contest-tools.md">Contest guide</a> ·
   <a href="docs/duels.md">Duels</a> ·
   <a href="docs/mass-email.md">Emails to users</a> ·
-  <a href="docs/contest-tools.md">Contest guide</a> ·
+  <a href="#security">Security</a> ·
+  <a href="#django-52">Django 5.2</a> ·
   <a href="MODIFICATIONS.md">Changelog</a>
 </p>
 
-Run individual or team contests, on site and online at once, with registration
-before the start, frozen scoreboards, an interactive reveal
-ceremony, balloon delivery tools and a Spanish interface, and 1v1 duels and
-knockout tournaments on a projector. This fork is maintained by **CPC-UAEH**, the
-Club de Programación Competitiva UAEH, and runs at [cpcjudge.com](https://cpcjudge.com).
-It builds on [DMOJ](https://github.com/DMOJ/online-judge), with
-additional contest, administration and deployment features.
+<p align="center">
+  <a href="docs/screenshots/public-scoreboard.png"><img src="docs/screenshots/public-scoreboard.png" alt="The public scoreboard of a contest in progress: a podium, a balloon per problem and the latest submissions"></a>
+</p>
 
-**Get started:** follow the [installation guide](docs/setup-guide.md) to configure
-your own instance. DMOJ provides problem statements in Markdown and LaTeX, live
-submission results, multiple contest formats, virtual participation and support
-for many programming languages through the
+Run individual or team contests, on site and online at once, with registration
+before the start, a public live scoreboard, frozen standings, a reveal ceremony
+and balloon delivery. Hold 1v1 duels and knockout tournaments on a projector, and
+write to your users from the admin. This fork is maintained by **CPC-UAEH**, the
+Club de Programación Competitiva UAEH, and runs at [cpcjudge.com](https://cpcjudge.com).
+It builds on [DMOJ](https://github.com/DMOJ/online-judge), which provides
+statements in Markdown and LaTeX, live results, several contest formats, virtual
+participation and many languages through the
 [judge server](https://github.com/DMOJ/judge-server).
 
-## Django 5.2
+*The screenshots use fictional demo accounts, teams and contests, and show the
+Spanish interface; English is included too. Click a picture to see it full size,
+or browse the [gallery](docs/screenshots/README.md).*
 
-This fork includes the upgrade to **Django 5.2.17**, pinned in
-[`requirements.txt`](requirements.txt), with compatibility changes for timezone
-handling, storage configuration, static-file compression and contest
-administration. The upgrade also updates the tested django-mptt and
-django-compressor dependencies.
+## Contests
 
-The [upgrade guide](docs/django52/README.md) covers the code changes, the
-settings and how to upgrade an existing installation. The
-[setup guide](docs/setup-guide.md) explains how to configure a new instance.
+<table>
+<tr>
+<td width="50%" valign="top">
+<b>Public scoreboard</b><br>
+<a href="docs/screenshots/public-scoreboard-compare.png"><img src="docs/screenshots/public-scoreboard-compare.png" width="380" alt="The Compare tab of a finished contest, charting two contestants"></a><br>
+A live page for anybody, without an account: a podium, a balloon per problem
+and the latest submissions, following the freeze. After the contest, Compare
+charts how two contestants went up. Also for private and hidden contests.
+</td>
+<td width="50%" valign="top">
+<b>Registration before the start</b><br>
+<a href="docs/screenshots/contest-list.png"><img src="docs/screenshots/contest-list.png" width="380" alt="The contest list with a registration and the countdown in the navigation bar"></a><br>
+Register from the contest list or page; the access code is asked once. A pill in
+the navigation bar counts down, then shows the time left, and at the start a
+short prompt asks whether to enter.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>On site and online</b><br>
+<a href="docs/screenshots/contest-registered.png"><img src="docs/screenshots/contest-registered.png" width="380" alt="The Registered tab of an on site and online contest, seen by an organizer"></a><br>
+One contest with Global, On site and Online standings. Organizers register
+people and teams from the Registered tab, mark who is on site and choose who
+gets a rating.
+</td>
+<td width="50%" valign="top">
+<b>Teams</b><br>
+<a href="docs/screenshots/teams-my-teams.png"><img src="docs/screenshots/teams-my-teams.png" width="380" alt="My teams with members and a pending invitation"></a><br>
+Teams with invitations, and individual, team or mixed contests with separate
+rankings. Members submit from their own accounts and share the team's score and
+clock.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Frozen scoreboards</b><br>
+<a href="docs/screenshots/scoreboard-freeze.png"><img src="docs/screenshots/scoreboard-freeze.png" width="380" alt="Team scoreboard during the freeze window"></a><br>
+Results stay hidden everywhere during the freeze: standings, submissions,
+statistics, the API and live updates. Organizers release them.
+</td>
+<td width="50%" valign="top">
+<b>Announcements and clarifications</b><br>
+<a href="docs/screenshots/announcements.png"><img src="docs/screenshots/announcements.png" width="380" alt="Contest announcements and an answered clarification"></a><br>
+Announcements pop up inside the contest at once. Contestants ask about a
+problem; the jury answers privately or for everyone.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Reveal ceremony</b><br>
+<a href="docs/screenshots/reveal-ceremony.png"><img src="docs/screenshots/reveal-ceremony.png" width="380" alt="Reveal ceremony with a team award card"></a><br>
+Reveal the final standings step by step, with medals, ties and first-to-solve
+awards, for contestants or teams.
+</td>
+<td width="50%" valign="top">
+<b>Balloon delivery</b><br>
+<a href="docs/screenshots/balloon-desk.png"><img src="docs/screenshots/balloon-desk.png" width="380" alt="Balloon desk with problem colors, delivery status and locations"></a><br>
+Pending and delivered balloons, problem colors, seat locations and undo, behind
+their own staff permission.
+</td>
+</tr>
+</table>
+
+Also: every statement of a contest in one PDF ([pdfoid](docs/pdf.md)),
+rankings that refresh themselves, and contest clones that keep their problems.
+See the [contest guide](docs/contest-tools.md).
+
+## Duels
+
+First-to-solve battles between two players, alone or as best-of-N series, and
+knockout tournaments of up to 64 places.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<b>Organizer panel</b><br>
+<a href="docs/screenshots/duels-panel.png"><img src="docs/screenshots/duels-panel.png" width="380" alt="The duels panel with a battle and its next step"></a><br>
+Every battle shows one button with its next step. Organizers call the players
+and pick the problems by hand or from a problem bank.
+</td>
+<td width="50%" valign="top">
+<b>Tournaments</b><br>
+<a href="docs/screenshots/duels-tournament.png"><img src="docs/screenshots/duels-tournament.png" width="380" alt="The public page of a tournament with its bracket"></a><br>
+A bracket that builds itself, public pages that follow the games live, and a
+Glicko-2 ranking of the battles that count.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Players</b><br>
+<a href="docs/screenshots/duels-player.png"><img src="docs/screenshots/duels-player.png" width="380" alt="A player during a duel: statement, editor, custom input and submissions"></a><br>
+Players stay on the duel page and submit from it until the battle is decided.
+A round can start with a C++ template already written.
+</td>
+<td width="50%" valign="top">
+<b>Projectors</b><br>
+<a href="docs/screenshots/duels-projector.png"><img src="docs/screenshots/duels-projector.png" width="380" alt="A projector at the end of a game, with the winner"></a><br>
+Paired with a code, a projector shows both players' code live, the scoreboard,
+the statements and the bracket.
+</td>
+</tr>
+</table>
+
+See the [duels guide](docs/duels.md) for the setup, the rules of a game and who
+organizes what.
+
+## Problems and the editor
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<b>Autocomplete</b><br>
+<a href="docs/screenshots/editor-autocomplete.png"><img src="docs/screenshots/editor-autocomplete.png" width="380" alt="The submit editor suggesting while typing C++"></a><br>
+Submit, custom tests and duels suggest as you type, including whole
+<code>#include</code> lines in C and C++. Each contest or duel round decides
+whether it is allowed.
+</td>
+<td width="50%" valign="top">
+<b>Interactive problems</b><br>
+<a href="docs/screenshots/interactive-problem.png"><img src="docs/screenshots/interactive-problem.png" width="380" alt="Problem data page with a testlib interactor"></a><br>
+Upload an interactor next to the test data. Testlib is recognized and
+<code>testlib.h</code> supplied, with a <a href="docs/interactive-problems.md">guide</a>
+and a complete example.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Sample tables and math</b><br>
+<a href="docs/screenshots/sample-table.png"><img src="docs/screenshots/sample-table.png" width="380" alt="A statement with two sample tables"></a><br>
+Samples written with <code>||input</code> and <code>||output</code> show as a
+compact table with a copy icon, and inline formulas also accept
+<code>$...$</code>. See <a href="docs/statements.md">the syntax</a>.
+</td>
+<td width="50%" valign="top">
+<b>Test cases from ZIP archives</b><br>
+<a href="docs/screenshots/testcase-autofill.png"><img src="docs/screenshots/testcase-autofill.png" width="380" alt="Problem data form populated from a sample ZIP archive"></a><br>
+Input and output files pair themselves by extension or folder, in natural
+order, with batches and points filled in.
+</td>
+</tr>
+</table>
+
+Also: a roomier [custom test](docs/screenshots/custom-test.png) editor with
+output up to 64 KB, kept out of public histories and statistics.
+
+## Administration and email
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<b>Emails to users</b><br>
+<a href="docs/screenshots/mass-email-preview.png"><img src="docs/screenshots/mass-email-preview.png" width="380" alt="An email to users previewed as a desktop and a phone would show it"></a><br>
+Write one email in the admin and send it through Resend to everyone, to filtered
+audiences or to people chosen by name. Whoever writes asks for approval; an
+approver reviews and sends. See <a href="docs/mass-email.md">Emails to users</a>.
+</td>
+<td width="50%" valign="top">
+<b>Light and dark themes</b><br>
+<a href="docs/screenshots/dark-mode.png"><img src="docs/screenshots/dark-mode.png" width="380" alt="The same page in light and dark themes"></a><br>
+Every account chooses light, dark or the system's theme. Phones get a stable
+480 px layout, and account emails share one design that reads well everywhere.
+<br><br>
+<b>Protected owner accounts</b><br>
+<a href="docs/screenshots/admin-owner-lock.png"><img src="docs/screenshots/admin-owner-lock.png" width="380" alt="Owner-only deletion confirmation listing affected records"></a><br>
+Accounts in <code>CPC_SERVER_OWNERS</code> control deletion, which lists what
+goes before confirming; other superusers cannot edit them.
+</td>
+</tr>
+</table>
 
 ## Security
+
+Protections in the source include protected owner accounts, impersonation only
+for superusers and logged, private custom tests with rate limits, jury tools
+scoped to their contests, an upload check before large request bodies, email
+limits and an event daemon that survives malformed messages. The
+[deployment examples](deploy/examples/README.md) and
+[security guides](docs/security/README.md) cover what each installation must
+configure, and the known limitations.
+
+<details>
+<summary>All protections and deployment controls</summary>
 
 ### Application protections
 
@@ -70,8 +245,7 @@ settings and how to upgrade an existing installation. The
 
 ### Deployment controls
 
-The [deployment examples](deploy/examples/README.md) and
-[security guides](docs/security/README.md) provide configuration for:
+The deployment examples and security guides provide configuration for:
 
 - separate unprivileged service accounts, systemd isolation and read-only code;
 - authenticated Redis and private service listeners;
@@ -84,229 +258,16 @@ The [deployment examples](deploy/examples/README.md) and
   tests.
 
 Application protections are included in the source; deployment controls must be
-configured for each installation. The [security guides](docs/security/README.md)
-explain each control and its known limitations.
+configured for each installation.
 
-## Contests
+</details>
 
-*The screenshots below show this fork's interface with fictional demo accounts,
-teams, contests and results. They do not represent a real competition.*
+## Django 5.2
 
-### Frozen scoreboards
-
-Configure a freeze window and keep results hidden across the scoreboard,
-participation pages, submissions, statistics, problem counters, API and live
-updates. Contestants still see their own submissions, and their row marks the
-results the frozen board is not showing. Organizers explicitly release the final
-results.
-
-![Team scoreboard during the freeze window](docs/screenshots/scoreboard-freeze.png)
-
-### Reveal ceremony
-
-The reveal ceremony works with **both individual contestants and teams**.
-Reveal results in order with adjustable playback speed, medal ranges,
-tie handling and first-to-solve awards. Award cards show the individual
-contestant or the team and its registered members. In mixed contests, select
-the individual or team division to present its standings.
-
-![Reveal ceremony with a team award card](docs/screenshots/reveal-ceremony.png)
-
-### Balloon delivery
-
-Track pending and delivered balloons, assign problem colors and participant
-locations, and undo delivery mistakes. Dedicated staff permissions control access
-to the desk; accepted submissions during the freeze remain hidden.
-
-![Balloon desk with problem colors, delivery status and team locations](docs/screenshots/balloon-desk.png)
-
-### Announcements and clarifications
-
-Publish announcements for the whole site or one contest. Contestants can ask
-about a problem or the contest rules; the jury can answer privately or share an
-answer with everyone.
-
-![Contest announcements and an answered clarification](docs/screenshots/announcements.png)
-
-### Every statement in one PDF
-
-Participants download all the statements of a contest in one PDF once it starts,
-to keep reading if the connection drops; organizers can prepare it beforehand.
-Problem PDFs no longer get stuck as empty files after a failed render. Both need
-[pdfoid](docs/pdf.md).
-
-### Registration before the start
-
-Register for a contest before it starts, from the contest list or its page; the
-access code is asked once. At the start, a short prompt on any page asks whoever
-registered whether to enter now, and a pill in the navigation bar counts down
-and then shows the time left. Whoever did not register joins as always.
-Organizers can also register accounts and teams themselves, until the contest
-ends, without the access code.
-
-### On site and online
-
-Run one contest on site and online at once, with Global, On site and Online
-standings. Organizers assign people from the Registered tab, even before they
-register; balloons go to those on site, and the reveal ceremony presents each
-view. Each contest chooses whether everybody, only those on site or only those
-online get a rating.
-
-### Public scoreboard
-
-A contest can show its scoreboard to anybody, without an account, at
-`/marcador/<key>/`: a podium, a balloon per problem and the latest submissions,
-updated live and respecting the freeze. Organizers turn it on in the contest's
-admin page, also for private and hidden contests. Problems appear only by their
-letter, which links to the problem once it is public, and after the contest a
-Compare tab charts how two contestants progressed. The page is in Spanish.
-
-## Duels
-
-First-to-solve battles between two players, alone or as best-of-N series, and
-knockout tournaments of up to 64 places with a bracket that builds itself.
-Organizers call the players, pick the problems by hand or from a problem bank,
-and start each game from a panel that always shows the next step. Each round can
-start its games with a C++ template already written. Players stay on the duel
-page and submit from it until the battle is decided; a projector, paired with a
-code, shows both players' code live, the scoreboard, the statements and the
-bracket. Tournaments have public pages, and a Glicko-2 ranking counts the battles
-that someone with the permission approves. Organizers manage their own battles
-and the ones they are added to as co-organizers; one permission gives every
-battle.
-
-![A player during a duel: statement, editor, custom input and submissions](docs/screenshots/duels-player.png)
-
-![A projector at the end of a game, with the winner](docs/screenshots/duels-projector.png)
-
-See the [duels guide](docs/duels.md) for the setup, the rules of a game and the
-known limitations.
-
-## Teams
-
-### Teams and invitations
-
-Create a team, invite members and manage the roster from **My teams**. Members
-submit from their own accounts while sharing the team's contest score and clock.
-
-![My teams with members and a pending invitation](docs/screenshots/teams-my-teams.png)
-
-### Contest registration
-
-Choose individual or team participation and select the members who will compete.
-One access code registers the selected roster, subject to the contest's team
-size and individual eligibility rules.
-
-![Contest registration with team member selection](docs/screenshots/contest-join.png)
-
-### Separate rankings
-
-Run individual, team or mixed contests. Mixed contests have separate ranking
-tabs, and team results stay separate from individual site ratings. Rankings
-refresh automatically while the browser tab is visible.
-
-![Mixed contest with separate individual and team rankings](docs/screenshots/contest-ranking-teams.png)
-
-## Interface
-
-### Light and dark themes
-
-Every account can choose a light or dark theme, or follow the system preference.
-The fork's screens and navigation include Spanish and English translations.
-
-![The same teams page in light and dark themes](docs/screenshots/dark-mode.png)
-
-### Phones
-
-Pages load on phones at a stable 480 px layout scaled to fit, without the
-zooming in and out that upstream shows at some screen widths. Wide editor tables,
-such as the test case table, scroll inside their own box.
-
-### Account emails
-
-Activation, password reset and email change messages share one design that reads
-well in Gmail, Outlook and phone apps: the site logo, a button with a plain link
-below it, and a contact line. Every email ends with a line saying the club is
-independent and not an official service of its university.
-
-### Custom tests
-
-Try code with your own input in a spacious editor, with translated status
-messages and output up to 64 KB by default. Custom tests remain separate from
-public submission histories and statistics.
-
-![Custom test editor with example code, input and simulated output](docs/screenshots/custom-test.png)
-
-### Autocomplete
-
-The editors of submit, custom tests and duels suggest as you type: words already
-in the code, the language's keywords and, in C and C++, whole `#include` lines.
-Tab picks and Enter always starts a new line; a box next to the language turns
-it off. It is on for practice, and each contest or duel round decides whether it
-is allowed.
-
-### Test cases from ZIP archives
-
-Populate test cases from paired input and output files. Automatic pairing
-supports extensions or folders, natural ordering, batch detection and integer
-point distribution, with feedback for unpaired files.
-
-![Problem data form populated from a sample ZIP archive](docs/screenshots/testcase-autofill.png)
-
-### Interactive problems
-
-Upload an interactor next to the test data and the problem becomes interactive.
-The data page writes the judge configuration on every save, recognizes testlib
-interactors and supplies `testlib.h`. It links to a guide for problem setters with
-a complete example that can be downloaded. Uploading a new data archive over an
-existing one also works now; upstream lost both files.
-
-![Problem data page with a testlib interactor](docs/screenshots/interactive-problem.png)
-
-### Sample tables and math
-
-Write the samples of a statement as OmegaUp does, with `||input`, `||output`, an
-optional `||description` and `||end`, and they show as a compact table with a copy
-icon on each input. Inline formulas also accept `$...$`, with rules that keep
-prices as text. Statements written the usual way render exactly as before.
-
-![A statement with two sample tables](docs/screenshots/sample-table.png)
-
-## Administration
-
-Manage teams, invitations, memberships and contest participation from the admin,
-with search by team or member.
-
-![Team administration with members and participation counts](docs/screenshots/admin-teams.png)
-
-Accounts configured in `CPC_SERVER_OWNERS` control deletion and sensitive account
-administration. Other superusers cannot edit those accounts or grant the protected
-privileges. Permanent team and contest deletion requires a confirmation that
-lists the affected records; submission records are preserved.
-
-![Owner-only deletion confirmation listing affected records](docs/screenshots/admin-owner-lock.png)
-
-Contest authors can remove a problem from a contest they edit. The problem and
-its submissions stay; only their link to the contest goes. This is the only
-exception to the owner-only deletion lock. The two-list permission selector shows
-full permission names at any screen width. Pages that can only be viewed offer a
-Back button in the bottom bar.
-
-### Emails to users
-
-Write an announcement in the admin and send it to many accounts through Resend:
-to everyone with a confirmed email, to those matching filters (contests,
-organizations, groups, recent activity, sign-up dates, solved problems, rating) or
-to people chosen by name. Preview it as a desktop and a phone would show it, send
-yourself a test, confirm by typing the number of recipients, send now or schedule
-it, and read the delivery figures afterwards. Whoever writes asks for approval,
-and an approver reviews, corrects and sends. Choose the sender among addresses of
-the site's domain, add addresses pasted from a form, and show your social
-networks at the foot of every email. Unsubscribes are honoured.
-
-![An email to users in the preview, as a desktop and a phone would show it](docs/screenshots/mass-email-preview.png)
-
-See [Emails to users](docs/mass-email.md) for the setup with Resend.
+This fork runs on **Django 5.2.17**, pinned in [`requirements.txt`](requirements.txt),
+with the tested django-mptt and django-compressor versions. The
+[upgrade guide](docs/django52/README.md) covers the code changes, the settings
+and how to upgrade an existing installation.
 
 ## Installation and documentation
 
@@ -318,7 +279,7 @@ own branding.
 | Guide | Contents |
 | --- | --- |
 | [Setup guide](docs/setup-guide.md) | Installation, configuration and verification |
-| [Fork overview](docs/fork-overview.md) | Features and changes relative to upstream |
+| [Fork overview](docs/fork-overview.md) | Every change relative to upstream |
 | [Django 5.2 upgrade](docs/django52/README.md) | Compatibility changes, tested dependencies and upgrade guidance |
 | [Contest tools](docs/contest-tools.md) | Registration, on site and online, freeze, reveal, balloons, announcements and clarifications |
 | [Interactive problems](docs/interactive-problems.md) | Interactors from the data page, judge requirements and verdicts |
@@ -328,7 +289,7 @@ own branding.
 | [PDFs](docs/pdf.md) | Problem and contest PDFs with pdfoid |
 | [Deployment examples](deploy/examples/README.md) | Example service units, Nginx settings and maintenance tasks |
 | [Security guides](docs/security/README.md) | How to configure each control, and known limitations |
-| [Screenshot gallery](docs/screenshots/README.md) | Full-size demonstration images |
+| [Screenshot gallery](docs/screenshots/README.md) | Every demonstration image, full size |
 
 ## Upstream and license
 
