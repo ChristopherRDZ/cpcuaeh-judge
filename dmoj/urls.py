@@ -274,6 +274,8 @@ urlpatterns = [
     # The public scoreboard of a contest (2026-11-10): no account and no session. The page and what it shows.
     path('marcador/<str:contest>/', public_scoreboard.page, name='public_scoreboard'),
     path('marcador/<str:contest>/datos', public_scoreboard.data, name='public_scoreboard_data'),
+    # Where a letter of it leads: this one does use the session (who asks decides whether to see the problem).
+    path('marcador/<str:contest>/problema/<str:letter>', public_scoreboard.problem, name='public_scoreboard_problem'),
 
     path('contest/<str:contest>', include([
         path('', contests.ContestDetail.as_view(), name='contest_view'),

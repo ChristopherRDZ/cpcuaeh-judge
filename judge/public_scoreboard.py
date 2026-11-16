@@ -13,6 +13,9 @@ What it costs. A snapshot is built at most once per change: every request within
 gets the stored one without a query, and a check is three small aggregate queries (`_fingerprint`). The stored one
 lives in the cache, so the six processes share it.
 
+Problems. The snapshot names a problem only by its letter. A letter on the page links to /marcador/<key>/problema/<letter>,
+which sends to the problem only whoever may open it on the site (`problem_code`).
+
 The freeze. With the scoreboard frozen, a row is its frozen copy, in the frozen order, and what was sent since is only
 a count: the «?» of the cell and a line with no verdict in the list. Nothing else of a hidden submission leaves here.
 
@@ -34,6 +37,8 @@ logger = logging.getLogger('judge.public_scoreboard')
 
 KEY_RE = re.compile(r'^[a-z0-9]{1,20}$')
 COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+SHORT_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{3}$')
+LETTER_RE = re.compile(r'^[A-Z]{1,3}$')
 CHANNEL = 'marcador_%d'
 VERSION = 1
 
@@ -42,7 +47,7 @@ MAX_AGE = 20.0      # seconds after which it is built again even if nothing that
 OFF_FOR = 2         # seconds a «there is no such scoreboard» is remembered
 KEEP_FOR = 300      # seconds the cache keeps a snapshot nobody asks for
 LOCK_FOR = 5        # seconds a process may take to build before another one tries
-QUEUE = 40          # submissions in the list
+QUEUE = 40          # submissions in the list, in each of the lists the page can show (one per tab)
 # With the scoreboard frozen, a verdict that landed after the freeze for something sent just before it is not in the
 # frozen copy. A cell whose copy differs from the live one hides what began to be judged this close to the freeze.
 RACE = timedelta(seconds=90)
@@ -64,6 +69,52 @@ def letter(index):
     while index > 0:
         out = chr((index - 1) % 26 + 65) + out
         index = (index - 1) // 26
+    return out
+
+
+def position(label):
+    """The other way round: the index of the problem with this letter, or None if it is not a letter."""
+    if not isinstance(label, str) or not LETTER_RE.match(label):
+        return None
+    index = 0
+    for char in label:
+        index = index * 26 + ord(char) - 64
+    return index - 1
+
+
+def _hex(color):
+    """A balloon colour as #rrggbb in lowercase, or None. The admin also takes #rgb (ContestTag.color_validator)."""
+    color = (color or '').strip()
+    if SHORT_COLOR_RE.match(color):
+        color = '#' + ''.join(digit * 2 for digit in color[1:])
+    return color.lower() if COLOR_RE.match(color) else None
+
+
+def _apart(one, other):
+    """Whether two colours can be told apart as balloons («redmean» distance, cheap and close enough to the eye).
+    Under 150 they read as the same colour: #ff0000 and #e6194b are 125 apart, #ffff00 and #ffd21f 100."""
+    a = [int(one[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(other[i:i + 2], 16) for i in (1, 3, 5)]
+    mean = (a[0] + b[0]) / 2
+    red, green, blue = a[0] - b[0], a[1] - b[1], a[2] - b[2]
+    return ((2 + mean / 256) * red * red + 4 * green * green + (2 + (255 - mean) / 256) * blue * blue) ** .5 >= 150
+
+
+def colors(chosen):
+    """The colour of each problem: the one its balloon has in the admin; for one without, the colour of PALETTE at
+    its position, as always, unless it looks like a chosen colour or was already given: then the next one that does
+    not. So choosing one colour does not repaint the others, and without any chosen it is PALETTE in its order."""
+    chosen = [_hex(color) for color in chosen]
+    picked = [color for color in chosen if color]
+    given, out = set(), []
+    for at, color in enumerate(chosen):
+        if color is None:
+            turn = [PALETTE[(at + step) % len(PALETTE)] for step in range(len(PALETTE))]
+            free = [option for option in turn if option not in given]
+            color = next((option for option in free if all(_apart(option, other) for other in picked)), None) or \
+                next((option for option in free if option not in picked), None) or turn[0]
+            given.add(color)
+        out.append(color)
     return out
 
 
@@ -92,6 +143,27 @@ def submitted(submission):
             event.post(CHANNEL % contest_id, {'type': 'envio'})
     except Exception:
         logger.exception('public scoreboard: could not announce submission %s', getattr(submission, 'id', None))
+
+
+def problem_code(key, label, user):
+    """Where a letter of the scoreboard of `key` leads, for `user`: (has a public scoreboard, problem code or None).
+
+    The code only when that user may open the problem on the site (Problem.is_accessible_by, which also lets in who
+    is competing in the contest); otherwise None, the same for a letter that does not exist and before the start, so
+    the answer says nothing about the problems of a contest that hides them. The snapshot never carries codes."""
+    from judge.models import Contest
+    if not isinstance(key, str) or not KEY_RE.match(key):
+        return False, None
+    contest = Contest.objects.filter(key=key, public_scoreboard=True).only('id', 'start_time').first()
+    if contest is None:
+        return False, None
+    index = position(label)
+    if index is None or index > 2000 or timezone.now() < contest.start_time:
+        return True, None
+    found = list(contest.contest_problems.order_by('order', 'id').select_related('problem')[index:index + 1])
+    if not found or not found[0].problem.is_accessible_by(user):
+        return True, None
+    return True, found[0].problem.code
 
 
 def _load(key):
@@ -160,15 +232,31 @@ def build(contest, now=None):
         data['reg'] = contest.users.waiting_registrations().count()
         return data
 
-    problems = list(contest.contest_problems.order_by('order', 'id').values_list('id', 'points', 'balloon_color'))
+    loaded = list(contest.contest_problems.order_by('order', 'id').values_list(
+        'id', 'points', 'balloon_color', 'problem__is_public', 'problem__is_organization_private'))
+    problems = [row[:3] for row in loaded]
     index = {}
-    for position, (problem_id, points, color) in enumerate(problems):
+    for position, ((problem_id, points, _color, public, organization_only), color) in enumerate(
+            zip(loaded, colors([row[2] for row in loaded]))):
         index[problem_id] = position
-        data['pr'].append({
-            'l': letter(position), 'm': _number(points),
-            'c': color.lower() if color and COLOR_RE.match(color) else PALETTE[position % len(PALETTE)],
-        })
+        # `a`: anybody may open it on the site, so its letter is a link (the owner, 2026-11-15: a letter only links
+        # once its problem is public). It is what Problem.is_accessible_by says for somebody without an account,
+        # read without loading the problems (their instances cost a query each); a test checks that they agree.
+        data['pr'].append({'l': letter(position), 'm': _number(points), 'c': color,
+                           'a': 1 if public and not organization_only else 0})
     count = len(problems)
+
+    # Comparing two rows over time (2026-11-15): only once the contest is over and nothing is frozen any more, which
+    # is when every submission can be told. Each row then gets `h`, its score each time it went up.
+    compare = now > contest.end_time and not frozen
+    data['cmp'] = 1 if compare else 0
+    if compare:
+        length = contest.end_time - contest.start_time
+        if contest.time_limit:
+            length = min(length, contest.time_limit)
+        data['dur'] = int(length.total_seconds())
+        if contest.freeze_delta is not None:
+            data['hielo'] = max(0, int((length - contest.freeze_delta).total_seconds()))
 
     queryset = contest.users.filter(virtual=ContestParticipation.LIVE, is_disqualified=False).without_contest_staff()
     if mode == Contest.TEAM:
@@ -213,6 +301,11 @@ def build(contest, now=None):
     busy_states = Submission.IN_PROGRESS_GRADING_STATUS
     first = [None] * count
     queue = []
+    # For comparing: the best of each problem so far (ICPC: whether it is solved), and the score each time it rose,
+    # in seconds from the start of that row (its own start in a contest with a time window).
+    history = {participation.id: [] for participation in participations} if compare else None
+    held = {participation.id: [0] * count for participation in participations} if compare else None
+    begins = {participation.id: participation.start for participation in participations} if compare else None
     rows = ContestSubmission.objects.filter(
         participation__contest_id=contest.id, participation__virtual=ContestParticipation.LIVE,
     ).order_by('submission__date', 'id').values_list(
@@ -251,6 +344,14 @@ def build(contest, now=None):
                     mark[3] = 1
             else:
                 state = 'a' if points > 0 else 'm'
+            if history is not None:
+                best_so_far = held[participation_id]
+                worth = (1 if state == 'o' else 0) if icpc else points
+                if worth > best_so_far[position] + 1e-9:
+                    best_so_far[position] = worth
+                    total = sum(best_so_far) if icpc else _number(sum(best_so_far), contest.points_precision)
+                    elapsed = max(0, int((date - begins[participation_id]).total_seconds()))
+                    history[participation_id].append([elapsed, position, total])
         seconds = int((date - contest.start_time).total_seconds())
         queue.append([sub_id, participation_id, position, max(seconds, 0), state, shown,
                       1 if first[position] == sub_id else 0])
@@ -289,14 +390,39 @@ def build(contest, now=None):
             real = ' '.join(profile.user.get_full_name().split())
             organization = profile.organization.short_name if profile.organization else ''
             pictures = [profile.id]
-        ranked.append(((-score, cumtime, tiebreaker, participation.id), {
+        row = {
             'i': participation.id, 'n': name, 'r': real, 'o': organization, 'a': pictures,
             'e': 1 if participation.team_id else 0, 's': 1 if participation.onsite else 0,
             'p': _number(score, contest.points_precision), 't': int(cumtime), 'b': _number(tiebreaker), 'c': cells,
-        }))
+        }
+        if history is not None:
+            # Only a history that ends where the scoreboard says: a format with bonuses or subtasks would not, and
+            # then the page compares without the chart.
+            steps = history[participation.id]
+            if icpc:
+                official = sum(1 for position, cell in enumerate(cells) if cell and problems[position][1] and
+                               cell[0] >= _number(problems[position][1]) - 1e-9)
+            else:
+                official = row['p']
+            if abs((steps[-1][2] if steps else 0) - official) < 1e-6:
+                row['h'] = steps
+        ranked.append(((-score, cumtime, tiebreaker, participation.id), row))
     ranked.sort(key=lambda pair: pair[0])
     data['f'] = [row for _key, row in ranked]
-    data['e'] = queue[:-QUEUE - 1:-1]
+
+    # The list follows the tab: the page shows the submissions of the rows of the tab that is open. So it gets the
+    # last QUEUE of each group it can split by (individual or team, on site or online), newest first; the last
+    # QUEUE of a tab that joins groups are always among them.
+    def group(participation_id):
+        participation = by_id[participation_id]
+        return (data['mixto'] and bool(participation.team_id), data['hib'] and bool(participation.onsite))
+
+    taken = {}
+    for item in reversed(queue):
+        key = group(item[1])
+        if taken.get(key, 0) < QUEUE:
+            data['e'].append(item)
+        taken[key] = taken.get(key, 0) + 1
     return data
 
 

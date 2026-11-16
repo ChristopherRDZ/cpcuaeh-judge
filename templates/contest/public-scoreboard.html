@@ -46,17 +46,26 @@ h2, h3 { margin: 0; }
 #contenido { width: 92%; margin: 0 auto; padding: 12px 0 40px; }
 h2.titulo { font-size: 2em; font-weight: 400; color: var(--p75); overflow-wrap: anywhere; }
 
-/* how far the contest is: a bar with the time at its tip and, striped, the stretch in which it freezes */
-.tiempo { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; color: var(--p66); font-size: .93em; font-variant-numeric: tabular-nums; }
-.avance { position: relative; flex: 1; height: 22px; overflow: hidden; border: 1px solid var(--p25); border-radius: 4px; background: var(--p10); }
-.avance i { position: absolute; top: 0; bottom: 0; }
-.avance .zona { right: 0; border-left: 1px solid #9cc4ea; background: repeating-linear-gradient(45deg, #cfe5fb 0 8px, var(--info25) 8px 16px); }
-.avance .zona em { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--info100); font-size: 12px; font-style: normal; white-space: nowrap; }
-.avance.cong .zona em { display: none; }
+/* how far the contest is: a thin rounded track, the time over its tip while it runs, marks of time under it and,
+   striped, the stretch in which it freezes (the owner chose it on 2026-11-15, without the balloon of the mockup) */
+.tiempo { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; padding: 24px 0 20px; color: var(--p66); font-size: .93em; font-variant-numeric: tabular-nums; }
+.avance { position: relative; flex: 1; height: 6px; border-radius: 3px; background: #e3e3e3; }
+.avance i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.avance .zona { right: 0; background: repeating-linear-gradient(45deg, #cfe5fb 0 6px, var(--info25) 6px 12px); }
 #hecho { left: 0; background: var(--azul); transition: width 1s linear; }
-#hielo { background: var(--info100); transition: width 1s linear; }
-.avance b { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 7px; transform: translateX(-100%); color: #fff; font-size: 12.5px; font-weight: 600; white-space: nowrap; transition: left 1s linear; }
-.avance b.corto { transform: none; color: var(--p75); }
+#hielo { background: var(--info100); transition: width 1s linear, left 1s linear; }
+.avance b { position: absolute; bottom: 12px; transform: translateX(-50%); color: var(--p75); font-size: 13px; font-weight: 700; white-space: nowrap; transition: left 1s linear; }
+.avance.cong b { color: var(--info100); }
+.avance.cong #hecho { border-radius: 3px 0 0 3px; }
+.avance.cong #hielo { border-radius: 0 3px 3px 0; }
+.marcas em { position: absolute; top: 14px; transform: translateX(-50%); color: var(--p50); font-size: 11px; font-style: normal; white-space: nowrap; }
+.marcas em::before { content: ""; position: absolute; top: -7px; left: 50%; width: 1px; height: 4px; background: var(--p33); }
+.marcas em.hz { color: var(--info100); }
+.marcas em.hz::before { background: var(--info100); }
+.marcas em.al-ini { transform: none; }
+.marcas em.al-ini::before { left: 0; }
+.marcas em.al-fin { transform: translateX(-100%); }
+.marcas em.al-fin::before { left: auto; right: 0; }
 
 .tabs { display: flex; align-items: flex-end; gap: 14px; margin: 0 0 10px; border-bottom: 1px solid var(--p25); }
 #pestanas { display: flex; margin-bottom: -1px; overflow-x: auto; overflow-y: hidden; }
@@ -65,6 +74,16 @@ h2.titulo { font-size: 2em; font-weight: 400; color: var(--p75); overflow-wrap: 
 #pestanas a.activa { border-color: var(--azul) var(--p25) var(--p0); background: var(--p0); cursor: default; }
 #pestanas i.sep { width: 14px; }
 #aviso { margin-left: auto; padding-bottom: 10px; color: var(--info100); }
+#extra { display: flex; margin-bottom: -1px; }
+#pestanas a, #extra a { text-decoration: none; }
+#extra a { display: block; padding: 10px 15px; border: 1px solid transparent; border-top-width: 3px; border-radius: 4px 4px 0 0; line-height: 1.42857; color: var(--p66); white-space: nowrap; cursor: pointer; }
+#extra a.activa { border-color: var(--azul) var(--p25) var(--p0); background: var(--p0); cursor: default; }
+#extra a.caja { border-color: var(--p25); background: var(--p5); color: var(--p75); }
+#extra a.caja:hover, #extra a.caja:focus-visible { border-top-color: var(--azul); background: var(--p0); outline: 0; }
+#extra a.apagada { color: var(--p33); cursor: default; }
+#extra a i { font-style: normal; margin-right: 5px; color: var(--azul); }
+#extra a.apagada i { color: inherit; }
+#pestanas a.fija { cursor: default; }
 .siguiendo { display: flex; gap: 12px; margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--info50); border-radius: 4px; background: var(--info25); color: var(--info100); }
 .siguiendo span { flex: 1; min-width: 0; }
 .siguiendo a { color: #1958c1; cursor: pointer; white-space: nowrap; }
@@ -75,7 +94,15 @@ h2.titulo { font-size: 2em; font-weight: 400; color: var(--p75); overflow-wrap: 
 .dos { display: grid; grid-template-columns: var(--cola) minmax(0, 1fr); gap: 22px; align-items: start; }
 .cola { position: sticky; top: 56px; }
 .cola h3 { padding: 5px 7px; border-radius: 4px 4px 0 0; background: var(--p75); color: #fff; font-size: 1.3em; font-weight: 400; }
-.cinta { max-height: calc(100vh - 104px); overflow-y: auto; scrollbar-width: thin; border: 1px solid var(--p25); border-top: 0; }
+.cinta { max-height: calc(100vh - 104px); overflow-y: auto; border: 1px solid var(--p25); border-top: 0; }
+/* Its scrollbar: thin and rounded, without arrows. Chrome ignores these when scrollbar-width is set, so that one is
+   only for the browsers that lack them (Firefox). */
+.cinta::-webkit-scrollbar { width: 10px; }
+.cinta::-webkit-scrollbar-track { background: transparent; }
+.cinta::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 5px; background: #c4c4c4 padding-box; }
+.cinta::-webkit-scrollbar-thumb:hover { background-color: #999; }
+.cinta::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports not selector(::-webkit-scrollbar) { .cinta { scrollbar-width: thin; scrollbar-color: #c4c4c4 transparent; } }
 .cinta li { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; min-height: 42px; border-bottom: 1px solid var(--p25); }
 .cinta li:last-child { border-bottom: 0; }
 .cinta li.nuevo { animation: entra .4s ease-out; }
@@ -180,6 +207,10 @@ i.mini { display: block; width: 9px; height: 11px; border: 1.5px solid var(--b);
 .th { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 2.4em; padding: 4px 2px; border-right: 1px solid var(--p50); border-bottom: 1px solid var(--p50); background: var(--p75); color: #fff; font-size: 1.1em; font-weight: 600; white-space: nowrap; }
 .th.izq { align-items: flex-start; padding-left: 10px; }
 .th.p { font-size: 1em; }
+/* a letter leads to its problem */
+a.th { color: #fff; text-decoration: none; }
+a.th.p:hover, a.th.p:focus-visible { background: #555; outline: 0; }
+a.th.p:hover > span, a.th.p:focus-visible > span { text-decoration: underline; text-underline-offset: 2px; }
 .fila { position: relative; background: var(--p0); transition: transform .7s cubic-bezier(.2, .75, .25, 1), background-color 1.2s, box-shadow .5s; cursor: pointer; }
 .tabla .fila:nth-child(even) { background: #f7f7f7; }
 .fila.seg, .tabla .fila.seg { background: var(--info25); }
@@ -194,11 +225,25 @@ i.mini { display: block; width: 9px; height: 11px; border: 1.5px solid var(--b);
 .lugar.cambia > span:first-child, .res.cambia > span { display: inline-block; animation: cambia .9s ease-out; }
 .salto { position: absolute; top: 1px; right: 2px; color: #1d9a44; font-size: 10px; font-style: normal; font-weight: 700; line-height: 1; opacity: 0; animation: salto 7s linear; pointer-events: none; }
 
-.det { display: none; grid-column: 1 / -1; padding: 8px 10px 10px; border: 1px solid var(--p25); border-top: 0; background: var(--p5); color: var(--p66); cursor: default; }
-.fila.abierta .det { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 3px 18px; }
-.det div { display: flex; gap: 8px; }
-.det b { min-width: 1.1em; color: #000; }
-.det .no, .det .no b { color: var(--p33); }
+@media (hover: hover) {
+    .tabla .fila:not(.abierta):not(.seg):not(.sube):hover { background: #efefef; transition: transform .7s cubic-bezier(.2, .75, .25, 1), background-color .15s, box-shadow .5s; }
+}
+
+/* An open row and its detail are one block of the table: one shade for both, the lines of the table all round, and
+   inside it the detail in its own panel, with a notch that points up to whom it is about. */
+.tabla .fila.abierta { background: #f1f1f1; box-shadow: inset 1px 0 0 var(--p25), inset -1px 0 0 var(--p25), inset 0 -1px 0 var(--p25); }
+.tabla .fila.abierta.seg { background: var(--info25); }
+.tabla .fila.abierta.sube { background: var(--marca); }
+.tabla .fila.abierta > .td, .tabla .fila.abierta .globos > .td { border-bottom-color: transparent; }
+.det { display: none; position: relative; grid-column: 1 / -1; margin: 1px 10px 10px; padding: 9px 12px 10px; border: 1px solid var(--p25); border-radius: 4px; background: var(--p0); color: var(--p66); cursor: default; }
+.det::before { content: ""; position: absolute; top: -6px; left: 50px; width: 10px; height: 10px; border: 1px solid var(--p25); border-right: 0; border-bottom: 0; background: var(--p0); transform: rotate(45deg); }
+.fila.abierta .det { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 18px; }
+.det div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.det .pl { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; min-width: 2.4em; color: #000; font-weight: 700; text-decoration: none; }
+.det .pl i.mini { width: 8px; height: 10px; }
+.det a.pl:hover > span, .det a.pl:focus-visible > span { color: #1958c1; text-decoration: underline; text-underline-offset: 2px; }
+.det .no, .det .no .pl { color: var(--p33); }
+.det .no i.mini { opacity: .45; }
 .det .acciones { grid-column: 1 / -1; flex-wrap: wrap; gap: 4px 16px; padding-bottom: 3px; }
 .det .acciones a { color: #1958c1; white-space: nowrap; cursor: pointer; }
 
@@ -207,6 +252,53 @@ i.mini { display: block; width: 9px; height: 11px; border: 1.5px solid var(--b);
 .pie .g svg { width: 18px; height: 23px; animation: none; }
 .pie .g b { font-size: 10px; }
 .pie .der { margin-left: auto; }
+
+/* ---------- comparing two, once the contest is over: who, how they ended, how they got there, each problem ---------- */
+.comparar { --sa: #2980b9; --sb: #d35400; }
+.cmp-elige { display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; }
+.cmp-sel { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
+.cmp-sel select { flex: 1; min-width: 0; height: 34px; padding: 4px 8px; border: 1px solid var(--p25); border-radius: 4px; background: var(--p0); color: #000; font: inherit; }
+.cmp-cambia { flex: 0 0 auto; width: 38px; height: 34px; padding: 0; border: 1px solid var(--p25); border-radius: 4px; background: linear-gradient(#fff, #e0e0e0); color: #333; font: inherit; font-size: 1.15em; line-height: 1; cursor: pointer; }
+.cmp-cambia:hover { background: #e0e0e0; }
+i.linea { display: inline-block; flex: 0 0 auto; width: 16px; height: 3px; border-radius: 2px; background: var(--s); vertical-align: middle; }
+.cmp-fichas { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; }
+.cmp-ficha { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--p25); border-top: 3px solid var(--s); border-radius: 4px; background: var(--p0); }
+.cmp-ficha .av { width: 56px; height: 56px; border-radius: 6px; }
+.cmp-ficha .avs.eq .av { width: 44px; height: 44px; }
+.cmp-ficha .nombres { flex: 1; }
+.cmp-ficha .nombre { font-size: 1.2em; }
+.cmp-datos { flex: 0 0 auto; text-align: right; color: var(--p66); line-height: 1.35; }
+.cmp-datos b { display: block; color: var(--p75); font-size: 2em; font-weight: 400; line-height: 1.05; }
+.cmp-datos small { display: block; color: var(--p50); }
+.cmp-vs { align-self: center; color: var(--p50); font-size: 1.1em; font-weight: 600; }
+.cmp-dice { margin: 10px 0 14px; color: var(--p66); font-size: 1.08em; }
+.cmp-dice b { color: #000; }
+.cmp-caja { margin-bottom: 16px; }
+.cmp-caja h3 { padding: 5px 7px; border-radius: 4px 4px 0 0; background: var(--p75); color: #fff; font-size: 1.15em; font-weight: 400; }
+.cmp-lectura { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding: 7px 10px; border: 1px solid var(--p25); border-top: 0; border-bottom: 0; color: var(--p66); font-variant-numeric: tabular-nums; }
+.cmp-lectura .cmp-t { min-width: 5.5em; color: var(--p50); }
+.cmp-lectura span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.cmp-lectura b { color: #000; font-size: 1.1em; }
+.cmp-lienzo { position: relative; border: 1px solid var(--p25); border-top: 0; border-radius: 0 0 4px 4px; background: var(--p0); }
+.cmp-lienzo svg { display: block; width: 100%; touch-action: pan-y; }
+.cmp-lienzo text { fill: var(--p50); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cmp-lienzo text.hielo { fill: var(--info100); }
+.cmp-tabla { border: 1px solid var(--p25); border-top: 0; border-radius: 0 0 4px 4px; }
+.cmp-fila { display: grid; grid-template-columns: 74px minmax(0, 1fr) minmax(0, 1fr); align-items: center; min-height: 38px; border-bottom: 1px solid var(--p25); }
+.cmp-fila:last-child { border-bottom: 0; }
+.cmp-fila:nth-child(even) { background: #f7f7f7; }
+.cmp-fila > div { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 10px; color: var(--p66); }
+.cmp-fila > div + div { border-left: 1px solid var(--p25); }
+.cmp-fila.cab { min-height: 0; background: var(--p5); font-weight: 600; }
+.cmp-fila.cab > div { color: var(--p75); }
+.cmp-fila .pl { display: inline-flex; align-items: center; gap: 5px; color: #000; font-weight: 700; text-decoration: none; }
+.cmp-fila a.pl:hover > span { color: #1958c1; text-decoration: underline; text-underline-offset: 2px; }
+.cmp-fila .pl i.mini { width: 8px; height: 10px; }
+.cmp-fila .g { flex: 0 0 auto; width: 20px; }
+.cmp-fila .g svg { width: 18px; height: 23px; }
+.cmp-fila .g small, .cmp-fila .g.nada { display: none; }
+.cmp-fila .mejor { color: #000; font-weight: 600; }
+.cmp-fila .nadie { color: var(--p33); }
 
 /* ---------- narrower: the submissions go above, in one line that opens when touched ---------- */
 html.medio .dos, html.movil .dos { display: block; }
@@ -233,7 +325,9 @@ html.movil .tabla .globos .g svg { width: 100%; max-width: 26px; height: auto; a
 html.movil .tabla .globos .gl { width: 100%; max-width: 26px; }
 html.movil .tabla .globos .g b { font-size: 10.5px; }
 html.movil .salto { top: -7px; right: auto; left: 3px; }
-html.movil .det { grid-area: d; margin-top: 6px; border: 0; }
+html.movil .det { grid-area: d; margin: 10px 4px 4px; padding: 8px 10px 9px; }
+html.movil .det::before { left: 38px; }
+html.movil .tabla .fila.abierta { box-shadow: none; }
 html.movil .escalones { gap: 0 6px; padding: 0; border-bottom: 3px solid var(--p75); }
 html.movil .puesto { padding-top: 10px; }
 html.movil .puesto .av { width: 52px; height: 52px; }
@@ -247,6 +341,17 @@ html.movil .p1 .escalon { min-height: 96px; }
 html.movil .p2 .escalon { min-height: 78px; }
 html.movil .p3 .escalon { min-height: 64px; }
 html.movil .pie .der { margin-left: 0; }
+html.movil .cmp-elige { flex-direction: column; align-items: stretch; gap: 6px; }
+html.movil .cmp-cambia { align-self: center; height: 30px; transform: rotate(90deg); }
+html.movil .cmp-fichas { grid-template-columns: 1fr 1fr; gap: 8px; }
+html.movil .cmp-vs { display: none; }
+html.movil .cmp-ficha { flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; text-align: center; }
+html.movil .cmp-ficha .nombres { align-items: center; max-width: 100%; }
+html.movil .cmp-ficha .nombre { font-size: 1.05em; }
+html.movil .cmp-datos { text-align: center; }
+html.movil .cmp-datos b { font-size: 1.7em; }
+html.movil .cmp-fila { grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr); font-size: .93em; }
+html.movil .cmp-fila > div { padding: 4px 6px; gap: 5px; }
 
 @media (max-width: 800px) {
     #pagina { border: 0; }
@@ -255,11 +360,11 @@ html.movil .pie .der { margin-left: 0; }
     .barra .seccion { display: none; }
     .reloj { font-size: 17px; }
     h2.titulo { font-size: 1.5em; }
-    .tiempo { margin: 6px 0 10px; }
-    .avance .zona em { display: none; }
-    #pestanas a { padding: 8px 11px; }
-    .tabs { display: block; }
-    #aviso { display: block; padding: 6px 0; font-size: .93em; }
+    .tiempo { margin: 0 0 8px; }
+    #pestanas a, #extra a { padding: 8px 9px; }
+    .tabs { flex-wrap: wrap; gap: 0 4px; }
+    #extra { margin-left: auto; }
+    #aviso { order: 9; flex-basis: 100%; margin-left: 0; padding: 6px 0; font-size: .93em; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -286,10 +391,10 @@ html.movil .pie .der { margin-left: 0; }
     <h2 class="titulo" id="titulo">{{ title }}</h2>
     <div class="tiempo">
         <span>0:00</span>
-        <div class="avance" id="avance"><i class="zona" id="zona"><em id="zona-txt"></em></i><i id="hecho"></i><i id="hielo"></i><b id="va"></b></div>
+        <div class="avance" id="avance"><i class="zona" id="zona"></i><i id="hecho"></i><i id="hielo"></i><span class="marcas" id="marcas"></span><b id="va"></b></div>
         <span id="fin"></span>
     </div>
-    <div class="tabs" id="tabs" hidden><nav id="pestanas"></nav><span id="aviso"></span></div>
+    <div class="tabs" id="tabs" hidden><nav id="pestanas"></nav><span id="aviso"></span><nav id="extra"></nav></div>
     <div class="siguiendo" id="siguiendo" hidden></div>
     <div class="nota-vacia" id="nota" hidden></div>
     <noscript><div class="nota-vacia">Este marcador necesita JavaScript para actualizarse.</div></noscript>
@@ -305,6 +410,7 @@ html.movil .pie .der { margin-left: 0; }
             <div class="pie" id="pie"></div>
         </section>
     </div>
+    <section class="comparar" id="comparar" hidden></section>
 </div></div>
 <script id="cfg" type="application/json">{{ config|safe }}</script>
 <script id="datos" type="application/json">{{ snapshot|safe }}</script>
@@ -372,12 +478,13 @@ html.movil .pie .der { margin-left: 0; }
     function preparar(d) {
         d.pr = (d.pr || []).map(function (p, i) {
             var c = /^#[0-9a-f]{6}$/i.test(p.c) ? p.c : '#888888';
-            return {i: i, l: String(p.l), c: c, m: +p.m || 0, estilo: '--c:' + c + ';--b:' + oscurecer(c, .26)};
+            return {i: i, l: String(p.l), c: c, m: +p.m || 0, a: +p.a ? 1 : 0, estilo: '--c:' + c + ';--b:' + oscurecer(c, .26)};
         });
         d.puntos = !d.icpc;
         d.porId = {};
         d.f = (d.f || []).map(function (f) {
-            var fila = {i: +f.i, n: f.n, r: f.r, o: f.o, a: (f.a || []).map(Number), e: !!f.e, s: !!f.s, p: +f.p || 0, t: +f.t || 0, b: +f.b || 0};
+            var fila = {i: +f.i, n: f.n, r: f.r, o: f.o, a: (f.a || []).map(Number), e: !!f.e, s: !!f.s, p: +f.p || 0, t: +f.t || 0, b: +f.b || 0,
+                h: Array.isArray(f.h) ? f.h : null};
             fila.cel = d.pr.map(function (pr, p) {
                 var c = f.c && f.c[p];
                 return c ? {pts: +c[0] || 0, t: +c[1] || 0, n: +c[2] || 0, q: +c[3] || 0, z: +c[4] || 0, x: +c[5] || 0, max: pr.m} : null;
@@ -556,18 +663,36 @@ html.movil .pie .der { margin-left: 0; }
 
     function detalle(f) {
         var html = '<div class="acciones"><a data-seguir="' + f.i + '">' + (seguido === f.i ? '★ Siguiendo' : '☆ Seguir') + '</a>' +
+            (comparable() ? '<a data-comparar="' + f.i + '">⇄ Comparar</a>' : '') +
             (f.e && f.r ? '<span>' + texto(f.r) + '</span>' : '') + '</div>';
         f.cel.forEach(function (c, p) {
-            var que = '';
-            if (c && c.q) que = 'en revisión';
-            else if (c && D.puntos && c.pts) que = num(c.pts) + ' de ' + num(c.max) + ' · ' + hora(c.t) + (c.x ? ' · primero en ' + num(c.max) : '');
-            else if (lleno(c)) que = 'resuelto a las ' + hora(c.t) + (c.x ? ' · primero' : '');
-            else if (c && c.pts) que = num(c.pts) + ' de ' + num(c.max) + ' puntos';
-            else if (c && c.n) que = (D.puntos ? '0 puntos, ' : '') + veces(c.n) + (D.puntos ? '' : ', sin resolver');
-            if (c && c.z) que += (que ? ' · ' : '') + ocultos(c.z);
-            html += '<div' + (que ? '' : ' class="no"') + '><b>' + D.pr[p].l + '</b><span>' + (que || '—') + '</span></div>';
+            var que = resumen(c);
+            html += '<div' + (que ? '' : ' class="no"') + '>' + letraDe(D.pr[p], 'pl') + '<span>' + (que || '—') + '</span></div>';
         });
         return html;
+    }
+
+    // What a row did with one problem, in words; '' if it never tried it.
+    function resumen(c) {
+        var que = '';
+        if (c && c.q) que = 'en revisión';
+        else if (c && D.puntos && c.pts) que = num(c.pts) + ' de ' + num(c.max) + ' · ' + hora(c.t) + (c.x ? ' · primero' : '');
+        else if (lleno(c)) que = 'resuelto a las ' + hora(c.t) + (c.n > 1 ? ' · ' + veces(c.n) : '') + (c.x ? ' · primero' : '');
+        else if (c && c.pts) que = num(c.pts) + ' de ' + num(c.max) + ' puntos';
+        else if (c && c.n) que = (D.puntos ? '0 puntos, ' : '') + veces(c.n) + (D.puntos ? '' : ', sin resolver');
+        if (c && c.z) que += (que ? ' · ' : '') + ocultos(c.z);
+        return que;
+    }
+
+    /* A letter, with its little balloon: a link to its problem on the site when anybody may open it (`a`), in another
+       tab so that the scoreboard stays open; plain text while the problem is not public. The server checks again
+       there, and the snapshot does not carry the codes of the problems. */
+    function letraDe(pr, clase) {
+        var dentro = '<i class="mini" style="' + pr.estilo + '"></i><span>' + texto(pr.l) + '</span>';
+        if (clase === 'th p') dentro = '<span>' + texto(pr.l) + '</span><i class="mini" style="' + pr.estilo + '"></i>';
+        if (!pr.a) return '<span class="' + clase + '">' + dentro + '</span>';
+        return '<a class="' + clase + '" href="problema/' + encodeURIComponent(pr.l) + '" target="_blank" rel="noopener" title="Abrir el problema ' +
+            texto(pr.l) + '">' + dentro + '</a>';
     }
 
     /* Brings the row of `f` up to date, touching only what changed, and says whether it got better. With `animar`,
@@ -694,9 +819,19 @@ html.movil .pie .der { margin-left: 0; }
             verbo + (nota ? ' · ' + nota : '') + '</small></span><span class="hora">' + hora(+e[3] || 0) + '</span>'};
     }
 
+    // The submissions of the rows of the tab that is open, newest first. The server sends the last 40 of each group.
+    function envios() {
+        return D.e.filter(function (e) {
+            var f = D.porId[e[1]];
+            if (!f) return false;
+            if (D.mixto && f.e !== (division === 'eq')) return false;
+            return !D.hib || filtro === 'todos' || f.s === (filtro === 'pres');
+        }).slice(0, 40);
+    }
+
     function cinta(animar) {
-        var ol = $('cinta').firstChild, vistos = {}, previo = null;
-        D.e.forEach(function (e) {
+        var ol = $('cinta').firstChild, vistos = {}, previo = null, lista = envios();
+        lista.forEach(function (e) {
             var id = +e[0], fr = linea(e), li = lineas[id], firma, era;
             if (!fr) return;
             if (!li) {
@@ -723,12 +858,40 @@ html.movil .pie .der { margin-left: 0; }
             delete lineas[id];
         });
         var sin = ol.querySelector('.sin');
-        if (!D.e.length && !sin) ol.innerHTML = '<li class="sin">Todavía no hay envíos.</li>';
-        else if (D.e.length && sin) ol.removeChild(sin);
+        var vacio = 'Todavía no hay envíos' + (!D.hib || filtro === 'todos' ? '.' : filtro === 'pres' ? ' presenciales.' : ' en línea.');
+        if (!lista.length) {
+            if (!sin) {
+                sin = document.createElement('li');
+                sin.className = 'sin';
+                ol.appendChild(sin);
+            }
+            if (sin.textContent !== vacio) sin.textContent = vacio;
+        } else if (sin) ol.removeChild(sin);
     }
 
     // ---------- head, tabs and «following» ----------
-    var fase = null, congelado = null;
+    var fase = null, congelado = null, marcasClave = '';
+
+    // The marks under the bar: every 30 minutes in three hours on a laptop (fewer where it is narrow), none that would
+    // crowd the end or the freeze, and «Congela h:mm» where it freezes. Redrawn only when something of that changes.
+    function marcas(dur, hz) {
+        var pista = $('avance').clientWidth, clave = [dur, hz, Math.round(pista / 20)].join('|');
+        if (clave === marcasClave) return;
+        marcasClave = clave;
+        var pasos = [300, 600, 900, 1800, 3600, 5400, 7200, 10800], tope = Math.max(2, Math.floor(pista / 120)), s = pasos[pasos.length - 1];
+        for (var i = 0; i < pasos.length; i++) if (dur / pasos[i] <= tope) { s = pasos[i]; break; }
+        var html = '', x = function (k) { return k / dur * pista; };
+        for (var k = s; k < dur - 1; k += s) {
+            if (hz != null && Math.abs(x(k) - x(hz)) < 80) continue;
+            if (x(dur) - x(k) < 24) continue;
+            html += '<em style="left:' + (k / dur * 100) + '%">' + hora(k) + '</em>';
+        }
+        if (hz != null) {
+            var lado = x(hz) < 45 ? ' al-ini' : x(dur) - x(hz) < 45 ? ' al-fin' : '';
+            html += '<em class="hz' + lado + '" style="left:' + (hz / dur * 100) + '%">Congela ' + hora(hz) + '</em>';
+        }
+        $('marcas').innerHTML = html;
+    }
 
     function cabecera() {
         if (!D) return;
@@ -743,23 +906,23 @@ html.movil .pie .der { margin-left: 0; }
         if (estadoEl.lastChild.textContent !== rotulo) estadoEl.lastChild.textContent = rotulo;
         $('reloj').textContent = f === 'antes' ? reloj(ini - t) : f === 'vivo' ? reloj(fin - t) : '';
 
-        // The bar: blue up to the time it is; what runs already frozen, darker, over the striped stretch.
+        // The bar: blue up to the time it is; what runs already frozen, darker, over the striped stretch; the time over
+        // the tip while it runs (before and after, the ends already say it).
         var a = Math.min(1, Math.max(0, (t - ini) / dur)), c = corte == null ? 1 : Math.min(1, Math.max(0, (corte - ini) / dur));
         $('avance').className = 'avance' + (a > c ? ' cong' : '');
         $('zona').hidden = corte == null;
         $('zona').style.width = (1 - c) * 100 + '%';
-        $('zona-txt').textContent = corte == null ? '' : 'Congela ' + hora((corte - ini) / 1000);
         $('hecho').style.width = Math.min(a, c) * 100 + '%';
         $('hielo').style.left = c * 100 + '%';
         $('hielo').style.width = Math.max(0, a - c) * 100 + '%';
-        va.hidden = f === 'antes';
+        va.hidden = f !== 'vivo';
         va.style.left = a * 100 + '%';
-        va.className = a < .08 ? 'corto' : '';
         va.textContent = hora((Math.min(t, fin) - ini) / 1000);
         $('fin').textContent = hora(dur / 1000);
+        marcas(dur / 1000, corte == null ? null : c * dur / 1000);
         var aviso = cong && corte != null ? 'Congelado desde las ' + hora((corte - ini) / 1000) + ' · lo enviado después se revela al final' : '';
         if ($('aviso').textContent !== aviso) $('aviso').textContent = aviso;
-        $('tabs').hidden = !aviso && !$('pestanas').firstChild;
+        $('tabs').hidden = !aviso && !$('pestanas').firstChild && !$('extra').firstChild;
 
         // The start, the freeze and the end change what the server answers: ask at once, and once more shortly after.
         if (fase !== null && (fase !== f || congelado !== cong)) {
@@ -788,9 +951,25 @@ html.movil .pie .der { margin-left: 0; }
             html += una('filtro', 'todos', filtro === 'todos', 'Global', base.length) + una('filtro', 'pres', filtro === 'pres', 'Presencial', pres) +
                 una('filtro', 'linea', filtro === 'linea', 'En línea', base.length - pres);
         }
+        // While comparing, none of these is the open one; without any, one to go back to the scoreboard.
+        if (vista === 'comparar') html = html.replace(/(data-filtro="[a-z]+") class="activa"/g, '$1');
+        var extra = '';
+        if (comparable()) {
+            if (!html) html = '<a data-vista="marcador"' + (vista === 'marcador' ? ' class="activa"' : '') + '>Marcador</a>';
+            extra = '<a data-vista="comparar" class="' + (vista === 'comparar' ? 'activa' : 'caja') + '"><i>⇄</i>Comparar</a>';
+        } else if (COMPARAR_ANTES === 'apagada' && D.f.length > 1) {
+            // Not yet: in grey, without a box, saying when. Without other tabs, the scoreboard's own, which stays put.
+            if (!html) html = '<a class="activa fija">Marcador</a>';
+            extra = '<a class="apagada" title="Se habilita cuando termina el concurso' + (D.corte != null ? ' y se revela el marcador' : '') +
+                '"><i>⇄</i>Comparar</a>';
+        }
         if ($('pestanas')._html !== html) {
             $('pestanas')._html = html;
             $('pestanas').innerHTML = html;
+        }
+        if ($('extra')._html !== extra) {
+            $('extra')._html = extra;
+            $('extra').innerHTML = extra;
         }
     }
 
@@ -802,14 +981,14 @@ html.movil .pie .der { margin-left: 0; }
             caja._html = html;
             caja.innerHTML = html;
         }
-        caja.hidden = !html;
+        caja.hidden = !html || vista === 'comparar';
     }
 
     function fijos() {
         raiz.style.setProperty('--n', D.pr.length);
         raiz.style.setProperty('--nm', D.pr.length > 18 ? Math.ceil(D.pr.length / 2) : Math.max(1, D.pr.length));
         $('letras').innerHTML = '<span class="th">#</span><span class="th izq">Participante</span><div class="globos">' +
-            D.pr.map(function (p) { return '<span class="th p">' + p.l + '<i class="mini" style="' + p.estilo + '"></i></span>'; }).join('') +
+            D.pr.map(function (p) { return letraDe(p, 'th p'); }).join('') +
             '</div><span class="th">' + (D.puntos ? 'Pts.' : 'Res.') + '</span><span class="th">Min.</span>';
         var azul = '--c:#1e9fd3;--b:#1677a0';
         var m = function (clase, cuanto, dentro, que, estrella) {
@@ -836,8 +1015,254 @@ html.movil .pie .der { margin-left: 0; }
         raiz.style.setProperty('--cola', ancho >= tabla + 380 ? '280px' : '236px');
     }
 
+    // ---------- comparing two: once the contest is over and nothing is frozen (the server says so: `cmp`) ----------
+    // Before that the tab shows greyed where there are tabs anyway ('apagada'); 'oculta' would show it only then.
+    var COMPARAR_ANTES = 'apagada';
+    var vista = 'marcador', parA = null, parB = null, cmpFirma = '';
+
+    function comparable() { return !!(D && D.cmp && D.pr.length && D.f.length > 1); }
+
+    // Board or comparison, after every snapshot: the comparison goes away by itself if it can no longer be drawn.
+    function mostrar() {
+        if (vista === 'comparar' && !comparable()) {
+            vista = 'marcador';
+            pestanas();
+            quitarHash();
+        }
+        var hay = !!(D.pr.length && D.f.length);
+        $('dos').hidden = !hay || vista === 'comparar';
+        $('comparar').hidden = !hay || vista !== 'comparar';
+        $('siguiendo').hidden = !$('siguiendo').firstChild || vista === 'comparar';
+        if (vista === 'comparar') comparar();
+    }
+
+    function ver(v, a, b) {
+        vista = v === 'comparar' && comparable() ? 'comparar' : 'marcador';
+        if (a != null) parA = a;
+        if (b !== undefined) parB = b;
+        cmpFirma = '';
+        if (vista === 'marcador') quitarHash();
+        repintar();
+    }
+
+    function quitarHash() {
+        if (/^#comparar-/.test(location.hash) && window.history && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
+    }
+
+    // The rows that can be compared: all of them, or those of the division that is open (teams and individuals do
+    // not share places). Each one with its place among them, as on the board.
+    function candidatos() {
+        var filas = D.f;
+        if (D.mixto) filas = filas.filter(function (f) { return f.e === (division === 'eq'); });
+        rangos(filas, 'cl');
+        return filas;
+    }
+
+    // Whom to compare at first: the one followed, or the first; against the one just above (or the second).
+    function elegirPar(lista) {
+        var ids = lista.map(function (f) { return f.i; }), k;
+        if (ids.indexOf(parA) < 0) parA = seguido && ids.indexOf(seguido) >= 0 ? seguido : ids[0];
+        if (ids.indexOf(parB) < 0 || parB === parA) {
+            k = ids.indexOf(parA);
+            parB = ids[k > 0 ? k - 1 : 1];
+        }
+    }
+
+    function comparar() {
+        var lista = candidatos();
+        if (lista.length < 2) { vista = 'marcador'; mostrar(); return; }
+        elegirPar(lista);
+        var caja = $('comparar'), firma = [marca, parA, parB, caja.clientWidth, division, raiz.className].join('|');
+        if (firma === cmpFirma) return;
+        cmpFirma = firma;
+        var a = D.porId[parA], b = D.porId[parB];
+        caja.innerHTML = selectores(lista) + fichas(a, b) + grafica(a, b) + porProblema(a, b);
+        prepararGrafica(a, b);
+        if (window.history && history.replaceState) history.replaceState(null, '', '#comparar-' + parA + '-' + parB);
+    }
+
+    function selectores(lista) {
+        var opciones = function (sel) {
+            return lista.map(function (f) {
+                return '<option value="' + f.i + '"' + (f.i === sel ? ' selected' : '') + '>' + f.cl + '.º  ' + texto(f.n) + (f.r ? ' · ' + texto(f.r) : '') + '</option>';
+            }).join('');
+        };
+        return '<div class="cmp-elige"><label class="cmp-sel" style="--s:var(--sa)"><i class="linea"></i><select id="cmp-a" aria-label="Primera persona">' +
+            opciones(parA) + '</select></label><button type="button" class="cmp-cambia" data-cambiar="1" title="Intercambiar">⇄</button>' +
+            '<label class="cmp-sel" style="--s:var(--sb)"><i class="linea"></i><select id="cmp-b" aria-label="Segunda persona">' + opciones(parB) + '</select></label></div>';
+    }
+
+    // How long each one was strictly ahead, from their histories (ties count for nobody).
+    function alFrente(a, b) {
+        var horas = [0], va = 0, vb = 0, ia = 0, ib = 0, fa = 0, fb = 0, fin = D.dur || (D.fin - D.ini) / 1000, i, t, sig;
+        a.h.concat(b.h).forEach(function (s) { horas.push(+s[0]); });
+        horas.push(fin);
+        horas.sort(function (x, y) { return x - y; });
+        for (i = 0; i < horas.length - 1; i++) {
+            t = horas[i];
+            while (ia < a.h.length && +a.h[ia][0] <= t) va = +a.h[ia++][2];
+            while (ib < b.h.length && +b.h[ib][0] <= t) vb = +b.h[ib++][2];
+            sig = Math.min(horas[i + 1], fin) - t;
+            if (sig <= 0) continue;
+            if (va > vb + 1e-9) fa += sig;
+            else if (vb > va + 1e-9) fb += sig;
+        }
+        return [fa, fb];
+    }
+
+    function fichas(a, b) {
+        var frente = a.h && b.h ? alFrente(a, b) : null;
+        var una = function (f, color, k) {
+            return '<div class="cmp-ficha" style="--s:' + color + '">' + fotos(f, 3, true) + '<span class="nombres"><span class="nombre">' + texto(f.n) +
+                '</span><span class="real">' + texto(f.r) + '</span></span><span class="cmp-datos"><b>' + f.cl + '.º</b>' + totalLargo(f) +
+                '<small>' + Math.floor(f.t / 60) + ' min' + (frente ? ' · ' + hora(frente[k]) + ' al frente' : '') + '</small></span></div>';
+        };
+        return '<div class="cmp-fichas">' + una(a, 'var(--sa)', 0) + '<span class="cmp-vs">vs</span>' + una(b, 'var(--sb)', 1) + '</div>' +
+            '<p class="cmp-dice">' + quienArriba(a, b) + '</p>';
+    }
+
+    // One sentence with who ended above and by how much, from the scoreboard itself (never from the chart).
+    function quienArriba(a, b) {
+        if (a.cl === b.cl) return 'Quedaron empatados en el ' + a.cl + '.º lugar.';
+        var arriba = a.cl < b.cl ? a : b, abajo = arriba === a ? b : a, d, por;
+        if (D.puntos) {
+            d = Math.round((arriba.p - abajo.p) * 1000) / 1000;
+            por = d > 0 ? 'por ' + num(d) + (d === 1 ? ' punto' : ' puntos') : 'con los mismos puntos, por menos tiempo';
+        } else {
+            d = arriba.res - abajo.res;
+            por = d > 0 ? 'por ' + d + (d === 1 ? ' problema' : ' problemas') : 'con los mismos resueltos, por menos penalización';
+        }
+        return '<b>' + texto(arriba.n) + '</b> quedó arriba de <b>' + texto(abajo.n) + '</b> ' + por + '.';
+    }
+
+    function valorEn(h, t) {
+        var v = 0;
+        for (var i = 0; i < h.length && +h[i][0] <= t; i++) v = +h[i][2];
+        return v;
+    }
+
+    function pasos(max) {
+        var opciones = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000], paso = opciones[opciones.length - 1], i, v, out = [];
+        for (i = 0; i < opciones.length; i++) if (max / opciones[i] <= 5) { paso = opciones[i]; break; }
+        for (v = 0; ; v += paso) { out.push(v); if (v >= max - 1e-9) break; }
+        return out;
+    }
+
+    // The chart: how each one's score rose during the contest, as steps, with the frozen stretch striped.
+    var G = null;
+
+    function grafica(a, b) {
+        if (!a.h || !b.h) { G = null; return ''; }
+        var ancho = Math.max(280, $('comparar').clientWidth - 2), alto = raiz.className === 'movil' ? 210 : 270;
+        var m = {l: 42, r: 16, t: 16, b: 26}, dur = Math.max(60, D.dur || (D.fin - D.ini) / 1000);
+        var tope = Math.max(1, valorEn(a.h, dur), valorEn(b.h, dur)), ys = pasos(tope), ymax = ys[ys.length - 1];
+        var x = function (s) { return m.l + (ancho - m.l - m.r) * Math.min(1, Math.max(0, s / dur)); };
+        var y = function (v) { return m.t + (alto - m.t - m.b) * (1 - v / ymax); };
+        G = {a: a, b: b, x: x, y: y, dur: dur, m: m, ancho: ancho, alto: alto};
+        var s = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" height="' + alto + '" role="img" aria-label="' + (D.puntos ? 'Puntos' : 'Resueltos') + ' durante el concurso">' +
+            '<defs><pattern id="cmp-rayas" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#f3f8fd"/><rect width="4" height="8" fill="#e2eefa"/></pattern></defs>';
+        if (D.hielo != null && D.hielo < dur) {
+            s += '<rect x="' + x(D.hielo) + '" y="' + m.t + '" width="' + (x(dur) - x(D.hielo)) + '" height="' + (alto - m.t - m.b) + '" fill="url(#cmp-rayas)"/>' +
+                '<text class="hielo" x="' + (x(D.hielo) + 5) + '" y="' + (alto - m.b - 7) + '">Congelado</text>';
+        }
+        ys.forEach(function (v) {
+            s += '<line x1="' + m.l + '" x2="' + (ancho - m.r) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="' + (v ? '#ececec' : '#c8c8c8') + '" stroke-width="1"/>' +
+                '<text x="' + (m.l - 7) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>';
+        });
+        var cada = [10, 15, 20, 30, 60, 90, 120, 180, 240, 360].map(function (n) { return n * 60; }), paso = cada[cada.length - 1], i, tt;
+        for (i = 0; i < cada.length; i++) if (dur / cada[i] <= Math.max(2, (ancho - m.l - m.r) / 70)) { paso = cada[i]; break; }
+        for (tt = 0; tt <= dur + 1; tt += paso) s += '<text x="' + x(tt) + '" y="' + (alto - 8) + '" text-anchor="' + (tt === 0 ? 'start' : 'middle') + '">' + hora(tt) + '</text>';
+        var linea = function (h, color) {
+            var d = 'M' + x(0) + ' ' + y(0), puntos = '';
+            h.forEach(function (st) {
+                d += 'H' + x(+st[0]) + 'V' + y(+st[2]);
+                puntos += '<circle cx="' + x(+st[0]) + '" cy="' + y(+st[2]) + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2"/>';
+            });
+            return '<path d="' + d + 'H' + x(dur) + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + puntos;
+        };
+        // The one ahead at the end is drawn last, on top.
+        s += valorEn(a.h, dur) >= valorEn(b.h, dur) ? linea(b.h, '#d35400') + linea(a.h, '#2980b9') : linea(a.h, '#2980b9') + linea(b.h, '#d35400');
+        s += '<line id="cmp-cruz" x1="0" x2="0" y1="' + m.t + '" y2="' + (alto - m.b) + '" stroke="#3b3b3b" stroke-width="1" opacity=".45" visibility="hidden"/>' +
+            '<circle id="cmp-pa" r="5" fill="#2980b9" stroke="#fff" stroke-width="2" visibility="hidden"/><circle id="cmp-pb" r="5" fill="#d35400" stroke="#fff" stroke-width="2" visibility="hidden"/>' +
+            '<rect id="cmp-zona" x="' + m.l + '" y="0" width="' + (ancho - m.l - m.r) + '" height="' + alto + '" fill="transparent"/></svg>';
+        return '<div class="cmp-caja"><h3>' + (D.puntos ? 'Puntos' : 'Problemas resueltos') + ' durante el concurso</h3><div class="cmp-lectura" id="cmp-lectura"></div>' +
+            '<div class="cmp-lienzo" id="cmp-lienzo">' + s + '</div></div>';
+    }
+
+    // The line above the chart says the values: at the end, or at the time under the pointer (no box over the chart).
+    function lectura(t) {
+        if (!G) return;
+        var fin = t == null, cuando = fin ? G.dur : t, va = valorEn(G.a.h, cuando), vb = valorEn(G.b.h, cuando);
+        var una = function (f, v, color) {
+            return '<span><i class="linea" style="--s:' + color + '"></i><b>' + (D.puntos ? num(v) : v) + '</b>' + texto(f.n) + '</span>';
+        };
+        $('cmp-lectura').innerHTML = '<span class="cmp-t">' + (fin ? 'Al final' : 'A las ' + hora(cuando)) + '</span>' + una(G.a, va, 'var(--sa)') + una(G.b, vb, 'var(--sb)');
+        var cruz = $('cmp-cruz'), pa = $('cmp-pa'), pb = $('cmp-pb');
+        [cruz, pa, pb].forEach(function (el) { el.setAttribute('visibility', fin ? 'hidden' : 'visible'); });
+        if (fin) return;
+        cruz.setAttribute('x1', G.x(cuando));
+        cruz.setAttribute('x2', G.x(cuando));
+        pa.setAttribute('cx', G.x(cuando));
+        pa.setAttribute('cy', G.y(va));
+        pb.setAttribute('cx', G.x(cuando));
+        pb.setAttribute('cy', G.y(vb));
+    }
+
+    function prepararGrafica() {
+        if (!G) return;
+        lectura(null);
+        var zona = $('cmp-zona'), svg = zona.ownerSVGElement;
+        var mover = function (ev) {
+            var r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * G.ancho / r.width;
+            var s = (px - G.m.l) / (G.ancho - G.m.l - G.m.r) * G.dur;
+            lectura(Math.max(0, Math.min(G.dur, Math.round(s / 60) * 60)));
+        };
+        zona.addEventListener('pointermove', mover);
+        zona.addEventListener('pointerdown', mover);
+        zona.addEventListener('pointerleave', function () { lectura(null); });
+    }
+
+    // Problem by problem: what each one did, the better of the two in bold (more points, or the same sooner).
+    function porProblema(a, b) {
+        var html = '<div class="cmp-caja"><h3>Problema por problema</h3><div class="cmp-tabla"><div class="cmp-fila cab"><div></div>' +
+            '<div><i class="linea" style="--s:var(--sa)"></i>' + texto(a.n) + '</div><div><i class="linea" style="--s:var(--sb)"></i>' + texto(b.n) + '</div></div>';
+        D.pr.forEach(function (pr, p) {
+            var ca = alcanzado(a, p), cb = alcanzado(b, p), pa = ca ? ca.pts : 0, pb = cb ? cb.pts : 0, gana = 0;
+            if (pa > pb + 1e-9) gana = 1;
+            else if (pb > pa + 1e-9) gana = 2;
+            else if (pa > 0 && ca.t !== cb.t) gana = ca.t < cb.t ? 1 : 2;
+            var lado = function (c, mia) {
+                var que = resumen(c);
+                return '<div class="' + (!que ? 'nadie' : gana === mia ? 'mejor' : '') + '">' + (que ? celda(c, p, '') : '') + '<span>' + (que || '—') + '</span></div>';
+            };
+            html += '<div class="cmp-fila"><div>' + letraDe(pr, 'pl') + '</div>' + lado(ca, 1) + lado(cb, 2) + '</div>';
+        });
+        return html + '</div></div>';
+    }
+
+    /* A cell with the time at which its best score was reached, from the history: by points the scoreboard keeps the
+       time of the last submission to the problem, even a worse one, and the chart above rises when the score did. */
+    function alcanzado(f, p) {
+        var c = f.cel[p], t = null, copia = {}, k;
+        if (!c || !f.h) return c;
+        f.h.forEach(function (s) { if (+s[1] === p) t = +s[0]; });
+        if (t === null) return c;
+        for (k in c) copia[k] = c[k];
+        copia.t = t;
+        return copia;
+    }
+
+    function leerHash() {
+        var m = /^#comparar-(\d+)-(\d+)$/.exec(location.hash);
+        if (!m || !comparable() || !D.porId[+m[1]] || !D.porId[+m[2]] || +m[1] === +m[2]) return;
+        var a = D.porId[+m[1]];
+        if (D.mixto) division = a.e ? 'eq' : 'ind';
+        ver('comparar', +m[1], +m[2]);
+    }
+
     // ---------- drawing a snapshot ----------
-    function forma(d) { return JSON.stringify([d.pr.map(function (p) { return [p.l, p.c, p.m]; }), d.icpc]); }
+    // A problem that goes public changes the letters too: the head is drawn again.
+    function forma(d) { return JSON.stringify([d.pr.map(function (p) { return [p.l, p.c, p.m, p.a]; }), d.icpc]); }
 
     function pintar(viejo, animar) {
         var mejora = false, nota = '';
@@ -860,7 +1285,7 @@ html.movil .pie .der { margin-left: 0; }
         else if (!D.f.length) nota = 'Todavía no entra nadie al concurso.';
         $('nota').textContent = nota;
         $('nota').hidden = !nota;
-        $('dos').hidden = !D.pr.length || !D.f.length;
+        mostrar();
 
         D.f.forEach(function (f) {
             var nueva = !nodos[f.i];
@@ -896,6 +1321,8 @@ html.movil .pie .der { margin-left: 0; }
         pestanas();
         D.f.forEach(function (f) { actualizar(f, null, false); });
         ordenar(false);
+        cinta(false);
+        mostrar();
     }
 
     var cambios = 0;
@@ -945,6 +1372,7 @@ html.movil .pie .der { margin-left: 0; }
                 $('nota').textContent = 'Este marcador ya no está disponible.';
                 $('nota').hidden = false;
                 $('dos').hidden = true;
+                $('comparar').hidden = true;
             } else if (d) recibir(d);
         }).catch(function () {
             fallos++;
@@ -1047,9 +1475,26 @@ html.movil .pie .der { margin-left: 0; }
         var el = ev.target, n;
         if (!D || !el.closest) return;
         if ((n = el.closest('[data-filtro]'))) {
-            if (filtro !== n.getAttribute('data-filtro')) { filtro = n.getAttribute('data-filtro'); repintar(); }
+            if (filtro !== n.getAttribute('data-filtro') || vista !== 'marcador') { filtro = n.getAttribute('data-filtro'); ver('marcador'); }
         } else if ((n = el.closest('[data-division]'))) {
-            if (division !== n.getAttribute('data-division')) { division = n.getAttribute('data-division'); repintar(); }
+            if (division !== n.getAttribute('data-division')) {
+                division = n.getAttribute('data-division');
+                ver(vista);
+            } else if (vista !== 'marcador') ver('marcador');
+        } else if ((n = el.closest('[data-vista]'))) {
+            if (vista !== n.getAttribute('data-vista')) {
+                ver(n.getAttribute('data-vista'));
+                window.scrollTo(0, 0);
+            }
+        } else if ((n = el.closest('[data-comparar]'))) {
+            ver('comparar', +n.getAttribute('data-comparar'), null);
+            window.scrollTo(0, 0);
+        } else if (el.closest('[data-cambiar]')) {
+            var era = parA;
+            parA = parB;
+            parB = era;
+            cmpFirma = '';
+            comparar();
         } else if (el.closest('[data-dejar]')) seguir(seguido);
         else if ((n = el.closest('[data-seguir]'))) seguir(+n.getAttribute('data-seguir'));
         else if ((n = el.closest('.fila'))) {
@@ -1059,6 +1504,21 @@ html.movil .pie .der { margin-left: 0; }
             if (D.porId[id]) actualizar(D.porId[id], null, false);
         } else if ((n = el.closest('#cinta'))) n.classList.toggle('abierta');
     });
+
+    document.addEventListener('change', function (ev) {
+        var el = ev.target, v = +el.value;
+        if (!D || (el.id !== 'cmp-a' && el.id !== 'cmp-b') || !D.porId[v]) return;
+        if (el.id === 'cmp-a') {
+            if (v === parB) parB = parA;
+            parA = v;
+        } else {
+            if (v === parA) parA = parB;
+            parB = v;
+        }
+        cmpFirma = '';
+        comparar();
+    });
+    window.addEventListener('hashchange', function () { if (D) leerHash(); });
 
     document.addEventListener('visibilitychange', function () {
         if (document.hidden) { clearTimeout(turno); return; }
@@ -1072,11 +1532,17 @@ html.movil .pie .der { margin-left: 0; }
     var redibujo = null;
     window.addEventListener('resize', function () {
         if (redibujo) return;
-        redibujo = setTimeout(function () { redibujo = null; if (D) modo(); }, 120);
+        redibujo = setTimeout(function () {
+            redibujo = null;
+            if (!D) return;
+            modo();
+            if (vista === 'comparar') comparar();
+        }, 120);
     });
 
     // ---------- start ----------
     try { recibir(JSON.parse($('datos').textContent)); } catch (e) { D = null; marca = ''; }
+    if (D) leerHash();
     (function tic() {
         cabecera();
         setTimeout(tic, 1000 - (ahora() % 1000) + 8);

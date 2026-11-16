@@ -1,6 +1,7 @@
-"""The two addresses of the public scoreboard of a contest (2026-11-10): the page and the snapshot it draws.
+"""The addresses of the public scoreboard of a contest (2026-11-10): the page and the snapshot it draws, and
+(2026-11-15) where a letter of it leads.
 
-Both skip the whole middleware chain (ShortCircuitMiddleware): no session, no account, no language. So neither may
+The page and the snapshot skip the whole middleware chain (ShortCircuitMiddleware): no session, no account, no language. So neither may
 raise — the error pages of the site need what the chain puts on the request — and both answer with plain responses.
 What they answer is in judge/public_scoreboard.py.
 """
@@ -9,10 +10,12 @@ import logging
 import time
 
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect
 from django.template.loader import get_template
+from django.urls import reverse
 
 from judge import public_scoreboard
+from judge.utils.views import generic_message
 
 logger = logging.getLogger('judge.public_scoreboard')
 
@@ -87,6 +90,28 @@ def page(request, contest):
         logger.exception('public scoreboard: could not render the page of %r', contest)
         return _plain('El marcador no está disponible en este momento. Vuelve a intentar en un minuto.', 503)
     return _headers(HttpResponse(html, content_type='text/html; charset=utf-8'))
+
+
+def problem(request, contest, letter):
+    """A letter of the scoreboard (2026-11-15): to its problem on the site, for whoever may open it there. This one
+    goes through the whole chain, session included, because who asks decides. Whoever may not open it gets the same
+    page whatever the reason (no such letter, not started yet, a problem only for those competing)."""
+    try:
+        scoreboard, code = public_scoreboard.problem_code(contest, letter, request.user)
+    except Exception:
+        logger.exception('public scoreboard: could not look up letter %r of %r', letter, contest)
+        return _plain('El marcador no está disponible en este momento. Vuelve a intentar en un minuto.', 503)
+    if not scoreboard:
+        return _plain('Este concurso no tiene marcador público.', 404)
+    if code is None:
+        response = generic_message(request, 'Problema no disponible',
+                                   'Por ahora sólo lo ven quienes participan en el concurso.', status=404)
+    else:
+        response = HttpResponseRedirect(reverse('problem_detail', args=[code]))
+    # Whoever asks may join the contest, or the problem may be made public: no browser keeps the answer.
+    response['Cache-Control'] = 'no-store'
+    response['X-Robots-Tag'] = 'noindex, nofollow'
+    return response
 
 
 data.short_circuit_middleware = True
