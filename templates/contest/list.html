@@ -115,6 +115,11 @@
             {% set duration=contest.contest_window_length|timedelta('localized-no-seconds') %}
             {{ _('%(duration)s long', duration=duration) }}
         {% endif %}
+        {# Its public scoreboard, when whoever organizes turned it on (2026-11-16): until now the page had no way in
+           but knowing its address. #}
+        {% if contest.public_scoreboard %}
+            · <a href="{{ url('public_scoreboard', contest.key) }}" class="public-scoreboard-link">{{ _('Public scoreboard') }}</a>
+        {% endif %}
     </div>
 {% endmacro %}
 

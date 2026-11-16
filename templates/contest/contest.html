@@ -112,6 +112,11 @@
     {% if contest.participation_mode != 'individual' %} · {{ _('Integrantes por equipo: %(minimum)s a %(maximum)s.', minimum=contest.team_min_size, maximum=contest.team_max_size) }}{% endif %}
     {% if contest.attendance_mode != 'online' %} · {{ contest.get_attendance_mode_display() }}{% endif %}
     {% if contest.is_hybrid and live_participation %} · {{ _('Compites') }}: <strong>{{ _('Presencial') if live_participation.onsite else _('En línea') }}</strong>{% endif %}</p>
+    {# Its public scoreboard, with the address to share (2026-11-16). #}
+    {% if contest.public_scoreboard %}
+        {% set scoreboard_url = url('public_scoreboard', contest.key) %}
+        <p class="public-scoreboard-line"><strong>{{ _('Public scoreboard') }}:</strong> <a href="{{ scoreboard_url }}">{{ request.get_host() }}{{ scoreboard_url }}</a></p>
+    {% endif %}
     {% include "contest/registration-box.html" %}
     {# Registered and not started yet, the countdown of the banner opens the box that asks whether to enter
        (contest/enter-countdown.html). The start and the end are asked to the contest, as its countdowns: the `now` of

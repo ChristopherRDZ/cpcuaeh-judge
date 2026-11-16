@@ -23,7 +23,7 @@ presents them, with the date each one was added.
 | Announcements right away | Inside a contest, announcements and answers pop up at once through a text-free ring of the event daemon, titled with the contest's name. Authors and curators post them from the Clarifications tab and no longer ask questions. 2026-11-01 |
 | Registering others | The Registered tab of every contest registers accounts and teams ahead, also after the start, without the access code; teams through a page of their members. Organizers remove registrations that have not entered. Migration `0164`. 2026-11-05 |
 | Rating by attendance | On site and online contests choose who gets a rating: everybody, on site only or online only. Migration `0164`. 2026-11-05 |
-| Public scoreboard | `/marcador/<key>/` for anybody, without an account, in contests that tick its box, also private or hidden ones: a podium, a balloon per problem and the latest submissions, live and following the freeze; problems only by their letter. Fixed Spanish text. Migration `0168`. 2026-11-10 |
+| Public scoreboard | `/marcador/<key>/` for anybody, without an account, in contests that tick its box, also private or hidden ones: a podium, a balloon per problem and the latest submissions, live and following the freeze; problems only by their letter. Fixed Spanish text. The contest list and the contest's page link to it. Migration `0168`. 2026-11-10 |
 | Comparing on the public scoreboard | Once a contest is over and unfrozen, a Compare tab charts how two rows went up. Letters link to problems that are public; the list of submissions follows the tab; a new time bar. 2026-11-15 |
 
 ## Duels

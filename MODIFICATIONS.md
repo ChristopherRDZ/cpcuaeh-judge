@@ -60,6 +60,8 @@ GNU Affero General Public License version 3.
 - Off by default: a public scoreboard box in the contest's admin page turns it
   on and alone decides, also for private and hidden contests. A clone starts
   with it off, and keeps the contest's problems, which the copy used to lose.
+- With the box ticked, the contest list links to the scoreboard next to the
+  contest's length, and the contest's page shows its address to share.
 - Once the contest is over and nothing is frozen, a Compare tab charts how two
   rows went up. A letter links to its problem only when the problem is public,
   through `/marcador/<key>/problema/<letter>`, which sends there only whoever

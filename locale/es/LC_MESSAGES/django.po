@@ -15038,3 +15038,7 @@ msgstr "Autocompletado: no"
 #: cpc 2026-11-08 autocompletado
 msgid "decided by its round"
 msgstr "lo decide su ronda"
+
+#: cpc 2026-11-16 marcador público
+msgid "Public scoreboard"
+msgstr "Marcador público"
