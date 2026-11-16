@@ -8,9 +8,10 @@ host.
 ## Configuration
 
 1. Create a dedicated ACL user for the site, with a strong password.
-2. Put the cache, Celery broker and Celery result URLs with that user in
-   `local_settings.py`. The [example](../../dmoj/local_settings.example.py) has
-   no fallback to an anonymous connection on purpose.
+2. Put the cache, Celery broker and Celery result URLs with that user in the
+   secrets file that the [example settings](../../dmoj/local_settings.example.py)
+   read (`DMOJ_REDIS_URL`, `DMOJ_CELERY_BROKER_URL`, `DMOJ_CELERY_RESULT_BACKEND`).
+   The example has no fallback to an anonymous connection on purpose.
 3. Check that the site, Celery and the bridge work with the new credentials.
 4. Disable the `default` user, and persist the ACL configuration so it survives
    a Redis restart.

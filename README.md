@@ -265,23 +265,24 @@ configured for each installation.
 ## Django 5.2
 
 This fork runs on **Django 5.2.17**, pinned in [`requirements.txt`](requirements.txt),
-with the tested django-mptt and django-compressor versions. The
+with the tested django-mptt and django-compressor versions. It needs Python 3.10
+or newer. The
 [upgrade guide](docs/django52/README.md) covers the code changes, the settings
 and how to upgrade an existing installation.
 
 ## Installation and documentation
 
-Start with a working [DMOJ installation](https://docs.dmoj.ca/#/site/installation),
-then follow [Setting up this fork](docs/setup-guide.md) for settings, migrations,
-translations, static assets, service configuration, scheduled cleanup and your
-own branding.
+Install it like DMOJ, cloning this repository instead of DMOJ's; do not install
+DMOJ first and switch. [Setting up this fork](docs/setup-guide.md) lists the
+differences, then covers settings, migrations, translations, static assets,
+services, scheduled cleanup and your own branding.
 
 | Guide | Contents |
 | --- | --- |
 | [Setup guide](docs/setup-guide.md) | Installation, configuration and verification |
 | [Fork overview](docs/fork-overview.md) | Every change relative to upstream |
 | [Django 5.2 upgrade](docs/django52/README.md) | Compatibility changes, tested dependencies and upgrade guidance |
-| [Contest tools](docs/contest-tools.md) | Registration, on site and online, freeze, reveal, balloons, announcements and clarifications |
+| [Contest tools](docs/contest-tools.md) | Registration, on site and online, freeze, reveal, balloons, announcements, clarifications and the public scoreboard |
 | [Interactive problems](docs/interactive-problems.md) | Interactors from the data page, judge requirements and verdicts |
 | [Duels](docs/duels.md) | Battles, tournaments, projectors, who organizes what, settings and limitations |
 | [Emails to users](docs/mass-email.md) | Announcements to many accounts through Resend: audiences, sending, unsubscribes, permissions |

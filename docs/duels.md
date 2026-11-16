@@ -60,7 +60,7 @@ is at `/duelos/manage/guide/`.
   problems stay with their place, counting rounds from the final, and the page
   warns before a change drops some. Rounds are named from the Final back to the
   Round of 64; each sets its games per battle (fixed once it starts), problems per
-  game, difficulty and C++ template.
+  game, difficulty, C++ template and autocomplete.
 - **Problems.** Choose them by hand for each battle and each game, even before the
   players are known, or let a *problem bank* deal them: on call, on start and after
   each game, never repeating a problem inside the tournament, optionally limited
@@ -101,8 +101,8 @@ is at `/duelos/manage/guide/`.
 
 ### Rules of a game
 
-Rules come from the tournament (*Rules*), the round (only the C++ template) and
-the battle (*Settings*), each overriding the previous one. A battle stores only
+Rules come from the tournament (*Rules*), the round (only the C++ template and
+autocomplete) and the battle (*Settings*), each overriding the previous one. A battle stores only
 what its own settings change, and a game keeps the rules it started with.
 
 | Rule | Default | Range |
@@ -117,6 +117,7 @@ what its own settings change, and a game keeps the rules it started with.
 | Show rival progress | on (points and attempts, never code) | |
 | Code on the screens | on | |
 | Start with the C++ template | off | |
+| Autocomplete code | off | |
 
 The player with more points wins; on equal points, whoever got there first, with
 the penalty added for each failed attempt before their best submission. Compile
@@ -128,6 +129,10 @@ With the **C++ template**, each problem opens in C++ (the player's own C++, else
 the newest one allowed) with a fixed `main()` and the cursor inside it; changing
 language before typing removes it. A tournament sets it per round, in the
 *Template* column of *Rounds and problems*; a quick battle, under *More rules*.
+
+**Autocomplete code** is set for the whole tournament in *Rules*; a round can
+follow it or say yes or no, and a quick battle sets it under *More rules*.
+Players can still turn it off in their editor.
 
 ### Club laptops
 

@@ -12,10 +12,10 @@ Restart=on-failure
 RestartSec=5
 UMask=0022
 Environment=HOME=/nonexistent
+# Secrets that dmoj/local_settings.example.py reads; a file only root can read.
+EnvironmentFile=/etc/dmoj/site.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PATH=/srv/dmoj/venv/bin:/usr/local/bin:/usr/bin:/bin
-Environment=DMOJ_SERVICE_LOG_DIR=/var/log/dmoj-bridge
-Environment=DMOJ_SERVICE_MEDIA_ROOT=/srv/dmoj/media/
 LogsDirectory=dmoj-bridge
 LogsDirectoryMode=0700
 BindReadOnlyPaths=/srv/dmoj/site /srv/dmoj/venv

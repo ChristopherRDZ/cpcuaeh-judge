@@ -15,10 +15,11 @@ transactional providers forbid bulk mail, and it would use up
    records in your DNS).
 2. Create an API key with **full access**. A "sending only" key cannot create
    contacts or segments, and nothing could be sent.
-3. In `dmoj/local_settings.py`:
+3. Put the key in the secrets file as `DMOJ_RESEND_API_KEY` (see the
+   [setup guide](setup-guide.md#2-private-settings)), and in
+   `dmoj/local_settings.py`:
 
    ```python
-   DMOJ_RESEND_API_KEY = 're_...'
    # Optional: first sender and reply-to. By default DEFAULT_FROM_EMAIL and SITE_ADMIN_EMAIL.
    DMOJ_MASS_EMAIL_FROM = 'Your Club <news@example.org>'
    DMOJ_MASS_EMAIL_REPLY_TO = 'contact@example.org'
@@ -34,7 +35,9 @@ transactional providers forbid bulk mail, and it would use up
    for example with two groups (see [Permissions](#permissions)). Writing alone
    does not send. The section appears in the admin menu as Emails to users, with
    **Por aprobar** (Waiting for approval), the list of unsubscribed people and
-   **Remitentes y redes** (Senders and networks) under it.
+   **Remitentes y redes** (Senders and networks) under it. On an installation
+   that sent emails before migration `0165`, give `approve_mass_email` to whoever
+   sent them: `send_mass_email` now only asks for approval.
 6. In **Remitentes y redes**, save your senders and the links of your social
    networks (see [Senders and networks](#senders-and-networks)).
 
@@ -169,8 +172,9 @@ admin, holds:
 - **Remitentes** (Senders): the addresses the form offers, one per line, as
   `Name <address>` or the address alone, all of the domain of
   `DMOJ_MASS_EMAIL_FROM`. The first one is the default. Until a list is saved it
-  holds that sender and four more addresses of the same domain, set in
-  `DEFAULT_SENDERS` in `judge/mass_email.py`.
+  holds that sender and four more of the same domain, named after this club
+  (`DEFAULT_SENDERS` in `judge/mass_email.py`): save your own list before the
+  first email.
 - **Redes sociales** (Social networks): links to Facebook, Instagram, TikTok, X,
   YouTube, Discord, WhatsApp, LinkedIn and GitHub. Those with a link show with
   their grey icon at the foot of every email; empty ones do not.

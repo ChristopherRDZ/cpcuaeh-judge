@@ -44,6 +44,11 @@ write.
 
 - **Keep secrets out of Git:** `dmoj/local_settings.py`, `websocket/config.js`,
   judge keys, database and Redis passwords, tunnel credentials.
+- **Secrets come from the environment** in `dmoj/local_settings.example.py`. The
+  units that start Django load them with `EnvironmentFile=/etc/dmoj/site.env`.
+- **Two files are copies:** `uwsgi.ini` goes to `/srv/dmoj/site/uwsgi.ini`, and
+  `websocket/config.example.js` to `websocket/config.js`. Git ignores both. The
+  event daemon also needs `npm install --prefix /srv/dmoj qu ws simplesets`.
 - **Offline compression.** With `COMPRESS_OFFLINE` on, regenerate the manifest and
   restart the web service after changing any template, stylesheet, script or
   translation catalog, or the affected pages answer 500. See

@@ -1,4 +1,4 @@
-# Contest tools: registration, freeze, reveal, balloons and clarifications
+# Contest tools: registration, freeze, reveal, balloons, clarifications and the public scoreboard
 
 Configure these tools on the contest's administration page. The contest tabs link
 to the tools the signed-in user is allowed to use.
@@ -273,14 +273,40 @@ The jury answers from the same tab or from the admin:
 Editors of the contest see a counter of unanswered questions in the navigation
 bar while they are in the contest.
 
+## Public scoreboard
+
+Tick **marcador público** (public scoreboard) in the Settings of a contest's
+admin page, and anybody can follow the contest at `/marcador/<key>/`, without an
+account: a podium, the table with a balloon per problem, and the latest
+submissions. It works for private and hidden contests too, and it ignores
+**scoreboard visibility**: the box alone decides. It shows each participant's
+username, name and profile picture, so mention it in your privacy notice.
+Problems appear only by their letter, and a letter opens the problem only for
+whoever may open it on the site. Authors, curators, testers, disqualified
+participants and virtual participations are left out.
+
+The page updates by itself through the event daemon (on HTTPS it needs
+`EVENT_DAEMON_GET_SSL`; without it, it asks every few seconds). During the
+freeze it shows the frozen standings, and later submissions only as **?**. Once
+the contest is over and nothing is frozen, **Comparar** (Compare) charts two
+rows. With the box ticked, the contest list and the contest page link to it.
+Clones start with the box off. The page is in Spanish only.
+
+## Autocomplete
+
+The editors of the submit page and the custom test suggest words of the code,
+keywords and, in C and C++, whole `#include` lines; Tab or a click picks one.
+Outside contests it is on. Inside a contest it is off unless **allow
+autocompletion** is ticked in the Settings of its admin page. Each person can
+still turn it off with the **Autocomplete** box next to the language.
+
 ## Applying the migrations
 
-The tools need migrations `0150` to `0155`, and registration and on site and
-online contests need `0162`, which only adds three columns. Registering others
-from the Registered tab and **Rated participants** need `0164`, which adds two.
-Back up the database before running them, compile the translation catalogs, and
-rebuild the offline compression manifest if you use it. See the
-[setup guide](setup-guide.md).
+These tools need migrations `0150` to `0155`; registration and on site and
+online contests, `0162`; registering others and **Rated participants**, `0164`;
+autocomplete, `0167`; the public scoreboard, `0168`. Back up the database before
+running them, compile the translation catalogs, and rebuild the offline
+compression manifest if you use it. See the [setup guide](setup-guide.md).
 
 Regression tests for the freeze, reveal and balloon code are in
 [tests/contest_features](../tests/contest_features/README.md).

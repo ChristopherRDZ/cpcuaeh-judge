@@ -4,7 +4,7 @@ Run from a clean checkout with the project's Python dependencies and GNU gettext
 (`msgfmt`) installed:
 
 ```sh
-python tests/contest_features/run.py
+python -B tests/contest_features/run.py
 ```
 
 The runner builds a temporary copy of the code without your local settings, uses

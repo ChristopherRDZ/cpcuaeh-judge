@@ -2,6 +2,7 @@
 
 Copy this file to ``dmoj/local_settings.py`` and adapt it locally. Never commit
 the resulting production file or place real credentials in this example.
+Secrets come from environment variables; see docs/setup-guide.md, section 2.
 """
 
 import os
@@ -19,7 +20,6 @@ SECURE_SSL_REDIRECT = False
 
 SITE_NAME = 'Example Judge'
 SITE_LONG_NAME = 'Example Online Judge'
-SITE_DOMAIN = 'judge.example.org'
 SITE_ADMIN_EMAIL = 'admin@example.org'
 # Domain of the canonical link and og:url of every page. Left empty, they come
 # out as https:///... and search engines cannot use them.
@@ -41,10 +41,10 @@ DATABASES = {
 
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
+        # Django's own Redis backend; it needs the `redis` package.
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         # Provision an authenticated Redis ACL user; keep the URL private.
         'LOCATION': os.environ['DMOJ_REDIS_URL'],
-        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},
     },
 }
 
@@ -52,17 +52,28 @@ CELERY_BROKER_URL = os.environ['DMOJ_CELERY_BROKER_URL']
 CELERY_RESULT_BACKEND = os.environ['DMOJ_CELERY_RESULT_BACKEND']
 
 DMOJ_PROBLEM_DATA_ROOT = '/srv/dmoj/problems'
-STATIC_ROOT = '/srv/dmoj/static'
+# Served by the /static/ location of deploy/examples/nginx.conf.
+STATIC_ROOT = '/srv/dmoj/site/static'
 MEDIA_ROOT = '/srv/dmoj/media'
+# Images uploaded from the editors go to MEDIA_ROOT/martor/; the /martor/
+# location of deploy/examples/nginx.conf serves MEDIA_ROOT under this prefix.
+MEDIA_URL = '/martor/'
 
-BRIDGED_JUDGE_ADDRESS = ('127.0.0.1', 9999)
+# A list of (host, port): the bridge listens on each one.
+BRIDGED_JUDGE_ADDRESS = [('127.0.0.1', 9999)]
+
 EVENT_DAEMON_USE = True
-EVENT_DAEMON_GET = 'http://127.0.0.1:15100/'
-EVENT_DAEMON_POST = 'http://127.0.0.1:15101/'
-EVENT_DAEMON_POLL = 'http://127.0.0.1:15102/'
+# Django publishes here: post_port of websocket/config.js, loopback only.
+EVENT_DAEMON_POST = 'ws://127.0.0.1:15101/'
+# Browsers connect here, through the /event/ and /channels/ locations of
+# deploy/examples/nginx.conf.
+EVENT_DAEMON_GET = 'ws://judge.example.org/event/'
+EVENT_DAEMON_GET_SSL = 'wss://judge.example.org/event/'
+EVENT_DAEMON_POLL = '/channels/'
+# Leave EVENT_DAEMON_KEY unset: websocket/daemon.js has no auth command, and
+# with a key nothing is published.
 
 DMOJ_SSL = 1
-DMOJ_HTTPS = True
 
 # Username(s) allowed to delete from the admin and protected from other
 # superusers. Empty means nobody can delete. See judge/admin_owner.py.
@@ -99,6 +110,8 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 DMOJ_RESEND_API_KEY = os.environ.get('DMOJ_RESEND_API_KEY')
 DMOJ_MASS_EMAIL_FROM = 'Example Judge <news@example.org>'
 DMOJ_MASS_EMAIL_REPLY_TO = SITE_ADMIN_EMAIL
+# Contacts the Resend account may keep: 1000 on the free plan, None for no limit.
+DMOJ_RESEND_CONTACT_LIMIT = 1000
 
 # Email limits; see docs/security/email.md. Keep the daily limit below your
 # provider's daily quota, or use it as a spending cap.
@@ -124,6 +137,8 @@ CPC_TEAMS_ENABLED = True
 # Active teams one account may own, and invitations one account may send per hour.
 CPC_MAX_OWNED_TEAMS = 20
 CPC_TEAM_INVITES_PER_HOUR = 20
+# Days a team invitation can still be accepted.
+CPC_TEAM_INVITATION_DAYS = 30
 
 # Duels (judge/arena); see docs/duels.md. Minutes without activity after which a
 # battle stops holding its players on the duel page, and request limits per player

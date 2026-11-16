@@ -1,10 +1,21 @@
 # Setting up this fork
 
-This guide configures the fork's contest tools, team support, duels and
-deployment controls on top of a working DMOJ installation.
+This fork installs like DMOJ. Follow the
+[DMOJ site installation guide](https://docs.dmoj.ca/#/site/installation) until
+the development server runs and a submission is judged, with the differences
+below, and then continue here. For uWSGI, Supervisor, Nginx and the event
+server, use sections 7 and 8 of this page instead.
 
-First follow the [upstream installation instructions](https://docs.dmoj.ca/) and
-verify login, problem creation and submission judging before continuing.
+- **Clone this repository, not DMOJ's** (section 1). Do not install DMOJ first
+  and switch: today's DMOJ has its own migrations `0150` to `0152`, different
+  from this fork's.
+- **Python 3.10 or newer**, for Django 5.2.17.
+- **Python packages:** besides `requirements.txt`,
+  `pip install mysqlclient redis websocket-client uwsgi`.
+- **Settings:** start from `dmoj/local_settings.example.py` (section 2), not
+  from DMOJ's sample.
+- **Redis** holds the cache, the sessions and the Celery queue. Duels need it as
+  soon as there is more than one web worker.
 
 Paths used throughout: `/srv/dmoj/site` for the checkout, `/srv/dmoj/venv` for
 the virtualenv, `/srv/dmoj/problems` for problem data, `judge.example.org` for
@@ -15,17 +26,28 @@ the host name. Substitute your own.
 ## 1. Get the code
 
 ```sh
-git clone --recursive https://github.com/ChristopherRDZ/cpcuaeh-judge.git /srv/dmoj/site
-cd /srv/dmoj/site
-git checkout cpc-production
+git clone --recursive -b cpc-production https://github.com/ChristopherRDZ/cpcuaeh-judge.git /srv/dmoj/site
 ```
 
 `--recursive` matters: `resources/libs` is a submodule and the styles do not
 build without it. If you already cloned without it, run
 `git submodule update --init --recursive`.
 
-If you are moving an existing installation, take a database dump first. Several
-of the steps below add tables.
+### Existing installations
+
+Take a database dump first, and do not load the fixtures again. Then run
+`manage.py showmigrations judge`:
+
+- If the last one is `0149_add_organization_private_problems_permission` or
+  older (DMOJ up to this fork's base, commit `97f3722e`), switch the checkout to
+  this repository, install `requirements.txt` in a new virtualenv (see the
+  [Django 5.2 guide](django52/README.md)) and continue with section 2.
+- If it lists `0150_add_performance_ceiling`, `0151_submission_is_archived` or
+  `0152_deactivate_user_permission`, your DMOJ is newer than this fork's base
+  and has migrations this fork does not have. Switching is not tested: install
+  this repository on a new database, or rehearse the move on a copy of yours.
+- From an earlier version of this fork, pull, repeat sections 3 to 5, and
+  restart the web service, Celery and the bridge.
 
 ## 2. Private settings
 
@@ -34,6 +56,14 @@ Copy the example and edit it:
 ```sh
 cp dmoj/local_settings.example.py dmoj/local_settings.py
 ```
+
+The example reads its secrets from the environment: `DJANGO_SECRET_KEY`,
+`DMOJ_DB_PASSWORD`, `DMOJ_REDIS_URL`, `DMOJ_CELERY_BROKER_URL` and
+`DMOJ_CELERY_RESULT_BACKEND`, plus the optional `DMOJ_EMAIL_USER`,
+`DMOJ_EMAIL_PASSWORD` and `DMOJ_RESEND_API_KEY`. Put them in a file only root
+can read, `/etc/dmoj/site.env`, which the [example units](../deploy/examples/systemd)
+load with `EnvironmentFile=`. Load it too before running `manage.py` by hand:
+`set -a; . /etc/dmoj/site.env; set +a`.
 
 The example carries the usual DMOJ settings plus the ones this fork adds. The
 four that matter most:
@@ -58,7 +88,7 @@ CPC_CUSTOM_TEST_MAX_PER_HOUR = 200
 ```
 
 Also set `SITE_NAME`, `SITE_LONG_NAME` and `SITE_ADMIN_EMAIL`, and review the team
-settings at the end of the example (`CPC_TEAMS_ENABLED` pauses new teams and team
+settings in the example (`CPC_TEAMS_ENABLED` pauses new teams and team
 registrations without touching existing ones). The `CPC_ARENA_*` limits for
 [duels](duels.md) after them have workable defaults. Problem and contest PDFs stay
 off until you set the two `DMOJ_PDF_*` settings; see [PDFs](pdf.md).
@@ -73,7 +103,11 @@ Set `DMOJ_CANONICAL` to your domain, for example `'judge.example.org'`. Every pa
 carries a canonical link and an `og:url` built from it; left empty, they come out
 as `https:///...`, which search engines cannot use. Point
 `TERMS_OF_SERVICE_URL` at your own terms (the registration form links it), for
-example a flat page at `'/terminos/'`.
+example a flat page at `'/terminos/'`. In the admin, set the domain under
+**Sites** to your host name too: the links in emails are built from it.
+
+If an older `local_settings.py` sets `ACE_URL`, remove it: autocomplete needs
+the Ace 1.43.3 of `dmoj/settings.py`, whose URL ends with a slash.
 
 Never commit `dmoj/local_settings.py`. It is already in `.gitignore`.
 
@@ -83,10 +117,22 @@ Never commit `dmoj/local_settings.py`. It is already in `.gitignore`.
 /srv/dmoj/venv/bin/python manage.py migrate
 ```
 
-This fork adds migrations `0150` through `0159`: announcements, clarifications,
-scoreboard freeze, balloons, teams, interactive problems, duels, emails to users,
-and the permissions for one's own and for all duels and emails. Keep the
-database backup from step 1 before applying them to an existing installation.
+This fork adds migrations `0150` to `0168`:
+
+| Migrations | For |
+| --- | --- |
+| `0150`–`0152` | announcements and clarifications |
+| `0153`, `0154` | scoreboard freeze and balloons |
+| `0155` | teams |
+| `0156` | interactive problems |
+| `0157`, `0160`, `0161`, `0163`, `0166` | duels: tables, public history, ranking, panel and projectors, cancelled tournaments |
+| `0158`, `0165` | emails to users, and their approval |
+| `0159` | permissions for one's own and for all duels and emails |
+| `0162`, `0164` | registration before the start, on site and online, registering others, who gets a rating |
+| `0167`, `0168` | autocomplete per contest, the public scoreboard |
+
+After `0165`, `send_mass_email` only asks for approval; give
+`approve_mass_email` to whoever sends. Keep the database backup from step 1.
 
 ## 4. Translations
 
@@ -109,9 +155,13 @@ is the language they were authored in. They therefore need an entry in **both**
 catalogs: an identity entry in `es` and a real translation in `en`. If you add
 strings, keep that pattern or English users will see Spanish text.
 
-Navigation bar labels are translated through the `dmoj-user` catalogs, and a
-label with no entry in the reader's language falls back to English. The duels
-label, `Duelos`, has an entry in both; give any label you add one in both too.
+Navigation bar labels are translated through the `dmoj-user` catalogs, whose
+message ids are Spanish: `Problemas`, `Envíos`, `Usuarios`, `Concursos`,
+`Compilador` (for `/custom-test/`, optional) and `Duelos`. The labels of DMOJ's
+`navbar` fixture are English and have no entry, so they stay English for
+everybody: rename them in the admin (*Navigation bar*). A label with no entry in
+the reader's language falls back to the English catalog; give any label you add
+an entry in both.
 
 ## 5. Styles and static files
 
@@ -127,8 +177,9 @@ this fork is available to every account, not only to users with the
 
 ### Offline compression
 
-If you enable `COMPRESS_OFFLINE` (recommended for a read-only deployment; see
-[offline compression](security/offline-compression.md)):
+With the example units the checkout is read-only, so offline compression is
+required: set `COMPRESS_OFFLINE = True` (see
+[offline compression](security/offline-compression.md)) and run:
 
 ```sh
 /srv/dmoj/venv/bin/python manage.py compress --force
@@ -163,7 +214,13 @@ the intended owner accounts before granting staff access.
 Bridge, event daemon, Celery and the web application all run separately. The
 [deployment examples](../deploy/examples/README.md) contain one systemd unit per
 service, each under its own unprivileged account, plus the shared namespace
-restrictions.
+restrictions. Copy [`uwsgi.ini`](../deploy/examples/uwsgi.ini) to
+`/srv/dmoj/site/uwsgi.ini` (Git ignores it); the web unit reads it from there.
+
+The event daemon is `websocket/daemon.js`. Copy `websocket/config.example.js` to
+`websocket/config.js` (Git ignores it too) and install its modules where the
+[unit](../deploy/examples/systemd/dmoj-events.service) looks for them:
+`npm install --prefix /srv/dmoj qu ws simplesets`.
 
 Judges connect to the bridge; see
 [`judge.example.yml`](../deploy/examples/judge.example.yml) and register each one
@@ -172,11 +229,13 @@ in the admin to get its key.
 [Duels](duels.md) need no service of their own, but live code, the player lock
 and their request limits live in the cache, so with several web workers the cache
 must be shared (Redis). Give organizers `manage_arena` (their own battles) or
-`manage_all_arena` (all of them) and add the `Duelos` entry to the navigation bar,
-as the guide explains.
+`manage_all_arena` (all of them), give `decide_arena_ranking` to whoever decides
+what counts for the duel ranking, and add the `Duelos` entry to the navigation
+bar, as the guide explains.
 
 [Emails to users](mass-email.md) are handed to Resend by a Celery task: Celery must
-be running, and restarted after their code or catalogs change.
+be running, and restarted after their code or catalogs change. Whoever writes
+needs `send_mass_email`; whoever sends, `approve_mass_email`.
 
 PDFs of problems and contests need [pdfoid](pdf.md), an optional extra service with
 headless Chrome. There is an [example unit](../deploy/examples/systemd/dmoj-pdfoid.service)
@@ -232,10 +291,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now dmoj-custom-test-cleanup.timer
 ```
 
-Run it once by hand first. Without `--ejecutar` it only reports:
+Run it once by hand first, as the web account and with the secrets file.
+Without `--ejecutar` it only reports:
 
 ```sh
-sudo -u dmoj-uwsgi env PYTHONDONTWRITEBYTECODE=1 HOME=/nonexistent \
+sudo systemd-run --pipe --wait -p User=dmoj-uwsgi -p EnvironmentFile=/etc/dmoj/site.env \
+    -E HOME=/nonexistent -E PYTHONDONTWRITEBYTECODE=1 \
     /srv/dmoj/venv/bin/python -B /usr/local/lib/dmoj-maintenance/cleanup_custom_tests.py
 ```
 
@@ -252,11 +313,14 @@ The fork ships with the CPC-UAEH name and artwork. To use your own:
 | Logo in the navigation bar | `resources/icons/logo.png` and `resources/icons/logo_dark.png` (dark theme) |
 | Favicons and app icons | the other images in `resources/icons/` |
 | Logo on the error page and in the README | `logo.png` in the repository root |
-| Footer text | the `Hecho por CPC-UAEH.` line in `templates/base.html` |
+| Footer text and its Instagram link | the `Hecho por CPC-UAEH.` line in `templates/base.html` |
 | Link preview description | the `og:description` default in `templates/base.html` |
 | Email design: colors, header logo, button and footer | `templates/registration/email_base.html` and `email_macros.html`; the logo is `resources/icons/logo-correo.png` |
 | Email texts | the activation, password reset and email change templates in `templates/registration/` |
 | Email footer line about the club | `templates/registration/email_base.html`, the four `templates/registration/*_email.txt`, `templates/mass_email/email.html` and `judge/mass_email.py`; see [Emails to users](mass-email.md#the-footer) |
+| Senders and social links of emails to users | **Remitentes y redes** in the admin; save your own senders before the first email, or the defaults in `DEFAULT_SENDERS` of `judge/mass_email.py` carry this club's name |
+| Examples in the email editor | the `cpcjudge.com` links in `templates/admin/judge/massemail/change_form.html` |
+| Logo of the public scoreboard | the inline `data:image/png` in `templates/contest/public-scoreboard.html`; the page is fixed Spanish text |
 | Terms and privacy notice | flat pages created from the admin (this site uses `/terminos/` and `/privacidad/`), and `TERMS_OF_SERVICE_URL` |
 | `robots.txt` | add `Sitemap: https://your-domain/sitemap.xml` at the end, with your own domain |
 | Home page text | a blog post or flat page created from the admin |
@@ -291,15 +355,18 @@ Start the services and verify these workflows:
    footer on one line, and stay that way.
 10. Request a password reset for your own account: the email arrives from your
     domain and its button points to your site. Request it twice more for the same
-    address: the third answer is the limit message.
+    address: the third answer is the limit message. Its links use the domain set
+    under Sites in the admin.
 11. In a problem statement, add a sample table (`||input`, `||output`, `||end`)
     and a formula with `$...$`; the preview and the problem page show a table and
     the formula. See [Sample tables and math](statements.md).
-12. As an organizer, open `/duelos/manage/`, create a quick battle between two
-    test accounts with a problem your judges have, call it, open a screen link in
-    another browser and start the game. Each player is kept on `/duelos/`, sees
-    the statement after the countdown and gets a verdict; the screen shows the
-    live code and the winner. `/arena/` must forward to `/duelos/`.
+12. As an organizer, open `/duelos/manage/` and create a quick battle between two
+    test accounts with a problem your judges have (*Create and send to the
+    waiting room*). Open `/proyector` in another browser, type its code under
+    *Projectors* → *Connect a projector*, and start game 1. Each player is kept
+    on `/duelos/`, sees the statement after the countdown and gets a verdict; the
+    projector shows the live code and the winner. `/arena/` must forward to
+    `/duelos/`.
 13. With pdfoid configured, open `/problem/<code>/pdf` for a public problem, and
     the contest PDF from the bottom of a contest page you organize.
 14. With a Resend key, write a draft in Emails to users and use "Save and send me
@@ -307,6 +374,28 @@ Start the services and verify these workflows:
     the unsubscribe and privacy notice links.
 15. View the source of any page: the canonical link reads
     `https://your-domain/...`, not `https:///...`.
+16. Approve the battle of step 12 in *Approve results* (`/duelos/ranking/decidir/`):
+    both players appear in `/duelos/ranking/`, which opens signed out, as
+    `/duelos/torneos/` does.
+17. Create a tournament with two test accounts, tick *Template* for its round in
+    *Rounds and problems* and start it: the player's editor opens in C++ with
+    `main()`. Then cancel it under *Something went wrong?*: both players are free
+    at once and it leaves `/duelos/torneos/`.
+18. Register for a contest that starts within the hour: the pill on *Contests*
+    counts down, and at the start a prompt asks whether to enter.
+19. In an *On site and online* contest, use the *Registered* tab to register one
+    account on site and one online: the ranking shows *Global*, *On site* and
+    *Online*, and their contest page says *The organizers registered you.*
+20. With one account that has `send_mass_email` and one with
+    `approve_mass_email`: the first saves an email with *Guardar y pedir
+    aprobación*; the second sees the envelope in the navigation bar and opens
+    *Revisar y enviar*.
+21. On a problem's submit page, outside contests, type `#inc` in C++: the editor
+    offers `#include` lines. Inside a contest without *Allow autocompletion* it
+    does not.
+22. Tick *Marcador público* in a contest's admin page: the contest list and the
+    contest page link to `/marcador/<key>/`, which opens signed out and shows a
+    new submission within seconds.
 
 ---
 
@@ -375,8 +464,13 @@ write to it.
 origin lack the `X-Forwarded-Proto: https` header that the tunnel adds. See
 [HTTPS](security/https.md).
 
-**A standalone script that starts Django dies in `logging/config.py`.** Its log
-handlers depend on the environment the service units provide. Set
+**Live updates never arrive, or submissions answer 500.** Check the
+`EVENT_DAEMON_*` settings against the example: `EVENT_DAEMON_POST` a `ws://`
+address on loopback, `EVENT_DAEMON_GET` and `EVENT_DAEMON_GET_SSL` the public
+`/event/` address, `EVENT_DAEMON_POLL` `/channels/`, and no `EVENT_DAEMON_KEY`.
+
+**A standalone script that starts Django dies in `logging/config.py`.** If your
+`LOGGING` writes to paths that only the service units provide, set
 `LOGGING_CONFIG = None` on `django.conf.settings` **before** `django.setup()`.
 Wrapping the settings in your own module does not work: `dmoj/__init__.py`
 imports Celery, and Celery reads settings while it is being imported.

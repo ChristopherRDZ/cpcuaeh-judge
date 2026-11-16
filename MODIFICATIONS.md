@@ -1,33 +1,19 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-11-15, this source includes a public live scoreboard for each
-contest, autocomplete in the code editor, a C++ template per round of a duel
-tournament, cancelling a duel tournament, a duel panel organized around the next
-step with tournaments by number of places and projectors paired with a code, a
-public history and a ranking of duels, approval before emails to users are sent,
-with senders of the site's domain, social links and pasted addresses,
-organizers who register people and teams in a contest, rating by attendance,
-registration before a contest starts,
-contests on site and online with separate standings, contest announcements that
-pop up right away, emails to many users sent through
-Resend, permissions for one's own and for all duels and emails with duel
-co-organizers, a footer line in every email about the club, a Back button in
-read-only admin forms, 1v1 duels and knockout tournaments,
-sample tables and `$...$` math in problem statements, reliable problem PDFs and
-one PDF with every statement of a contest, an event daemon that survives
-malformed messages, per-recipient and daily email limits, the visitor's real
-address behind a tunnel, redesigned account emails and icons, removal of contest
-problems by contest authors, a readable permission selector in the admin, a
-stable phone layout, interactive problems configured from the problem data page,
-team support and team contests, an owner account that restricts deletion in the
-administration interface, a dark theme available to every account, test cases
-filled in from a problem data archive, frozen scoreboards, a reveal ceremony,
-balloon operations, contest announcements and clarifications, self-refreshing
-rankings, resilient live updates, custom-test admission controls, a pre-upload
-check for problem data and the Django 5.2.17 upgrade.
-Timezone, storage/dependency and contest administration adaptations are
-documented in the [upgrade guide](docs/django52/README.md). A grouped list of
-every change is in the [fork overview](docs/fork-overview.md).
+As of 2026-11-16, this source adds to DMOJ: contests with registration before
+the start, on site and online standings, organizers who register people and
+teams, a public live scoreboard, frozen scoreboards, a reveal ceremony, balloon
+delivery, announcements, clarifications and team contests; 1v1 duels and
+knockout tournaments with a panel, projectors, a public history, a ranking and
+a C++ template per round; emails to many users through Resend, with approval;
+autocomplete in the code editor, interactive problems, sample tables and
+`$...$` math, test cases filled in from archives, problem and contest PDFs and
+a roomier custom test with limits; an owner account that restricts deletion in
+the admin, email limits, the visitor's real address behind a tunnel, a
+hardened event daemon, a dark theme for everyone, a stable phone layout, and
+the Django 5.2.17 upgrade. The sections below date each change; the
+[fork overview](docs/fork-overview.md) groups them, and the
+[upgrade guide](docs/django52/README.md) covers Django 5.2.
 
 This repository contains a modified version of
 [DMOJ](https://github.com/DMOJ/online-judge), originally distributed under the
@@ -56,7 +42,8 @@ GNU Affero General Public License version 3.
   updates by itself through the event daemon, and with the scoreboard frozen
   what was sent afterwards only shows as `?` until the reveal. Problems are
   named only by their letter; organizers, testers, disqualified participants and
-  virtual participations are left out.
+  virtual participations are left out. It shows each participant's username,
+  name and profile picture.
 - Off by default: a public scoreboard box in the contest's admin page turns it
   on and alone decides, also for private and hidden contests. A clone starts
   with it off, and keeps the contest's problems, which the copy used to lose.
@@ -78,8 +65,9 @@ GNU Affero General Public License version 3.
 - On in practice. A contest allows it with Allow autocompletion; a duel
   tournament in its Rules, each round as the tournament, yes or no, and a quick
   battle under More rules. Off by default in both.
-- Ace goes from 1.1.3 to 1.43.3 (`ACE_URL`, now with a final slash). Migration
-  `0167` adds the contest's column, false by default also in the database.
+- Ace goes from 1.1.3 to 1.43.3 (`ACE_URL`, now with a final slash; update it
+  if your settings set it). Migration `0167` adds the contest's column, false
+  by default also in the database.
 
 ## A C++ template per round in duel tournaments — 2026-11-08
 
@@ -144,18 +132,6 @@ GNU Affero General Public License version 3.
   what is pending. Fixes found while using it are in the commit message.
 - Migration `0163`. Details in [docs/duels.md](docs/duels.md).
 
-## Duel history and ranking — 2026-10-26 and 2026-10-27
-
-- Public pages for duel tournaments at `/duelos/torneos/`: started tournaments
-  shown in the history, with their bracket, live while they are played, and
-  upcoming ones announced with a date. Code, submissions and screens are never
-  public. Migration `0160`, with the `hide_arena_history` permission.
-- A Glicko-2 ranking at `/duelos/ranking/`. Everything starts as pending; only
-  someone with the new `judge.decide_arena_ranking` permission decides what
-  counts, also when creating it. Byes, walkovers, cancelled battles and battles
-  with typed names never count. The ranking is recalculated on each change.
-  Migration `0161` and the `rate_duels` command.
-
 ## Contest announcements and the Registered tab — 2026-11-01
 
 - Inside a contest, an announcement or an answer pops up right away: saving it
@@ -201,6 +177,18 @@ GNU Affero General Public License version 3.
   stricter problem data forms, password reset limits that Unicode variants no
   longer dodge, and stale signups that give way to new ones.
 - No migration. The commit messages describe each change.
+
+## Duel history and ranking — 2026-10-26 and 2026-10-27
+
+- Public pages for duel tournaments at `/duelos/torneos/`: started tournaments
+  shown in the history, with their bracket, live while they are played, and
+  upcoming ones announced with a date. Code, submissions and screens are never
+  public. Migration `0160`, with the `hide_arena_history` permission.
+- A Glicko-2 ranking at `/duelos/ranking/`. Everything starts as pending; only
+  someone with the new `judge.decide_arena_ranking` permission decides what
+  counts, also when creating it. Byes, walkovers, cancelled battles and battles
+  with typed names never count. The ranking is recalculated on each change.
+  Migration `0161` and the `rate_duels` command.
 
 ## Email footer and the admin bottom bar — 2026-10-24
 

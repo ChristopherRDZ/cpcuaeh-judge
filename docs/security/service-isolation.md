@@ -9,16 +9,17 @@ service and a shared set of restrictions in
 | Service | Account | Reads | Writes |
 | --- | --- | --- | --- |
 | Web (uWSGI) | `dmoj-uwsgi` | code, virtualenv, its settings | problem data, media, its logs and socket |
-| Celery | `dmoj-celery` | code, virtualenv, its settings, problem data | its logs |
-| Bridge | `dmoj-bridge` | code, virtualenv, its settings, problem data | its logs |
+| Celery | `dmoj-celery` | code, virtualenv, its settings, problem data | media, its logs |
+| Bridge | `dmoj-bridge` | code, virtualenv, its settings | problem data, its logs |
 | Events | `dmoj-events` | event daemon and its configuration | nothing |
 | Nginx | `dmoj-proxy` | static files, media, the web socket | its temporary directories |
 | Judges | `dmoj-judge` | judge environment, its key, problem data | private runtime state |
 
-The units use no capabilities, `NoNewPrivileges`, private `/tmp` and devices,
-read-only code and virtualenv, and hide everything a service does not need:
-home directories, other services' credentials and, on WSL, Windows files and
-interoperability.
+The web, Celery, bridge, event and Nginx units run without capabilities, with
+`NoNewPrivileges`, private `/tmp` and devices, a read-only system and checkout,
+and no access to home directories. They do not hide other services'
+credentials, so keep each one readable only by its own account, and they do not
+hide the Windows side of a WSL machine; see [WSL notes](#wsl-notes).
 
 The web socket is group-restricted (mode 660); Nginx needs to be in its group,
 without access to the application's settings.
@@ -36,9 +37,10 @@ The bridge can take a while to stop while judges are connected.
 
 ## Judges
 
-Judges accept their own restrictions (`PrivateDevices`, `ProtectKernelTunables`,
-`ProtectKernelModules`, `ProtectControlGroups`, `RestrictSUIDSGID`,
-`RestrictAddressFamilies`). Do **not** add `LockPersonality`: the executors call
+The [judge unit](../../deploy/examples/systemd/dmoj-judge@.service) uses its own
+restrictions: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`,
+`PrivateTmp`, `ProtectKernelModules`, `ProtectControlGroups`, `RestrictSUIDSGID`
+and `RestrictAddressFamilies`. Do **not** add `LockPersonality`: the executors call
 `personality(ADDR_NO_RANDOMIZE)` for consistent memory accounting, and blocking
 it changes results silently. Do not assume every web restriction fits a judge.
 

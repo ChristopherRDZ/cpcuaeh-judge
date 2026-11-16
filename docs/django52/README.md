@@ -1,7 +1,8 @@
 # Django 5.2
 
 This fork runs on **Django 5.2.17**. Upstream DMOJ at the fork's base commit used
-Django 4.2, whose extended support ended in April 2026.
+Django 4.2, whose extended support ended in April 2026. Django 5.2 needs Python
+3.10 or newer.
 
 ## What changed in the code
 
@@ -29,7 +30,7 @@ PyPI package with the same version number is not the same code.
    `STORAGES` instead of `STATICFILES_STORAGE`, no `USE_L10N`, and
    `CompressorFinder` only once.
 4. Run `manage.py migrate`. The Django upgrade itself adds no migrations; the
-   fork's features add `0150` to `0155`.
+   fork's features add `0150` to `0168`.
 5. Rebuild static files, and the offline compression manifest if you use it.
 6. Restart the web service, Celery and the bridge, and check login, a submission,
    the admin and a contest page.

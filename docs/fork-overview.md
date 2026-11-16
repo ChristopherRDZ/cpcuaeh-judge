@@ -1,7 +1,7 @@
 # What this fork adds
 
-Every change this fork makes to upstream DMOJ, grouped the way the README
-presents them, with the date each one was added.
+Every change this fork makes to upstream DMOJ, grouped by area, with the date
+each one was added.
 
 ## Contests
 
@@ -23,7 +23,7 @@ presents them, with the date each one was added.
 | Announcements right away | Inside a contest, announcements and answers pop up at once through a text-free ring of the event daemon, titled with the contest's name. Authors and curators post them from the Clarifications tab and no longer ask questions. 2026-11-01 |
 | Registering others | The Registered tab of every contest registers accounts and teams ahead, also after the start, without the access code; teams through a page of their members. Organizers remove registrations that have not entered. Migration `0164`. 2026-11-05 |
 | Rating by attendance | On site and online contests choose who gets a rating: everybody, on site only or online only. Migration `0164`. 2026-11-05 |
-| Public scoreboard | `/marcador/<key>/` for anybody, without an account, in contests that tick its box, also private or hidden ones: a podium, a balloon per problem and the latest submissions, live and following the freeze; problems only by their letter. Fixed Spanish text. The contest list and the contest's page link to it. Migration `0168`. 2026-11-10 |
+| Public scoreboard | `/marcador/<key>/` for anybody, without an account, in contests that tick its box, also private or hidden ones: a podium, a balloon per problem and the latest submissions, live and following the freeze; problems only by their letter. It shows usernames, names and profile pictures. Fixed Spanish text. The contest list and the contest's page link to it. Migration `0168`. 2026-11-10 |
 | Comparing on the public scoreboard | Once a contest is over and unfrozen, a Compare tab charts how two rows went up. Letters link to problems that are public; the list of submissions follows the tab; a new time bar. 2026-11-15 |
 
 ## Duels
@@ -32,7 +32,7 @@ presents them, with the date each one was added.
 | --- | --- |
 | 1v1 duels | First-to-solve battles, alone or as best-of-N series, with partial or all-or-nothing points and optional penalties. At `/duelos/`; `/arena/` forwards there. Migration `0157`. 2026-10-17 |
 | Tournaments | Knockout brackets of up to 64 players, seeded by hand, at random or by rating, with an optional third-place match; problems by hand or from problem banks. 2026-10-17 |
-| Organizer panel | One permission, `judge.manage_arena`; versioned actions so several organizers can work at once; a guide in Spanish. 2026-10-17 |
+| Organizer panel | Behind `judge.manage_arena` (see Own and all); versioned actions so several organizers can work at once; a guide in Spanish. 2026-10-17 |
 | Player lock | Players stay on the duel page and submit only from it while their battle lasts; expires after a period without activity. 2026-10-17 |
 | Projector screens | Secret, revocable links with combined, scoreboard, live code, statements and bracket views. 2026-10-17 |
 | Duel contests out of the lists | The hidden contest behind each game stays out of `/contests/` and the admin's contest lists, and is deleted with its game. 2026-10-19 |
@@ -115,6 +115,7 @@ presents them, with the date each one was added.
 | Visitor address behind a tunnel | Nginx takes the edge's header, from loopback only, so per-IP limits count each visitor. 2026-10-14 |
 | Error report cap | Error emails to `ADMINS` are capped per day and never use the reserve that existing accounts need. 2026-10-14 |
 | Event daemon input checks | Malformed messages, frames or long-polling URLs get an error instead of ending the daemon; message size caps. 2026-10-17 |
+
 ## Operations
 
 | Change | Notes |
