@@ -14,6 +14,7 @@ presents them, with the date each one was added.
 | Self-refreshing rankings | Polls only while the tab is visible, backs off, stops after the contest. 2026-09-15 |
 | Resilient live updates | Heartbeat in the event daemon, exponential backoff in the browser, long-polling fallback. 2026-09-15 |
 | Contest cloning | A clone keeps the freeze settings but starts unrevealed. 2026-09-21 |
+| Clones with their problems | A cloned contest keeps its problems, which the copy used to lose, and starts without a public scoreboard. 2026-11-10 |
 | Removing contest problems | Contest authors can remove a problem from a contest they edit; the problem and its submissions stay. The only exemption from the owner-only deletion lock. 2026-10-07 |
 | Contest PDF | Every statement of a contest in one PDF, for participants once it started and for organizers at any time; cached by content, rendered once at a time. 2026-10-19 |
 | Registration before the start | Register from the contest list or page; the access code is asked once. At the start a prompt on any page asks whoever registered whether to enter; nobody enters alone, and joining without registering still works. Migration `0162`. 2026-10-31 |
@@ -22,6 +23,8 @@ presents them, with the date each one was added.
 | Announcements right away | Inside a contest, announcements and answers pop up at once through a text-free ring of the event daemon, titled with the contest's name. Authors and curators post them from the Clarifications tab and no longer ask questions. 2026-11-01 |
 | Registering others | The Registered tab of every contest registers accounts and teams ahead, also after the start, without the access code; teams through a page of their members. Organizers remove registrations that have not entered. Migration `0164`. 2026-11-05 |
 | Rating by attendance | On site and online contests choose who gets a rating: everybody, on site only or online only. Migration `0164`. 2026-11-05 |
+| Public scoreboard | `/marcador/<key>/` for anybody, without an account, in contests that tick its box, also private or hidden ones: a podium, a balloon per problem and the latest submissions, live and following the freeze; problems only by their letter. Fixed Spanish text. Migration `0168`. 2026-11-10 |
+| Comparing on the public scoreboard | Once a contest is over and unfrozen, a Compare tab charts how two rows went up. Letters link to problems that are public; the list of submissions follows the tab; a new time bar. 2026-11-15 |
 
 ## Duels
 

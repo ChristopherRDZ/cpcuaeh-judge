@@ -1,9 +1,9 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-11-09, this source includes autocomplete in the code editor, a C++
-template per round of a duel tournament, cancelling a duel tournament, a duel
-panel organized around the next step with tournaments by number of places and
-projectors paired with a code, a
+As of 2026-11-15, this source includes a public live scoreboard for each
+contest, autocomplete in the code editor, a C++ template per round of a duel
+tournament, cancelling a duel tournament, a duel panel organized around the next
+step with tournaments by number of places and projectors paired with a code, a
 public history and a ranking of duels, approval before emails to users are sent,
 with senders of the site's domain, social links and pasted addresses,
 organizers who register people and teams in a contest, rating by attendance,
@@ -47,6 +47,25 @@ GNU Affero General Public License version 3.
 - Authentication using either a username or an email address.
 - A signed-in custom code testing workflow and its judge bridge support.
 - Minor registration and presentation adjustments.
+
+## Public scoreboard of a contest — 2026-11-10 and 2026-11-15
+
+- `/marcador/<key>/` shows the scoreboard of a contest to anybody, without an
+  account or a session: a podium, the whole table with a balloon per problem
+  (partial points filled up to where they got) and the latest submissions. It
+  updates by itself through the event daemon, and with the scoreboard frozen
+  what was sent afterwards only shows as `?` until the reveal. Problems are
+  named only by their letter; organizers, testers, disqualified participants and
+  virtual participations are left out.
+- Off by default: a public scoreboard box in the contest's admin page turns it
+  on and alone decides, also for private and hidden contests. A clone starts
+  with it off, and keeps the contest's problems, which the copy used to lose.
+- Once the contest is over and nothing is frozen, a Compare tab charts how two
+  rows went up. A letter links to its problem only when the problem is public,
+  through `/marcador/<key>/problema/<letter>`, which sends there only whoever
+  may open it. The list of submissions follows the tab.
+- The page is fixed Spanish text. Migration `0168` adds the contest's column,
+  false by default also in the database.
 
 ## Autocomplete in the code editor — 2026-11-09
 

@@ -152,6 +152,15 @@ register; balloons go to those on site, and the reveal ceremony presents each
 view. Each contest chooses whether everybody, only those on site or only those
 online get a rating.
 
+### Public scoreboard
+
+A contest can show its scoreboard to anybody, without an account, at
+`/marcador/<key>/`: a podium, a balloon per problem and the latest submissions,
+updated live and respecting the freeze. Organizers turn it on in the contest's
+admin page, also for private and hidden contests. Problems appear only by their
+letter, which links to the problem once it is public, and after the contest a
+Compare tab charts how two contestants progressed. The page is in Spanish.
+
 ## Duels
 
 First-to-solve battles between two players, alone or as best-of-N series, and
