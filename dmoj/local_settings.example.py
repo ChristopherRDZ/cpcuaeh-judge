@@ -21,6 +21,9 @@ SECURE_SSL_REDIRECT = False
 SITE_NAME = 'Example Judge'
 SITE_LONG_NAME = 'Example Online Judge'
 SITE_ADMIN_EMAIL = 'admin@example.org'
+# New profiles take this time zone, and contest times typed in the admin are
+# read in the editor's profile time zone. DMOJ's default is 'America/Toronto'.
+DEFAULT_USER_TIME_ZONE = 'America/Toronto'
 # Domain of the canonical link and og:url of every page. Left empty, they come
 # out as https:///... and search engines cannot use them.
 DMOJ_CANONICAL = 'judge.example.org'
@@ -61,6 +64,9 @@ MEDIA_URL = '/martor/'
 
 # A list of (host, port): the bridge listens on each one.
 BRIDGED_JUDGE_ADDRESS = [('127.0.0.1', 9999)]
+# Where the bridge takes submissions from the site (DMOJ's default port). Give a
+# second instance on the same host its own port here and above.
+BRIDGED_DJANGO_ADDRESS = [('127.0.0.1', 9998)]
 
 EVENT_DAEMON_USE = True
 # Django publishes here: post_port of websocket/config.js, loopback only.
@@ -74,6 +80,15 @@ EVENT_DAEMON_POLL = '/channels/'
 # with a key nothing is published.
 
 DMOJ_SSL = 1
+
+# Server errors to stderr, so they reach the service journal. Without this,
+# with DEBUG off a 500 leaves no trace anywhere.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {'django.request': {'handlers': ['console'], 'level': 'ERROR'}},
+}
 
 # Username(s) allowed to delete from the admin and protected from other
 # superusers. Empty means nobody can delete. See judge/admin_owner.py.

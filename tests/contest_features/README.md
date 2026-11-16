@@ -12,7 +12,8 @@ an in-memory SQLite database and cache, disables events and compression, and run
 the balloon, location and contest-problem removal tests plus the freeze, reveal
 and award checks. It never
 reads your private settings or connects to a live database or Redis. It prints
-the temporary directory so you can inspect it.
+the temporary directory so you can inspect it. The copy is left in place (about
+20 MB); delete it afterwards.
 
 `test_balloons.py` covers eligibility, the freeze rule, access control,
 delivery and undo, locations, escaped text, pagination, incomplete or tampered

@@ -36,7 +36,8 @@ LockPersonality=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 BindReadOnlyPaths=/srv/dmoj/site /srv/dmoj/venv
 InaccessiblePaths=-/srv/dmoj/site/.git
-ReadWritePaths=/srv/dmoj/problems /run/dmoj-web /srv/dmoj/media
+# static/CACHE: django-compressor writes the compressed CSS and JavaScript there.
+ReadWritePaths=/srv/dmoj/problems /run/dmoj-web /srv/dmoj/media /srv/dmoj/site/static/CACHE
 
 [Install]
 WantedBy=multi-user.target

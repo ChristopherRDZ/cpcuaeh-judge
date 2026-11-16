@@ -11,7 +11,8 @@ The runner builds a temporary copy of the code without your local settings, uses
 an in-memory SQLite database and cache and a temporary problem data directory,
 disables events and compression, and runs `test_interactive_problems.py`. It
 never reads your private settings, connects to a live database or Redis, or
-contacts a judge. It prints the temporary directory so you can inspect it.
+contacts a judge. It prints the temporary directory so you can inspect it. The
+copy is left in place (about 20 MB); delete it afterwards.
 
 The 23 tests post the problem data form as the browser does and cover:
 

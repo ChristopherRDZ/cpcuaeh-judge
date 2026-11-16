@@ -27,7 +27,9 @@ earlier address `/arena/…` are forwarded to the same place under `/duelos/` wi
    with one of them, plus `see_private_problem` if battles should use problems that
    are not public, and add the organizers. Superusers have every duel permission.
 4. **Add the navigation entry.** In the admin, under *Navigation bar*, add an
-   entry with key `arena`, label `Duelos`, path `/duelos/` and regex `^/duelos`.
+   entry with key `arena`, label `Duelos`, path `/duelos/`, regex `^/duelos` and
+   an order (required). With DMOJ's fixture (orders 1 to 7), `6` puts it after
+   *About*; to have it right after *Contests*, give *About* a higher order first.
    It is translated through the `dmoj-user` catalog, which has `Duelos` in both
    languages; a label with no entry in the reader's language falls back to English.
 5. **Recompile translations and, with offline compression, regenerate the

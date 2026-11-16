@@ -12,7 +12,9 @@ an in-memory SQLite database and cache, and runs every `test_*.py` here once wit
 the interface in Spanish and once in English. pdfoid is replaced by a stub that
 records what it receives, so no browser or PDF service is needed. It never reads
 your private settings or connects to a live database, Redis or pdfoid. It prints
-the temporary directory so you can inspect it.
+the temporary directory so you can inspect it. The copy is left in place (about
+20 MB); delete it afterwards. Tracebacks in the output come from failures the
+tests inject on purpose; the result is the final `OK`.
 
 The tests cover:
 

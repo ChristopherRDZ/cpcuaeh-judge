@@ -14,7 +14,9 @@ replaced by `mass_email_fake.py`, an in-memory imitation of its API (contacts,
 segments, broadcasts, cursor pagination and injected failures), and email goes
 to memory. It never reads your private settings, connects to a live database,
 Redis or Resend, or sends an email. It prints the temporary directory so you can
-inspect it.
+inspect it. The copy is left in place (about 20 MB); delete it afterwards.
+Tracebacks in the output come from failures the tests inject on purpose; the
+result is the final `OK`.
 
 The tests cover:
 

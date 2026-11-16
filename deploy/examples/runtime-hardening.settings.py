@@ -1,15 +1,15 @@
-"""Optional fragment to merge into private settings after adapting the build.
+"""Optional fragment to merge into private settings.
 
 This is not a complete settings module or an automatic deployment procedure.
-Generate and verify all compressed variants before enabling offline mode.
+Leave COMPRESS_OFFLINE off: offline compression needs a manifest generator this
+repository does not ship (docs/security/offline-compression.md).
 """
-
-COMPRESS_OFFLINE = True
 
 CPC_CUSTOM_TEST_MAX_IN_FLIGHT = 2
 CPC_CUSTOM_TEST_MAX_PER_MINUTE = 12
 CPC_CUSTOM_TEST_MAX_PER_HOUR = 200
 
-# Merge this into the existing LOGGING dictionary, preserving other handlers:
-# LOGGING['loggers']['django.request']['handlers'] = ['console', 'mail_admins']
-# Ensure 'console' is a logging.StreamHandler routed to the service journal.
+# The LOGGING of dmoj/local_settings.example.py sends django.request errors to
+# the console, which reaches the service journal. To also email them, define a
+# 'mail_admins' handler (dmoj.throttle_mail.ThrottledEmailHandler; see
+# docs/security/email.md) and add it to django.request's handlers.

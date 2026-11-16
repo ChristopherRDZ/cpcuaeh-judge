@@ -13,7 +13,9 @@ interface in Spanish, then the page and message tests again in English. Judging
 is replaced by a no-op and the bridge is simulated the way it really works: the
 submission gets its verdict and then `update_contest()` runs. It never reads your
 private settings, connects to a live database, Redis or judge, or sends an email.
-It prints the temporary directory so you can inspect it.
+It prints the temporary directory so you can inspect it. The copy is left in
+place (about 20 MB); delete it afterwards. Tracebacks in the output come from
+failures the tests inject on purpose; the result is the final `OK`.
 
 The tests cover:
 

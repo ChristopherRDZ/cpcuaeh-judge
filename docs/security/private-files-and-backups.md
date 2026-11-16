@@ -7,7 +7,7 @@
 - Keep judge keys and tunnel credentials away from the web, proxy and event
   services.
 - Make the code, the virtualenv, deployment tools and Git metadata read-only for
-  every service account.
+  every service account; only the web service writes `static/CACHE/`.
 - Editor backups, `.bak` copies and compiled bytecode of the settings contain the
   same secrets. Protect or delete them too.
 - When you replace a file, check that its owner, mode and ACLs survived. Never fix

@@ -121,7 +121,7 @@ each one was added.
 | Change | Notes |
 | --- | --- |
 | Scheduled custom-test cleanup | Removes finished tests from every account, not only from whoever submits next. 2026-09-19 |
-| Offline compression | Required for a read-only checkout; the guides explain what invalidates the manifest. 2026-09-14 |
+| Offline compression | The guides explain what invalidates the manifest, for installations that use it. 2026-09-14 |
 | Django 5.2.17 | Upgrade with timezone, storage and dependency adaptations. 2026-09-12 |
 | Reliable problem PDFs | A failed render no longer leaves an empty PDF in the cache; the PDF takes its title from the page; a patch and a unit for pdfoid. 2026-10-19 |
 

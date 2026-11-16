@@ -1,21 +1,26 @@
 # Setting up this fork
 
-This fork installs like DMOJ. Follow the
-[DMOJ site installation guide](https://docs.dmoj.ca/#/site/installation) until
-the development server runs and a submission is judged, with the differences
-below, and then continue here. For uWSGI, Supervisor, Nginx and the event
-server, use sections 7 and 8 of this page instead.
+This fork installs like DMOJ, with the
+[DMOJ site installation guide](https://docs.dmoj.ca/#/site/installation). Install
+in this order:
 
-- **Clone this repository, not DMOJ's** (section 1). Do not install DMOJ first
-  and switch: today's DMOJ has its own migrations `0150` to `0152`, different
-  from this fork's.
-- **Python 3.10 or newer**, for Django 5.2.17.
-- **Python packages:** besides `requirements.txt`,
-  `pip install mysqlclient redis websocket-client uwsgi`.
-- **Settings:** start from `dmoj/local_settings.example.py` (section 2), not
-  from DMOJ's sample.
-- **Redis** holds the cache, the sessions and the Celery queue. Duels need it as
-  soon as there is more than one web worker.
+1. DMOJ's prerequisites and database.
+2. Sections 1 to 6 below, instead of DMOJ's clone, settings, assets and database
+   steps.
+3. DMOJ's Celery, `runserver` and `runbridged` checks.
+4. Sections 7 to 9, instead of DMOJ's uWSGI, Supervisor, Nginx and event server
+   steps.
+
+Judges are a separate install
+([DMOJ: setting up a judge](https://docs.dmoj.ca/#/judge/setting_up_a_judge),
+[`judge.example.yml`](../deploy/examples/judge.example.yml)); the site guide alone
+does not get a submission judged. Do not install DMOJ itself first and switch:
+today's DMOJ has its own migrations `0150` to `0152`, different from this fork's.
+
+**Python 3.10 or newer** (tested with 3.11; 3.12 installs and passes
+`manage.py check`). On Debian and Ubuntu, `python3 -m venv` also needs
+`python3-venv`, which DMOJ's package list leaves out. Redis holds the cache, the
+sessions and the Celery queue.
 
 Paths used throughout: `/srv/dmoj/site` for the checkout, `/srv/dmoj/venv` for
 the virtualenv, `/srv/dmoj/problems` for problem data, `judge.example.org` for
@@ -27,6 +32,10 @@ the host name. Substitute your own.
 
 ```sh
 git clone --recursive -b cpc-production https://github.com/ChristopherRDZ/cpcuaeh-judge.git /srv/dmoj/site
+cd /srv/dmoj/site
+python3 -m venv /srv/dmoj/venv
+/srv/dmoj/venv/bin/pip install -r requirements.txt
+/srv/dmoj/venv/bin/pip install mysqlclient redis websocket-client uwsgi
 ```
 
 `--recursive` matters: `resources/libs` is a submodule and the styles do not
@@ -106,8 +115,23 @@ as `https:///...`, which search engines cannot use. Point
 example a flat page at `'/terminos/'`. In the admin, set the domain under
 **Sites** to your host name too: the links in emails are built from it.
 
+Set `DEFAULT_USER_TIME_ZONE` (DMOJ's default is `'America/Toronto'`): new
+profiles take it, and contest times typed in the admin are read in the editor's
+profile time zone.
+
 If an older `local_settings.py` sets `ACE_URL`, remove it: autocomplete needs
 the Ace 1.43.3 of `dmoj/settings.py`, whose URL ends with a slash.
+
+If another instance runs on the same host (a staging copy, a test), give this one
+its own value for every address: the database, `DMOJ_REDIS_URL`, both Celery
+URLs, `EVENT_DAEMON_POST` and the three ports of `websocket/config.js`,
+`BRIDGED_JUDGE_ADDRESS` and `BRIDGED_DJANGO_ADDRESS`. Otherwise it may publish
+live updates to, and send submissions through, the other instance.
+
+For the first `runserver` test over plain HTTP, set `DEBUG = True`, add the
+address you browse to `ALLOWED_HOSTS`, and set `SESSION_COOKIE_SECURE` and
+`CSRF_COOKIE_SECURE` to `False`. Otherwise pages have no styles and signing in
+fails the CSRF check. Restore the example's values before serving through HTTPS.
 
 Never commit `dmoj/local_settings.py`. It is already in `.gitignore`.
 
@@ -115,6 +139,14 @@ Never commit `dmoj/local_settings.py`. It is already in `.gitignore`.
 
 ```sh
 /srv/dmoj/venv/bin/python manage.py migrate
+```
+
+On a new database only, load DMOJ's starting data, as its guide does (`demo`
+adds sample content and a superuser `admin` whose password is `admin`; change it
+or delete that account on any site others can reach):
+
+```sh
+/srv/dmoj/venv/bin/python manage.py loaddata navbar language_small
 ```
 
 This fork adds migrations `0150` to `0168`:
@@ -163,32 +195,35 @@ everybody: rename them in the admin (*Navigation bar*). A label with no entry in
 the reader's language falls back to the English catalog; give any label you add
 an entry in both.
 
+DMOJ's `navbar` fixture also adds *About* (`/about/`) with *Status* under it.
+Neither has a catalog entry, so both stay English, and `/about/` answers 404
+until you create that flat page. Delete them, or relabel them and add the labels
+to both `dmoj-user` catalogs.
+
 ## 5. Styles and static files
 
 ```sh
 ./make_style.sh
 /srv/dmoj/venv/bin/python manage.py collectstatic --noinput
 /srv/dmoj/venv/bin/python manage.py compilejsi18n
+sudo install -d -o dmoj-uwsgi -g dmoj-uwsgi /srv/dmoj/site/static/CACHE
 ```
+
+The last line needs the `dmoj-uwsgi` account, which section 7's deployment
+examples ask you to create; create the service accounts first, or run that line
+after section 7.
 
 `make_style.sh` builds both the light and the dark stylesheet. The dark theme in
 this fork is available to every account, not only to users with the
 `test_site` permission as upstream has it.
 
-### Offline compression
-
-With the example units the checkout is read-only, so offline compression is
-required: set `COMPRESS_OFFLINE = True` (see
-[offline compression](security/offline-compression.md)) and run:
-
-```sh
-/srv/dmoj/venv/bin/python manage.py compress --force
-```
-
-Changes that affect a rendered compression block can invalidate the offline
-manifest. Regenerate it after changes to templates, stylesheets, scripts or
-translations, then restart the web service. Verify the affected pages in both
-languages; a stale manifest can cause HTTP 500 responses on specific pages.
+django-compressor builds the compressed CSS and JavaScript when a page first
+needs them and writes them to `static/CACHE/`, so the web service must be able
+to write that folder, and only that one. The last line above gives it to
+`dmoj-uwsgi`, the account of the example web unit (section 7), which lists it in
+`ReadWritePaths=`. Leave `COMPRESS_OFFLINE` off, as the example does; see
+[compression](security/offline-compression.md) for why offline compression is
+not a single command here.
 
 ## 6. The owner account
 
@@ -216,6 +251,9 @@ Bridge, event daemon, Celery and the web application all run separately. The
 service, each under its own unprivileged account, plus the shared namespace
 restrictions. Copy [`uwsgi.ini`](../deploy/examples/uwsgi.ini) to
 `/srv/dmoj/site/uwsgi.ini` (Git ignores it); the web unit reads it from there.
+To try it by hand before installing the unit, use a copy whose `uwsgi-socket`
+and `pidfile` point to a writable directory; `/run/dmoj-web` exists only while
+the unit runs.
 
 The event daemon is `websocket/daemon.js`. Copy `websocket/config.example.js` to
 `websocket/config.js` (Git ignores it too) and install its modules where the
@@ -335,13 +373,14 @@ Start the services and verify these workflows:
 
 1. The home page, in **both** languages. `Accept-Language: en` and `es`.
 2. `/problems/`, `/submissions/` and `/stats/language/` in several languages.
-   These pages carry compressed blocks that contain translated strings, which is
-   exactly where a stale offline manifest shows up.
+   These pages carry compressed blocks that contain translated strings; with
+   offline compression, that is where a stale manifest shows up.
 3. Sign in, run a custom test, and check the output is not truncated.
 4. Create a team, invite somebody, and register the team for a contest.
 5. As a problem editor, open a problem's data page and upload a zip whose files
    are named `case1.in` / `case1.out`; confirm the cases fill in by themselves.
-   Signed out, the same page must answer 403.
+   Signed out, the same page must answer 403 (Nginx's upload check answers it;
+   without Nginx in front, Django redirects to the sign-in page).
 6. `/static../robots.txt` must answer 404.
 7. Sign in as a second superuser and confirm the delete actions are **not**
    there, and that it cannot edit the owner account.
@@ -372,8 +411,9 @@ Start the services and verify these workflows:
 14. With a Resend key, write a draft in Emails to users and use "Save and send me
     a test": the copy arrives from your sender address, with the footer line and
     the unsubscribe and privacy notice links.
-15. View the source of any page: the canonical link reads
-    `https://your-domain/...`, not `https:///...`.
+15. View the source of any page served through your HTTPS front end: the
+    canonical link reads `https://your-domain/...` (over plain HTTP it reads
+    `http://`), not `https:///...`.
 16. Approve the battle of step 12 in *Approve results* (`/duelos/ranking/decidir/`):
     both players appear in `/duelos/ranking/`, which opens signed out, as
     `/duelos/torneos/` does.
@@ -403,17 +443,21 @@ Start the services and verify these workflows:
 
 | You changed | You must also |
 | --- | --- |
-| a template, stylesheet or script | regenerate the offline manifest, restart the web service |
+| a template, stylesheet or script | restart the web service (with offline compression, regenerate the manifest first) |
 | a translation catalog | `compilemessages -l es -l en`, restart the web service |
-| a `.scss` file | `./make_style.sh`, then `collectstatic`, then the manifest |
+| a `.scss` file | `./make_style.sh`, then `collectstatic` (and the manifest, with offline compression) |
 | `nginx.conf` | `nginx -t`, then reload (restart only for a `listen` change) |
 | a systemd unit | `daemon-reload`, then restart that service |
 | Python code | reload the web service; restart Celery and the bridge if their code changed |
 
 ## Troubleshooting
 
-**Pages answer 500 in some languages but not others.** Stale offline compression
-manifest. Regenerate it and restart the web service.
+**Every `manage.py` command warns about accessing the database during app
+initialization.** DMOJ's start-up code creates missing profiles; the warning is
+harmless.
+
+**Pages answer 500 in some languages but not others.** With offline
+compression, the manifest is stale. Regenerate it and restart the web service.
 
 **On some phones every page keeps growing and shrinking.** The upstream viewport
 handler in `resources/common.js` is active again. It looks up `meta#viewport`,
@@ -478,3 +522,7 @@ imports Celery, and Celery reads settings while it is being imported.
 **New `.pyc` files appear world-writable.** Set `PYTHONDONTWRITEBYTECODE=1` in
 the service units, and pass `-B` when running `manage.py` manually. Check file
 permissions separately on filesystems such as Windows drives mounted under WSL.
+
+**Every `manage.py` command warns about accessing the database during app
+initialization.** DMOJ's start-up code creates missing profiles; the warning is
+harmless.

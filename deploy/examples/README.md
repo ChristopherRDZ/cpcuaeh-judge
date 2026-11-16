@@ -20,7 +20,7 @@ They all assume the layout used in [the setup guide](../../docs/setup-guide.md):
 | --- | --- |
 | [`nginx.conf`](nginx.conf) | Front end: the visitor's address, body limits, the upload check, static files, events |
 | [`uwsgi.ini`](uwsgi.ini) | Application socket and request timeout |
-| [`runtime-hardening.settings.py`](runtime-hardening.settings.py) | Offline compression, custom-test limits, error logging |
+| [`runtime-hardening.settings.py`](runtime-hardening.settings.py) | Custom-test limits, error logging |
 | [`judge.example.yml`](judge.example.yml) | Judge configuration skeleton |
 | [`cleanup_custom_tests.py`](cleanup_custom_tests.py) | Scheduled custom-test cleanup |
 | [`systemd/`](systemd) | One unit per service, each under its own account |
@@ -49,10 +49,11 @@ write.
 - **Two files are copies:** `uwsgi.ini` goes to `/srv/dmoj/site/uwsgi.ini`, and
   `websocket/config.example.js` to `websocket/config.js`. Git ignores both. The
   event daemon also needs `npm install --prefix /srv/dmoj qu ws simplesets`.
-- **Offline compression.** With `COMPRESS_OFFLINE` on, regenerate the manifest and
-  restart the web service after changing any template, stylesheet, script or
-  translation catalog, or the affected pages answer 500. See
-  [offline compression](../../docs/security/offline-compression.md).
+- **Compression.** Leave `COMPRESS_OFFLINE` off. The web service writes the
+  compressed CSS and JavaScript to `/srv/dmoj/site/static/CACHE/`, the only
+  writable folder of the checkout (`ReadWritePaths=` in the web unit). Offline
+  compression needs a manifest generator this repository does not ship; see
+  [compression](../../docs/security/offline-compression.md).
 - **The upload route.** Keep the `auth_request` check and its internal location
   exactly as in the example, with `client_max_body_size 0` there; buffer bodies on
   disk (`/var/lib/dmoj-nginx`, from `StateDirectory=` in the unit), not in RAM. See

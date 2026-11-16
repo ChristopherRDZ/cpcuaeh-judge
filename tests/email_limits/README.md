@@ -11,7 +11,7 @@ The runner builds a temporary copy of the code without your local settings, uses
 an in-memory SQLite database, cache and mail outbox, and runs
 `test_email_limits.py`. It never reads your private settings, connects to a live
 database or Redis, or sends an email. It prints the temporary directory so you can
-inspect it.
+inspect it. The copy is left in place (about 20 MB); delete it afterwards.
 
 The tests cover:
 

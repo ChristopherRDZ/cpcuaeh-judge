@@ -10,7 +10,7 @@ up on each server; the [examples](../../deploy/examples/README.md) show one way.
 | [Redis](redis.md) | password-protected Redis for sessions, cache and Celery |
 | [Service isolation](service-isolation.md) | one account per service, systemd restrictions, judges, WSL |
 | [Private files and backups](private-files-and-backups.md) | settings, permissions, backups |
-| [Offline compression](offline-compression.md) | read-only static files and when to rebuild |
+| [Compression](offline-compression.md) | the one static folder the web service writes, and offline compression |
 | [Custom tests](custom-tests.md) | ownership, per-user limits, cleanup |
 | [Email](email.md) | per-recipient and daily limits, failed sends, sender addresses |
 | [Custom test privacy](custom-test-privacy.md) | what custom tests are hidden from |

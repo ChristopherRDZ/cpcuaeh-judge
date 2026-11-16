@@ -1,45 +1,34 @@
-# Offline compression
+# Compression of CSS and JavaScript
 
-If the checkout is read-only for the web service, as the
-[isolation guide](service-isolation.md) recommends, django-compressor cannot
-write its output while serving pages. Pages whose compressed blocks were not
-generated yet then answer **500**, and only in some languages or for some users.
-The fix is to generate everything in advance:
+django-compressor joins and minifies the CSS and JavaScript of each
+`{% compress %}` block. By default it does so when a page first needs a block,
+and writes the result under `STATIC_ROOT/CACHE/`. That is the setup these guides
+use: `COMPRESS_OFFLINE` stays off, and the web service may write that one folder
+while the rest of the checkout stays read-only
+([setup guide](../setup-guide.md#5-styles-and-static-files)).
 
-```python
-COMPRESS_OFFLINE = True
-```
+## Offline compression (advanced)
 
-```sh
-/srv/dmoj/venv/bin/python manage.py collectstatic --noinput
-/srv/dmoj/venv/bin/python manage.py compress --force
-```
+With `COMPRESS_OFFLINE = True`, every block must be generated in advance into a
+manifest, and a page whose block is missing answers 500
+(`OfflineGenerationError`). In this tree that is not a single command: the
+templates are Jinja2, so `manage.py compress` finds no blocks by default, and a
+block depends on the language and on whether the reader is signed in, so the
+manifest needs one pass per language and per context. This repository does not
+ship a generator for it.
 
-Run the build as an account that can write `static/`, then restart the web
-service. Do not make the static tree writable by the web service to avoid it.
-
-## When to rebuild
-
-Regenerate the manifest and restart the web service whenever you change:
+If you build one, regenerate the manifest and restart the web service whenever
+you change:
 
 - a template that contains a `{% compress %}` block;
 - CSS, SCSS or JavaScript in `resources/`;
 - a translation catalog or the `LANGUAGES` setting;
 - django-compressor or the minifiers (`rcssmin`, `rjsmin`).
 
-Each block is keyed by its rendered content, so editing a template **outside**
-its `{% compress %}` blocks does not invalidate the manifest. The viewport script
-and the inline styles of `templates/base.html` sit outside its blocks for that
-reason. If you edit `base.html`, either keep both blocks byte-identical or
-rebuild.
-
-A missing variant answers `OfflineGenerationError` (HTTP 500) on the affected
-page. After a rebuild, load the home page, `/problems/`, `/submissions/` and
-`/stats/language/` in each language (`Accept-Language`), signed out and signed
-in.
-
-The compressed blocks depend on the template context, so make sure the build
-covers every language you serve and both anonymous and signed-in users.
+Editing a template **outside** its `{% compress %}` blocks does not invalidate
+the manifest. After a rebuild, load the home page, `/problems/`, `/submissions/`
+and `/stats/language/` in each language (`Accept-Language`), signed out and
+signed in.
 
 On WSL, files written into a Windows drive from Linux may lose their ownership
 attributes; check the result after publishing a build.
