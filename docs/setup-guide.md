@@ -189,13 +189,13 @@ strings, keep that pattern or English users will see Spanish text.
 
 Navigation bar labels are translated through the `dmoj-user` catalogs, whose
 message ids are Spanish: `Problemas`, `Envíos`, `Usuarios`, `Concursos`,
-`Compilador` (for `/custom-test/`, optional) and `Duelos`. The labels of DMOJ's
-`navbar` fixture are English and have no entry, so they stay English for
-everybody: rename them in the admin (*Navigation bar*). A label with no entry in
-the reader's language falls back to the English catalog; give any label you add
-an entry in both.
+`Compilador` (for `/custom-test/`, optional) and `Duelos`. This fork's `navbar`
+fixture uses those labels and adds `Duelos` after `Concursos`, so the bar shows
+in Spanish or English as each reader prefers. A label with no entry in the
+reader's language falls back to the English catalog; give any label you add an
+entry in both.
 
-DMOJ's `navbar` fixture also adds *About* (`/about/`) with *Status* under it.
+The `navbar` fixture also adds *About* (`/about/`) with *Status* under it.
 Neither has a catalog entry, so both stay English, and `/about/` answers 404
 until you create that flat page. Delete them, or relabel them and add the labels
 to both `dmoj-user` catalogs.

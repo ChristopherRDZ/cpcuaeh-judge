@@ -61,7 +61,7 @@ each one was added.
 | --- | --- |
 | Dark theme for everyone | No longer gated behind the `test_site` permission; `auto` follows the system. 2026-09-18 |
 | Rebuilt custom test | Full-width editor, no line wrapping, output up to 64 KB, translated messages. 2026-09-18 |
-| Translated navigation bar | Through a `dmoj-user` catalog that did not exist upstream. 2026-09-19 |
+| Translated navigation bar | Through a `dmoj-user` catalog that did not exist upstream; the `navbar` fixture uses its labels and includes Duels. 2026-09-19 |
 | Test case autofill | Pairs files from a zip, natural ordering, batch detection, point distribution. 2026-09-19 |
 | Interactive problems | Interactor upload on the data page, `interactive:` written on every save, testlib detection with a bundled `testlib.h`, optional contestant feedback, a guide with a downloadable example. Migration `0156`. 2026-09-25 |
 | Data archive replacement | Uploading an archive over an existing one lost both upstream; the new one is now stored and the old one removed. 2026-09-25 |

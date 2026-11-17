@@ -11,8 +11,7 @@
    judge/views/public_scoreboard.py serves it. A page of its own, for anybody, without an account. Everything is inline
    on purpose: nothing under resources/, so no collectstatic, no hashed copy and no compression block. It does not
    extend base.html, and it is rendered without a request: only `title`, `config` and `snapshot` reach it, the last
-   two already escaped to sit inside a <script>. Everything that comes from an account is written by `texto()`.
-   This file is generated: the source is fuente/public-scoreboard.src.html of its dossier (the logo goes in there). #}
+   two already escaped to sit inside a <script>. Everything that comes from an account is written by `texto()`. #}
 <style>{% raw %}
 /* Measures and colours from site/resources: the #3b3b3b bar of navbar.scss, the tabs and the side box of
    widgets.scss, the table of table.scss, the submission row of submission.scss and the font of base.scss. */

@@ -68,7 +68,7 @@ def team_name_key(name):
 
 
 def invitation_cutoff():
-    """Invitations sent before this have expired (equipos-globos-8, 2026-10-29): a pending one could be accepted
+    """Invitations sent before this have expired (2026-10-29): a pending one could be accepted
     months later, for example right after its team was authorised for a private contest."""
     return timezone.now() - timedelta(days=getattr(settings, 'CPC_TEAM_INVITATION_DAYS', 30))
 

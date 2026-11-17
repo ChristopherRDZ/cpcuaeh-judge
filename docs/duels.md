@@ -26,12 +26,13 @@ earlier address `/arena/…` are forwarded to the same place under `/duelos/` wi
    every organizer. See [Who organizes what](#who-organizes-what). Create a group
    with one of them, plus `see_private_problem` if battles should use problems that
    are not public, and add the organizers. Superusers have every duel permission.
-4. **Add the navigation entry.** In the admin, under *Navigation bar*, add an
-   entry with key `arena`, label `Duelos`, path `/duelos/`, regex `^/duelos` and
-   an order (required). With DMOJ's fixture (orders 1 to 7), `6` puts it after
-   *About*; to have it right after *Contests*, give *About* a higher order first.
-   It is translated through the `dmoj-user` catalog, which has `Duelos` in both
-   languages; a label with no entry in the reader's language falls back to English.
+4. **Check the navigation entry.** A new installation gets it from the `navbar`
+   fixture. Otherwise, in the admin, under *Navigation bar*, add an entry with key
+   `arena`, label `Duelos`, path `/duelos/`, regex `^/duelos` and an order
+   (required); to have it right after *Contests*, give it the next order and move
+   *About* after it. It is translated through the `dmoj-user` catalog, which has
+   `Duelos` in both languages; a label with no entry in the reader's language
+   falls back to English.
 5. **Recompile translations and, with offline compression, regenerate the
    manifest**, as after any template change. See the
    [setup guide](setup-guide.md#4-translations).
