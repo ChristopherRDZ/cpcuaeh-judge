@@ -1,0 +1,32 @@
+{% load i18n %}
+{% comment %}
+    CPC (2026-11-17): the one of wpadmin (wpadmin/templates/wpadmin/menu/user_tools.html), the same but for its two
+    pictures, which asked Gravatar for the MD5 of the email of whoever is signed in. They now come from this site,
+    /avatar/ with the profile id and the size (judge/jinja2/gravatar.py), like on every other page, in 32 and 64 px,
+    sizes the site keeps. An account without a profile gets no picture: its address cannot be made without an id.
+{% endcomment %}
+{% if is_user_allowed %}
+{% with avatar_profile=user.profile.pk %}
+	<li class="wp-user-tools wp-menu-top wp-has-submenu wp-menu-not-open{% if is_first %} wp-first-item{% endif %}{% if is_last %} wp-last-item{% endif %}" {% if item.css_styles %}style="{{ item.css_styles }}"{% endif %}>
+		<div class="wp-menu-image"><a href="javascript:;">{% if avatar_profile %}<img class="wp-small-gravatar" src="{% url 'user_avatar' avatar_profile 32 %}" width="16" height="16" />{% endif %}</a></div>
+		<a href="javascript:;">
+			{% trans 'Welcome,' %} <strong>{% firstof user.get_short_name user.get_username %}</strong>.
+		</a>
+		<div class="wp-submenu">
+			<div class="wp-submenu-wrap">
+				<ul>
+					<li {% if not item.url %}class="wp-no-url"{% endif %}><a href="{% if item.url %}{{ item.url }}{% else %}javascript:;{% endif%}">{% firstof user.first_name user.username %}{% if avatar_profile %} <img class="wp-big-gravatar" src="{% url 'user_avatar' avatar_profile 64 %}" width="64" height="64" />{% endif %}</a></li>
+					{% if user.has_usable_password %}
+						<li><a href="{% url 'admin:password_change' %}">{% trans 'Change password' %}</a></li>
+					{% endif %}
+					<li><a href="{% url 'admin:logout' %}">{% trans 'Log out' %}</a></li>
+					{% url 'django-admindocs-docroot' as docsroot %}
+					{% if docsroot %}
+						<li><a href="{{ docsroot }}">{% trans 'Documentation' %}</a></li>
+					{% endif %}
+				</ul>
+			</div>
+		</div>
+	</li>
+{% endwith %}
+{% endif %}

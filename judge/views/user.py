@@ -458,6 +458,11 @@ def generate_scratch_codes(request):
 # layout, and nothing is asked of Gravatar for an address nobody confirmed.
 AVATAR_PLACEHOLDER = ('<svg xmlns="http://www.w3.org/2000/svg" width="%(size)d" height="%(size)d" '
                       'viewBox="0 0 %(size)d %(size)d"><rect width="100%%" height="100%%" fill="#d6d6d6"/></svg>')
+# How long the browser keeps what the view gives (fotos-arreglos, 2026-11-17). A picture, an hour, so that a new photo
+# or email shows soon (the server keeps it for a day). The grey square, half a minute and no longer five: it is often
+# only an instant without network on the server (the review of 2026-11-16), and the next page should get the picture.
+AVATAR_PICTURE_MAX_AGE = 3600
+AVATAR_GREY_MAX_AGE = 30
 
 
 @require_safe
@@ -471,11 +476,10 @@ def user_avatar(request, profile, size):
         raise Http404()
     email, active, mute = row
     picture = gravatar_picture(email or '', size, mute) if active else None
-    # The server keeps a picture for a day; the browser, for an hour, so that a new photo or email shows soon.
     if picture is None:
-        kind, body, age = 'image/svg+xml', AVATAR_PLACEHOLDER % {'size': size}, 300
+        kind, body, age = 'image/svg+xml', AVATAR_PLACEHOLDER % {'size': size}, AVATAR_GREY_MAX_AGE
     else:
-        (kind, body), age = picture, 3600
+        (kind, body), age = picture, AVATAR_PICTURE_MAX_AGE
     response = HttpResponse(body, content_type=kind)
     patch_cache_control(response, public=True, max_age=age)
     response['X-Content-Type-Options'] = 'nosniff'

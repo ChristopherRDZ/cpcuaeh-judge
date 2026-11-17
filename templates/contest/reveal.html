@@ -1164,15 +1164,17 @@
         return node;
     }
 
-    // The profile picture the site shows everywhere else (Gravatar). A missing or blocked picture leaves a grey
-    // square instead of a broken image, which matters on a projector without internet.
+    // The profile picture the site shows everywhere else: /avatar/<profile>/<size> of this same site (Gravatar
+    // through the server since 2026-10-28), or an https:// address. Anything else, // included, is not loaded. A
+    // missing or blocked picture leaves a grey square instead of a broken image, which matters on a projector
+    // without internet.
     function avatar(url, className) {
         var img = el('img', className);
         img.alt = '';
         img.loading = 'lazy';
         img.referrerPolicy = 'no-referrer';
         img.onerror = function () { img.style.visibility = 'hidden'; };
-        if (url && url.indexOf('https://') === 0) img.src = url;
+        if (url && (url.indexOf('/avatar/') === 0 || url.indexOf('https://') === 0)) img.src = url;
         else img.style.visibility = 'hidden';
         return img;
     }

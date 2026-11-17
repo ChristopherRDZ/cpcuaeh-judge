@@ -97,6 +97,7 @@ each one was added.
 | Login by email | Sign in with the username or the email address; if several accounts share an address, the password decides which one. |
 | Email limits | Two password reset emails per address and one email change per account in 24 hours, and a daily cap per UTC day with a reserve for existing accounts. 2026-10-14 |
 | No stuck sign-ups | The activation email is sent inside the registration transaction; if it fails, no account is created and the address can register again. 2026-10-14 |
+| Profile pictures | Asked from Gravatar by the server and served at `/avatar/<profile>/<size>`, so browsers never see an email's hash; the last good picture is kept 7 days and shown when Gravatar cannot be reached, and browsers keep a grey square 30 seconds. The reveal ceremony and the admin's user menu use them too. 2026-10-28 and 2026-11-17 |
 
 ## Security
 

@@ -1,6 +1,6 @@
 # CPC-UAEH modifications to DMOJ
 
-As of 2026-11-16, this source adds to DMOJ: contests with registration before
+As of 2026-11-17, this source adds to DMOJ: contests with registration before
 the start, on site and online standings, organizers who register people and
 teams, a public live scoreboard, frozen scoreboards, a reveal ceremony, balloon
 delivery, announcements, clarifications and team contests; 1v1 duels and
@@ -9,11 +9,12 @@ a C++ template per round; emails to many users through Resend, with approval;
 autocomplete in the code editor, interactive problems, sample tables and
 `$...$` math, test cases filled in from archives, problem and contest PDFs and
 a roomier custom test with limits; an owner account that restricts deletion in
-the admin, email limits, the visitor's real address behind a tunnel, a
-hardened event daemon, a dark theme for everyone, a stable phone layout, and
-the Django 5.2.17 upgrade. The sections below date each change; the
-[fork overview](docs/fork-overview.md) groups them, and the
-[upgrade guide](docs/django52/README.md) covers Django 5.2.
+the admin, email limits, the visitor's real address behind a tunnel, profile
+pictures that outlast a Gravatar outage, a hardened event daemon, a dark theme
+for everyone, a stable phone layout, and the Django 5.2.17 upgrade. The
+sections below date each change; the [fork overview](docs/fork-overview.md)
+groups them, and the [upgrade guide](docs/django52/README.md) covers Django
+5.2.
 
 This repository contains a modified version of
 [DMOJ](https://github.com/DMOJ/online-judge), originally distributed under the
@@ -33,6 +34,20 @@ GNU Affero General Public License version 3.
 - Authentication using either a username or an email address.
 - A signed-in custom code testing workflow and its judge bridge support.
 - Minor registration and presentation adjustments.
+
+## Profile pictures — 2026-11-17
+
+- Since 2026-10-28 the site asks Gravatar for profile pictures itself and serves
+  them at `/avatar/<profile>/<size>`, so browsers never see the hash of an
+  email. Now it also keeps the last good picture of each account for 7 days and
+  shows it when Gravatar cannot be reached, where a network failure used to
+  show the grey square. Browsers keep a grey square for 30 seconds instead of
+  5 minutes.
+- The reveal ceremony shows the pictures again (it only took `https://`
+  addresses), and the admin's user menu takes them from `/avatar/` instead of
+  from Gravatar (`templates/wpadmin/menu/user_tools.html`).
+- No migration. If your privacy notice says that browsers ask Gravatar for the
+  pictures, update it.
 
 ## Public scoreboard of a contest — 2026-11-10 and 2026-11-15
 
